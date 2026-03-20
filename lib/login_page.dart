@@ -5,7 +5,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9FB), // Matches the soft background
+      backgroundColor: const Color(0xFFF9F9FB),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -120,7 +120,7 @@ class LoginPage extends StatelessWidget {
                 children: [
                   const Text("Don’t have an account? ", style: TextStyle(color: Colors.black54)),
                   GestureDetector(
-                    onTap: () {}, // Add registration navigation here
+                    onTap: () {},
                     child: const Text(
                       "Register",
                       style: TextStyle(color: Color(0xFF1A37CC), fontWeight: FontWeight.bold),
