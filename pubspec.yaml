@@ -58,7 +58,13 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icons/
+    - assets/icons/applied.svg
+    - assets/icons/home.svg
+    - assets/icons/profile.svg
+    - assets/icons/saved.svg
+    - assets/icons/JobBuddyLogo.png
+    - assets/icons/LoginPic.jpg
+    - assets/icons/searchbarnavdeco.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
