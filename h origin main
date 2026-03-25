@@ -1,0 +1,17 @@
+[33mcommit 641ccb02a58897f87e51f6fb6301ec73d86f0f95[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: laypengg <laypeng615@gmail.com>
+Date:   Fri Mar 20 16:03:19 2026 +0800
+
+    Fpr images etc, UI decoration purposes
+
+[33mcommit b2a048f93b0c1191e165a4ea7842fdaa42f3afbd[m
+Author: laypengg <laypeng615@gmail.com>
+Date:   Fri Mar 20 15:59:47 2026 +0800
+
+    added new page, Ui havent complete
+
+[33mcommit 538f3779d7efcd777a38b779b032bf707fbeb6b0[m
+Author: Weng Hong <139559902+GGWPEZWIN@users.noreply.github.com>
+Date:   Tue Mar 3 13:42:43 2026 +0800
+
+    initialization of the project
