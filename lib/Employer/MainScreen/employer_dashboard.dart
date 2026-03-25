@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../JobListing/create_job_page.dart';  // Add this import
 
 class EmployerDashboard extends StatefulWidget {
   const EmployerDashboard({super.key});
@@ -37,6 +38,19 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       'timePosted': '3 days ago',
     },
   ];
+
+  // Function to navigate to Create Job Page
+  void _navigateToCreateJob() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateJobPage(),
+      ),
+    ).then((_) {
+      // Refresh the page when returning from CreateJobPage
+      setState(() {});
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +216,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: _navigateToCreateJob,  // Added navigation
                   child: Row(
                     children: const [
                       Text(
@@ -230,8 +244,24 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               workType: job['workType'] as String,
               applicants: job['applicants'] as int,
               timePosted: job['timePosted'] as String,
-              onEdit: () {},
-              onDelete: () {},
+              onEdit: () {
+                // Add edit functionality later
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Edit feature coming soon!'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              },
+              onDelete: () {
+                // Add delete functionality later
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Delete feature coming soon!'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              },
             )),
             const SizedBox(height: 30),
 
@@ -239,7 +269,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: _navigateToCreateJob,  // Added navigation
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text(
                   'Create New Job',
@@ -272,6 +302,12 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             setState(() {
               _selectedIndex = index;
             });
+
+            // Navigate based on selected tab
+            if (index == 1) {
+              // Jobs tab - navigate to Create Job
+              _navigateToCreateJob();
+            }
           },
           showSelectedLabels: true,
           showUnselectedLabels: true,
@@ -285,7 +321,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       ),
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton(
-        onPressed: () {},
+        onPressed: _navigateToCreateJob,  // Added navigation
         backgroundColor: const Color(0xFF425AE2),
         child: const Icon(Icons.add),
       )
