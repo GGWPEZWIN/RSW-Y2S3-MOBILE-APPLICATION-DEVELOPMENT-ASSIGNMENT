@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 // Note: Currently this is just the UI representation (still no data yet)
@@ -334,4 +334,4 @@ class _JobDetailsPageState extends State<JobDetailsPage>{
     );
   }
 }
-
+*/

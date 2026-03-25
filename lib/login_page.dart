@@ -1,7 +1,67 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'email_login_page.dart';
+import 'services/google_sign_in_service.dart';
+import 'home_page.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final GoogleSignInService _googleSignInService = GoogleSignInService();
+  bool _isLoading = false;
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await _googleSignInService.signInWithGoogle();
+
+      if (user != null) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome ${user.displayName ?? 'User'}!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to home page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomePage(user: user)),
+        );
+      } else {
+        // User cancelled sign-in
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google sign-in cancelled'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error signing in: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -15,27 +75,34 @@ class LoginPage extends StatelessWidget {
               const SizedBox(height: 20),
 
               // --- Header Logo ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.work, color: Color(0xFF425AE2), size: 30),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "JobBuddy",
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+              Align(
+                alignment: Alignment.topLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/icons/JobBuddyLogo.png',
+                      height: 50,
+                      width: 50,
+                      fit: BoxFit.contain,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    const Text(
+                      "JobBuddy",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
               const Spacer(flex: 2),
 
-              // --- Main Illustration ---
               Image.asset(
-                'assets/LoginPic.jpg',
+                'assets/icons/LoginPic.png',
                 height: 220,
                 fit: BoxFit.contain,
               ),
@@ -43,45 +110,72 @@ class LoginPage extends StatelessWidget {
               const SizedBox(height: 30),
 
               // --- Login Method ---
-              const Center(
-                child: Text(
-                  "Find the right job",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF425AE2),
+              Column(
+                children: [
+                  const Center(
+                    child: Text(
+                      "Find the right job",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF425AE2),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Center(
-                child: Text(
-                  "Build your career",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: Text(
+                      "Build your career",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
 
               const Spacer(flex: 2),
 
-              // --- Google Button ---
-              OutlinedButton(
-                onPressed: () {},
+              // --- Google Button with Loading State ---
+              _isLoading
+                  ? Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF7B4DFF), width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                ),
+                child: const Center(
+                  child: SpinKitThreeBounce(
+                    color: Color(0xFF7B4DFF),
+                    size: 24,
+                  ),
+                ),
+              )
+                  : OutlinedButton(
+                onPressed: _handleGoogleSignIn,
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(color: Color(0xFFD1D1EB)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Placeholder for Google G icon
-                    const Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
-                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Image.asset(
+                        'assets/icons/google.webp',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     const Text(
                       "Continue with Google",
                       style: TextStyle(color: Colors.black, fontSize: 16),
@@ -103,12 +197,28 @@ class LoginPage extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(color: Color(0xFFD1D1EB)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: const Text(
-                  "Continue with email",
-                  style: TextStyle(color: Colors.black, fontSize: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 25,
+                      height: 25,
+                      child: Image.asset(
+                        'assets/icons/email.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      "Continue with Email",
+                      style: TextStyle(color: Colors.black, fontSize: 16),
+                    ),
+                  ],
                 ),
               ),
 
@@ -118,12 +228,20 @@ class LoginPage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Don’t have an account? ", style: TextStyle(color: Colors.black54)),
+                  const Text(
+                    "Don’t have an account? ",
+                    style: TextStyle(color: Colors.black54),
+                  ),
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      // Navigate to registration page
+                    },
                     child: const Text(
                       "Register",
-                      style: TextStyle(color: Color(0xFF1A37CC), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFF1A37CC),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -137,7 +255,10 @@ class LoginPage extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Recruitment? Visit ", style: TextStyle(fontSize: 14)),
+                    const Text(
+                      "Recruitment? Visit ",
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
                     GestureDetector(
                       onTap: () {},
                       child: const Text(
@@ -146,6 +267,7 @@ class LoginPage extends StatelessWidget {
                           fontSize: 14,
                           color: Color(0xFF1A37CC),
                           decoration: TextDecoration.underline,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
