@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'email_login.dart';
 import 'services/google_sign_in_service.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
+import 'Employer/MainScreen/employer_dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -260,7 +262,15 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              // I temporary put this dashboard page to test the route navigation
+                                builder: (_) => const EmployerDashboard(),
+                            ),
+                          );
+                      },
                       child: const Text(
                         "here",
                         style: TextStyle(
