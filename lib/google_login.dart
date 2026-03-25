@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'email_login.dart';
@@ -24,7 +23,6 @@ class _LoginPageState extends State<LoginPage> {
       final user = await _googleSignInService.signInWithGoogle();
 
       if (user != null) {
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome ${user.displayName ?? 'User'}!'),
@@ -33,13 +31,11 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
 
-        // Navigate to home page
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => HomePage(user: user)),
         );
       } else {
-        // User cancelled sign-in
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Google sign-in cancelled'),
@@ -49,7 +45,6 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } catch (e) {
-      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error signing in: $e'),
@@ -235,9 +230,7 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(color: Colors.black54),
                   ),
                   GestureDetector(
-                    onTap: () {
-                      // Navigate to registration page
-                    },
+                    onTap: () {},
                     child: const Text(
                       "Register",
                       style: TextStyle(
@@ -251,7 +244,7 @@ class _LoginPageState extends State<LoginPage> {
 
               const Spacer(flex: 1),
 
-              // --- Footer ---
+              // --- Footer - Navigate to Employer Dashboard ---
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(
@@ -263,13 +256,13 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     GestureDetector(
                       onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              // I temporary put this dashboard page to test the route navigation
-                                builder: (_) => const EmployerDashboard(),
-                            ),
-                          );
+                        // temporary nav to Employer Dashboard, later i will put as login
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EmployerDashboard(),
+                          ),
+                        );
                       },
                       child: const Text(
                         "here",
