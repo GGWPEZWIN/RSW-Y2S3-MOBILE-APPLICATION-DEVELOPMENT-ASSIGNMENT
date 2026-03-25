@@ -30,17 +30,6 @@ flutter:
     - assets/icons/profile.svg
     - assets/icons/saved.svg
     - assets/icons/JobBuddyLogo.png
-    - assets/icons/LoginPic.png
-    - assets/icons/google.webp
-    - assets/icons/email.png
-    - assets/icons/searchbarnavdeco.png
-
-  assets:
-    - assets/icons/applied.svg
-    - assets/icons/home.svg
-    - assets/icons/profile.svg
-    - assets/icons/saved.svg
-    - assets/icons/JobBuddyLogo.png
     - assets/icons/LoginPic.jpg
     - assets/icons/searchbarnavdeco.png
 
