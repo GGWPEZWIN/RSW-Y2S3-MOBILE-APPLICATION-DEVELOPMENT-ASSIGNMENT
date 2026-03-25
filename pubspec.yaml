@@ -30,7 +30,7 @@ flutter:
     - assets/icons/profile.svg
     - assets/icons/saved.svg
     - assets/icons/JobBuddyLogo.png
-    - assets/icons/LoginPic.jpg
+    - assets/icons/LoginPic.png
     - assets/icons/searchbarnavdeco.png
 
   # To add assets to your application, add an assets section, like this:
