@@ -256,7 +256,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     GestureDetector(
                       onTap: () {
-                        // temporary nav to Employer Dashboard, later i will put as login
+                        // Navigate directly to Employer Dashboard (JUST TEMPORARY DESTINATION)
                         Navigator.push(
                           context,
                           MaterialPageRoute(
