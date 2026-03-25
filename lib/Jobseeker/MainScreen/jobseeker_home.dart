@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'profile_page.dart';
+import 'jobseeker_profile.dart';
 
 class HomePage extends StatelessWidget {
   final User? user;

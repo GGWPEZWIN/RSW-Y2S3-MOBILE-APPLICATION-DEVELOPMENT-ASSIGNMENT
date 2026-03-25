@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'email_login_page.dart';
+import 'email_login.dart';
 import 'services/google_sign_in_service.dart';
-import 'home_page.dart';
+import 'Jobseeker/MainScreen/jobseeker_home.dart';
 
 class LoginPage extends StatefulWidget {
   @override
