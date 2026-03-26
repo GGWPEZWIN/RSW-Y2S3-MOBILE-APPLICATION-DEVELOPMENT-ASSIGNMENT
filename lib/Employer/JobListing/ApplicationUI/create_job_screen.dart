@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../models/job_model.dart';
+import 'job_list_screen.dart';
 
 class CreateJobPage extends StatefulWidget {
-  const CreateJobPage({super.key});
+  final Job? jobToEdit;
+
+  const CreateJobPage({super.key, this.jobToEdit});
 
   @override
   State<CreateJobPage> createState() => _CreateJobPageState();
@@ -10,11 +14,14 @@ class CreateJobPage extends StatefulWidget {
 class _CreateJobPageState extends State<CreateJobPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Helper to check if we are in edit mode
+  bool get isEditing => widget.jobToEdit != null;
+
   // Controllers
-  final TextEditingController _jobTitleController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _minPayController = TextEditingController();
-  final TextEditingController _maxPayController = TextEditingController();
+  late TextEditingController _jobTitleController;
+  late TextEditingController _locationController;
+  late TextEditingController _minPayController;
+  late TextEditingController _maxPayController;
 
   // Selected values
   String _selectedWorkplace = 'On-site';
@@ -40,6 +47,34 @@ class _CreateJobPageState extends State<CreateJobPage> {
   static const Color _helperColor = Color(0xFF888888);
 
   @override
+  void initState() {
+    super.initState();
+
+    // Initialize controllers
+    _jobTitleController = TextEditingController();
+    _locationController = TextEditingController();
+    _minPayController = TextEditingController();
+    _maxPayController = TextEditingController();
+
+    // If editing, populate the fields with existing data
+    if (isEditing) {
+      final job = widget.jobToEdit!;
+      _jobTitleController.text = job.title;
+      _locationController.text = job.location;
+      _selectedWorkplace = job.workplace;
+      _selectedWorkType = job.workType;
+
+      // Parse salary to get min and max pay
+      final salaryClean = job.salary.replaceAll(RegExp(r'[^0-9\s-]'), '');
+      final parts = salaryClean.split('-');
+      if (parts.length == 2) {
+        _minPayController.text = parts[0].trim();
+        _maxPayController.text = parts[1].trim();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _jobTitleController.dispose();
     _locationController.dispose();
@@ -50,6 +85,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
 
   // ── Stepper ──────────────────────────────────────────────────────────────
   Widget _buildStepper() {
+    if (isEditing) return const SizedBox.shrink(); // Hide stepper in edit mode
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
       child: Row(
@@ -146,13 +183,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
   InputDecoration _fieldDecoration({
     required String hint,
     Widget? prefix,
-    Widget? suffix,
+    required String? Function(String?)? validator
   }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: _hintColor, fontSize: 14),
       prefixIcon: prefix,
-      suffixIcon: suffix,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: _borderColor),
@@ -164,14 +200,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.red),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
       filled: true,
       fillColor: _fillColor,
@@ -253,13 +281,9 @@ class _CreateJobPageState extends State<CreateJobPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Create a job ad',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: Colors.black,
-          ),
+        title: Text(
+          isEditing ? 'Edit job ad' : 'Create a job ad',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
         ),
       ),
       body: Form(
@@ -271,8 +295,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
             children: [
               // ── Step indicator ──────────────────────────────────────────
               _buildStepper(),
-
-              const Divider(height: 1, color: Color(0xFFEEEEEE)),
+              if (!isEditing) const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 24),
 
               // ── Job Title ───────────────────────────────────────────────
@@ -283,12 +306,10 @@ class _CreateJobPageState extends State<CreateJobPage> {
                   hint: 'Enter a simple job title (e.g. Sales Assistant)',
                   prefix: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Icon(Icons.work_outline_rounded,
-                        size: 20, color: Colors.grey[400]),
+                    child: Icon(Icons.work_outline_rounded, size: 20, color: Colors.grey[400]),
                   ),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Please add job title' : null,
                 ),
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Please add job title' : null,
               ),
               const SizedBox(height: 20),
 
@@ -298,17 +319,11 @@ class _CreateJobPageState extends State<CreateJobPage> {
                 controller: _locationController,
                 decoration: _fieldDecoration(
                   hint: 'Enter a suburb, city or region (e.g. Kuala Lumpur)',
-                  prefix: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Icon(Icons.location_on_outlined,
-                        size: 20, color: Colors.grey[400]),
-                  ),
+                  prefix: const Icon(Icons.location_on_outlined, size: 20, color: _inactiveGrey),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter location' : null,
                 ),
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Please enter location' : null,
               ),
-              _helperText('Suggestions will appear below the field as you type'),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // ── Workplace Option ────────────────────────────────────────
               _sectionLabel('Workplace Option'),
@@ -324,8 +339,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
                   child: DropdownButton<String>(
                     value: _selectedWorkplace,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                        size: 20, color: Colors.grey),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Colors.grey),
                     style: const TextStyle(fontSize: 14, color: _labelColor),
                     items: ['On-site', 'Remote', 'Hybrid']
                         .map((w) => DropdownMenuItem(value: w, child: Text(w)))
@@ -373,7 +387,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               TextFormField(
                 controller: _minPayController,
                 keyboardType: TextInputType.number,
-                decoration: _fieldDecoration(hint: 'Enter minimum pay'),
+                decoration: _fieldDecoration(hint: 'Enter minimum pay', validator: null),
               ),
               const SizedBox(height: 12),
 
@@ -382,7 +396,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               TextFormField(
                 controller: _maxPayController,
                 keyboardType: TextInputType.number,
-                decoration: _fieldDecoration(hint: 'Enter maximum pay'),
+                decoration: _fieldDecoration(hint: 'Enter maximum pay', validator: null),
               ),
               const SizedBox(height: 20),
 
@@ -430,12 +444,31 @@ class _CreateJobPageState extends State<CreateJobPage> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Job ad created successfully!'),
-                          backgroundColor: _primaryBlue,
-                        ),
+                      final salary = "RM${_minPayController.text} - RM${_maxPayController.text}";
+
+                      final job = Job(
+                        title: _jobTitleController.text,
+                        company: isEditing ? widget.jobToEdit!.company : "Your Company",
+                        location: _locationController.text,
+                        workType: _selectedWorkType,
+                        workplace: _selectedWorkplace,
+                        salary: salary,
+                        postedTime: isEditing ? widget.jobToEdit!.postedTime : "1 hour ago",
+                        applicants: isEditing ? widget.jobToEdit!.applicants : "0 applied",
                       );
+
+                      // If editing, we should update the existing job
+                      // For now, navigate back with the edited job
+                      if (isEditing) {
+                        Navigator.pop(context, job);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => JobListScreen(jobs: [job]),
+                          ),
+                        );
+                      }
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -445,18 +478,17 @@ class _CreateJobPageState extends State<CreateJobPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Next',
-                    style: TextStyle(
+                  child: Text(
+                    isEditing ? 'Update Job' : 'Next',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
             ],
           ),
         ),

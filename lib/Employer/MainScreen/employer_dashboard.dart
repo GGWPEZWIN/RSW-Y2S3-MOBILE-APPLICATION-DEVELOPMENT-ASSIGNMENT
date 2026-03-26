@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../JobListing/create_job_page.dart';
+import '../JobListing/ApplicationUI/create_job_screen.dart';
 
 class EmployerDashboard extends StatefulWidget {
   const EmployerDashboard({super.key});
