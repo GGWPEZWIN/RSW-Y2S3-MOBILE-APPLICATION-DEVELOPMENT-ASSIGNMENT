@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'login_page.dart';
+import 'google_login.dart';
+import 'package:assignment/Jobseeker/JobApplication/job_application_form.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,7 +13,6 @@ void main() async {
   } catch (e) {
     debugPrint('Error initializing Firebase: $e');
   }
-
   runApp(const MyApp());
 }
 
@@ -28,6 +28,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Poppins',
       ),
       home: LoginPage(), // Remove 'const' here
+      //home: JobApplicationScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
