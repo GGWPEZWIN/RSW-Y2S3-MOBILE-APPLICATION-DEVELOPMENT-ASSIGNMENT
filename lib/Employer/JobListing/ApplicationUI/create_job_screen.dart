@@ -437,7 +437,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               ),
               const SizedBox(height: 36),
 
-              // ── Next Button ─────────────────────────────────────────────
+              // ── Save Button ─────────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -479,7 +479,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
                     ),
                   ),
                   child: Text(
-                    isEditing ? 'Update Job' : 'Next',
+                    isEditing ? 'Update Job' : 'Save',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
