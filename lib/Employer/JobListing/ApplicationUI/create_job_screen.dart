@@ -446,6 +446,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
                     if (_formKey.currentState!.validate()) {
                       final salary = "RM${_minPayController.text} - RM${_maxPayController.text}";
 
+                      final currentTime = DateTime.now();
+
                       final job = Job(
                         title: _jobTitleController.text,
                         company: isEditing ? widget.jobToEdit!.company : "Your Company",
@@ -455,6 +457,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
                         salary: salary,
                         postedTime: isEditing ? widget.jobToEdit!.postedTime : "1 hour ago",
                         applicants: isEditing ? widget.jobToEdit!.applicants : "0 applied",
+                        createdAt: isEditing ? widget.jobToEdit!.createdAt : currentTime,
                       );
 
                       // If editing, we should update the existing job
