@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../Employer/JobListing/models/job_model.dart';
+import '../Employer/models/job_model.dart';
+
 class JobService {
   final CollectionReference _jobsCollection =
   FirebaseFirestore.instance.collection('jobs');
