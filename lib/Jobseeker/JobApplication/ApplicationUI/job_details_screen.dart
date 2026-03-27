@@ -1,5 +1,6 @@
-/*import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'job_application_screen.dart';
 
 // Note: Currently this is just the UI representation (still no data yet)
 // TODO: Implement state management
@@ -334,4 +335,4 @@ class _JobDetailsPageState extends State<JobDetailsPage>{
     );
   }
 }
-*/
+

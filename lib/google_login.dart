@@ -5,12 +5,14 @@ import 'services/google_sign_in_service.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
 import 'Employer/MainScreen/employer_dashboard.dart';
 
-class LoginPage extends StatefulWidget {
+class GoogleLogin extends StatefulWidget {
+  const GoogleLogin({super.key});
+
   @override
-  _LoginPageState createState() => _LoginPageState();
+  _GoogleLoginState createState() => _GoogleLoginState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _GoogleLoginState extends State<GoogleLogin> {
   final GoogleSignInService _googleSignInService = GoogleSignInService();
   bool _isLoading = false;
 
