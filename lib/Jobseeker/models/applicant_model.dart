@@ -1,3 +1,5 @@
+//TODO: NEED TO ADD USERNAME, EMAIL FIELD OR ELSE EMPLOYER DON'T KNOW WHO IS THIS
+
 class Applicant {
   final String id;
   final String jobTitle;

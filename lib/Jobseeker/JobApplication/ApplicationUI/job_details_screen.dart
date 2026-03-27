@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'job_application_screen.dart';
+import 'package:assignment/Jobseeker/models/applicant_model.dart';
 
 // Note: Currently this is just the UI representation (still no data yet)
 // TODO: Implement state management
@@ -15,6 +16,7 @@ class _JobDetailsPageState extends State<JobDetailsPage>{
 
   // Data/variables
   int _currentIndex = 0;
+  Applicant? _applicant;
 
   // SVG icons
   final List<String> _icons = [
@@ -199,16 +201,45 @@ class _JobDetailsPageState extends State<JobDetailsPage>{
                       child: const Text("Save"),
                     ),
                   ),
+
                   const SizedBox(width: 16),
+
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () async {
+                        // If _applicant is null, create a new one as draft
+                        // job title, company need to get from employer side
+                        _applicant ??= Applicant(
+                          id: '',
+                          jobTitle: 'Senior Product Designer',
+                          company: 'JobBuddy Inc.',
+                          resume: '',
+                          portfolioUrl: '',
+                          coverLetter: '',
+                          skills: [],
+                          submittedAt: '',
+                        );
+
+                        // Navigate and await the updated applicant
+                        final updatedApplicant = await Navigator.push<Applicant>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => JobApplicationScreen(applicant: _applicant!),
+                          ),
+                        );
+
+                        if (updatedApplicant != null) {
+                          setState(() {
+                            _applicant = updatedApplicant;
+                          });
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: const Color(0xFFffffff),
+                        foregroundColor: const Color(0xFFFFFFFF),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 4,
-                        shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                        shadowColor: const Color(0xFF2563EB).withAlpha(100),
                       ),
                       child: const Text("Apply Now"),
                     ),
@@ -232,6 +263,7 @@ class _JobDetailsPageState extends State<JobDetailsPage>{
             ),
           ],
         ),
+        //Nav
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(

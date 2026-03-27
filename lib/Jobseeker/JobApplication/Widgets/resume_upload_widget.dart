@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:convert';
+import 'dart:io';
 
 class ResumeUploadWidget extends StatefulWidget {
-  final void Function(String filePath, String fileName) onFileSelected;
+  final void Function(String base64Data, String fileName) onFileSelected;
   final String? initialFileName;
-  final String? initialFilePath;
+  final String? initialFileBase64;
 
   const ResumeUploadWidget({
     super.key,
     required this.onFileSelected,
     this.initialFileName,
-    this.initialFilePath,
+    this.initialFileBase64,
   });
 
   @override
@@ -25,7 +27,7 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
   static const Color kIconBg        = Color(0xFFF0F3F8);
 
   String? _fileName;
-  String? _filePath;
+  String? _fileBase64;
   String? _uploadedAgo;
   bool    _isLoading    = false;
   String? _errorMessage;
@@ -33,31 +35,37 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialFileName != null) {
-      _fileName    = widget.initialFileName;
-      _filePath    = widget.initialFilePath;
-      _uploadedAgo = 'N/A';
+    _loadInitialData();
+  }
 
-      // Notify parent on first frame so _resumePath is set from the start
-      if (widget.initialFilePath != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onFileSelected(
-              widget.initialFilePath!, widget.initialFileName!);
-        });
-      }
+  // CRITICAL: This ensures the UI updates when you return to this screen from a draft
+  @override
+  void didUpdateWidget(covariant ResumeUploadWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialFileName != oldWidget.initialFileName) {
+      _loadInitialData();
     }
+  }
+
+  void _loadInitialData() {
+    setState(() {
+      _fileName = widget.initialFileName;
+      _fileBase64 = widget.initialFileBase64;
+      _uploadedAgo = _fileName != null ? 'Loaded from draft' : null;
+    });
   }
 
   Future<void> _pickFile() async {
     setState(() {
-      _isLoading    = true;
+      _isLoading = true;
       _errorMessage = null;
     });
 
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx'],
+        // UPDATED: Added image extensions to allowed formats
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp'],
         allowMultiple: false,
       );
 
@@ -68,9 +76,10 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
 
       final picked = result.files.single;
 
+      // 5 MB limit check
       if (picked.size > 5 * 1024 * 1024) {
         setState(() {
-          _isLoading    = false;
+          _isLoading = false;
           _errorMessage = 'File too large. Maximum size is 5 MB.';
         });
         return;
@@ -79,35 +88,47 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
       final path = picked.path;
       if (path == null) {
         setState(() {
-          _isLoading    = false;
-          _errorMessage = 'Could not read file path. Please try again.';
+          _isLoading = false;
+          _errorMessage = 'Could not read file path.';
         });
         return;
       }
 
-      // Store the local path — no upload needed just to print to console
+      // 1. Read the raw bytes of the image/file
+      final bytes = await File(path).readAsBytes();
+
+      // 2. Convert the entire file to a Base64 string
+      final base64String = base64Encode(bytes);
+
       setState(() {
-        _fileName    = picked.name;
-        _filePath    = path;
+        _fileName = picked.name;
+        _fileBase64 = base64String;
         _uploadedAgo = 'Selected just now';
-        _isLoading   = false;
-        _errorMessage = null;
+        _isLoading = false;
       });
 
-      // Notify parent with local path + filename
-      widget.onFileSelected(path, picked.name);
-
+      // 3. Notify parent with the full Base64 string
+      widget.onFileSelected(base64String, picked.name);
     } catch (e) {
       setState(() {
-        _isLoading    = false;
+        _isLoading = false;
         _errorMessage = 'Something went wrong. Please try again.';
       });
-      debugPrint('File pick error: $e');
     }
   }
 
-  String get _displayName => _fileName ?? 'No file selected';
-  bool   get _hasFile     => _fileName != null;
+  bool get _hasFile => _fileName != null;
+
+  // Helper to determine icon based on file extension
+  IconData _getIcon() {
+    if (!_hasFile) return Icons.description_outlined;
+    final ext = _fileName!.toLowerCase();
+    if (ext.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    if (ext.contains('jpg') || ext.contains('png') || ext.contains('jpeg')) {
+      return Icons.image_outlined;
+    }
+    return Icons.insert_drive_file_outlined;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,12 +137,7 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
       children: [
         const Text(
           'Resume / CV',
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: kTextPrimary,
-            letterSpacing: -0.1,
-          ),
+          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: kTextPrimary),
         ),
         const SizedBox(height: 8),
         Container(
@@ -129,20 +145,16 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _hasFile ? kBlue.withOpacity(0.4) : kBorder,
-              width: _hasFile ? 1.5 : 1,
-            ),
+            border: Border.all(color: _hasFile ? kBlue : kBorder, width: _hasFile ? 1.5 : 1),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _displayName,
+                      _fileName ?? 'No file selected',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -152,102 +164,39 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (_hasFile) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        _uploadedAgo ?? '',
-                        style: const TextStyle(
-                            fontSize: 12, color: kTextSecondary),
-                      ),
+                      const SizedBox(height: 4),
+                      Text(_uploadedAgo ?? '', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
                     ],
                     const SizedBox(height: 12),
                     _isLoading
-                        ? const SizedBox(
-                      height: 36,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: kBlue,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Loading...',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: kBlue,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                        : ElevatedButton.icon(
+                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        : ElevatedButton(
                       onPressed: _pickFile,
-                      icon: const Icon(Icons.upload_rounded, size: 16),
-                      label: Text(
-                          _hasFile ? 'Replace File' : 'Upload File'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kBlue,
                         foregroundColor: Colors.white,
-                        elevation: 0,
-                        textStyle: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 9),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
+                      child: Text(_hasFile ? 'Replace File' : 'Upload File'),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
               Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: kIconBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  _hasFile
-                      ? Icons.picture_as_pdf_outlined
-                      : Icons.description_outlined,
-                  color: _hasFile ? kBlue : kTextSecondary,
-                  size: 24,
-                ),
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(color: kIconBg, borderRadius: BorderRadius.circular(10)),
+                child: Icon(_getIcon(), color: _hasFile ? kBlue : kTextSecondary, size: 28),
               ),
             ],
           ),
         ),
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.error_outline_rounded,
-                  size: 14, color: Colors.redAccent),
-              const SizedBox(width: 6),
-              Text(
-                _errorMessage!,
-                style: const TextStyle(
-                    fontSize: 12, color: Colors.redAccent),
-              ),
-            ],
+        if (_errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
           ),
-        ],
-        const SizedBox(height: 6),
-        const Text(
-          'Accepted formats: PDF, DOC, DOCX — max 5 MB',
-          style: TextStyle(fontSize: 11, color: kTextSecondary),
-        ),
       ],
     );
   }
