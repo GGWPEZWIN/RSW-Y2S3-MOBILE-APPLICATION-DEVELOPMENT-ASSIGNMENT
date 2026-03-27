@@ -112,7 +112,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       context,
       MaterialPageRoute(builder: (_) => const CreateJobPage()),
     ).then((_) {
-      // ✅ Reset nav highlight to Home when returning from any pushed screen
       if (mounted) setState(() => _selectedIndex = 0);
     });
   }
@@ -131,9 +130,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       context,
       MaterialPageRoute(builder: (_) => const JobListScreenWrapper()),
     ).then((_) {
-      // ✅ This is the key fix: when back arrow is pressed on JobListScreen,
-      // Flutter pops back to EmployerDashboard and this callback fires,
-      // resetting the highlight to Home (index 0).
       if (mounted) setState(() => _selectedIndex = 0);
     });
   }
@@ -515,7 +511,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         onTap: (index) {
-          // ✅ Show highlight immediately for visual feedback
           setState(() => _selectedIndex = index);
 
           switch (index) {
