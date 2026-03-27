@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/job_model.dart';
 import 'job_list_screen.dart';
 
@@ -13,26 +14,22 @@ class CreateJobPage extends StatefulWidget {
 
 class _CreateJobPageState extends State<CreateJobPage> {
   final _formKey = GlobalKey<FormState>();
+  bool _isSaving = false;
 
-  // Helper to check if we are in edit mode
   bool get isEditing => widget.jobToEdit != null;
 
-  // Controllers
   late TextEditingController _jobTitleController;
   late TextEditingController _locationController;
   late TextEditingController _minPayController;
   late TextEditingController _maxPayController;
 
-  // Selected values
   String _selectedWorkplace = 'On-site';
   String _selectedWorkType = 'Full-time';
   String _selectedPayType = 'Monthly';
   String _selectedCurrency = 'MYR';
   String _showPayOnAd = 'Yes';
 
-  // Step index (0 = Classify, 1 = Ad Types, 2 = Write, 3 = Manage)
   final int _currentStep = 0;
-
   final List<String> _stepLabels = ['Classify', 'Ad Types', 'Write', 'Manage'];
   final List<String> _workTypeOptions = ['Full-time', 'Part-time', 'Contract', 'Casual'];
   final List<String> _payTypeOptions = ['Hourly', 'Monthly', 'Annually'];
@@ -49,14 +46,11 @@ class _CreateJobPageState extends State<CreateJobPage> {
   @override
   void initState() {
     super.initState();
-
-    // Initialize controllers
     _jobTitleController = TextEditingController();
     _locationController = TextEditingController();
     _minPayController = TextEditingController();
     _maxPayController = TextEditingController();
 
-    // If editing, populate the fields with existing data
     if (isEditing) {
       final job = widget.jobToEdit!;
       _jobTitleController.text = job.title;
@@ -64,7 +58,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       _selectedWorkplace = job.workplace;
       _selectedWorkType = job.workType;
 
-      // Parse salary to get min and max pay
       final salaryClean = job.salary.replaceAll(RegExp(r'[^0-9\s-]'), '');
       final parts = salaryClean.split('-');
       if (parts.length == 2) {
@@ -83,10 +76,83 @@ class _CreateJobPageState extends State<CreateJobPage> {
     super.dispose();
   }
 
-  // ── Stepper ──────────────────────────────────────────────────────────────
-  Widget _buildStepper() {
-    if (isEditing) return const SizedBox.shrink(); // Hide stepper in edit mode
+  // ── FIXED _saveJob: single Navigator.pop, no finally-pop ─────────────────
+  Future<void> _saveJob() async {
+    if (!_formKey.currentState!.validate()) return;
 
+    setState(() => _isSaving = true);
+
+    try {
+      final salary =
+          'RM${_minPayController.text.trim()} - RM${_maxPayController.text.trim()}';
+      final now = DateTime.now();
+
+      final jobData = {
+        'title': _jobTitleController.text.trim(),
+        'company': isEditing ? widget.jobToEdit!.company : 'Your Company',
+        'location': _locationController.text.trim(),
+        'workType': _selectedWorkType,
+        'workplace': _selectedWorkplace,
+        'salary': salary,
+        'postedTime': _getTimeAgo(now),
+        'applicants': isEditing ? widget.jobToEdit!.applicants : '0 applied',
+        'createdAt': isEditing ? widget.jobToEdit!.createdAt : now,
+      };
+
+      if (isEditing && widget.jobToEdit!.id != null) {
+        await FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(widget.jobToEdit!.id)
+            .update(jobData);
+      } else {
+        await FirebaseFirestore.instance.collection('jobs').add(jobData);
+      }
+
+      // ✅ Stop loading spinner first
+      if (mounted) setState(() => _isSaving = false);
+
+      // ✅ Show success snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isEditing ? 'Job updated successfully!' : 'Job created successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // ✅ Single pop — returns to the screen that pushed this page
+      if (mounted) Navigator.pop(context, true);
+
+    } catch (e) {
+      // ✅ Stop spinner on error too
+      if (mounted) setState(() => _isSaving = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving job: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+    // ✅ NO finally block with Navigator.pop — that was the root cause
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes > 1 ? 's' : ''} ago';
+    return 'Just now';
+  }
+
+  // ── Stepper ───────────────────────────────────────────────────────────────
+  Widget _buildStepper() {
+    if (isEditing) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
       child: Row(
@@ -94,14 +160,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
           final isActive = i == _currentStep;
           final isDone = i < _currentStep;
           final isLast = i == _stepLabels.length - 1;
-
           return Expanded(
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     children: [
-                      // Circle
                       Container(
                         width: 22,
                         height: 22,
@@ -145,7 +209,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  // ── Section label ─────────────────────────────────────────────────────────
   Widget _sectionLabel(String text, {bool showInfo = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -154,10 +217,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
           Text(
             text,
             style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _labelColor,
-            ),
+                fontSize: 15, fontWeight: FontWeight.w700, color: _labelColor),
           ),
           if (showInfo) ...[
             const SizedBox(width: 4),
@@ -168,23 +228,14 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  // ── Helper text ───────────────────────────────────────────────────────────
   Widget _helperText(String text) {
     return Padding(
       padding: const EdgeInsets.only(top: 6, bottom: 4),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 12, color: _helperColor),
-      ),
+      child: Text(text, style: const TextStyle(fontSize: 12, color: _helperColor)),
     );
   }
 
-  // ── Outlined text field ───────────────────────────────────────────────────
-  InputDecoration _fieldDecoration({
-    required String hint,
-    Widget? prefix,
-    required String? Function(String?)? validator
-  }) {
+  InputDecoration _fieldDecoration({required String hint, Widget? prefix}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: _hintColor, fontSize: 14),
@@ -201,13 +252,20 @@ class _CreateJobPageState extends State<CreateJobPage> {
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
       ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
       filled: true,
       fillColor: _fillColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 
-  // ── Pill chip selector ────────────────────────────────────────────────────
   Widget _chipSelector({
     required List<String> options,
     required String selected,
@@ -245,7 +303,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  // ── Currency dropdown ─────────────────────────────────────────────────────
   Widget _currencyDropdown() {
     return Container(
       height: 50,
@@ -283,22 +340,33 @@ class _CreateJobPageState extends State<CreateJobPage> {
         ),
         title: Text(
           isEditing ? 'Edit job ad' : 'Create a job ad',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
         ),
       ),
-      body: Form(
+      body: _isSaving
+          ? const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Saving...', style: TextStyle(color: Colors.grey, fontSize: 14)),
+          ],
+        ),
+      )
+          : Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Step indicator ──────────────────────────────────────────
               _buildStepper(),
               if (!isEditing) const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 24),
 
-              // ── Job Title ───────────────────────────────────────────────
+              // Job Title
               _sectionLabel('Job Title', showInfo: true),
               TextFormField(
                 controller: _jobTitleController,
@@ -306,26 +374,36 @@ class _CreateJobPageState extends State<CreateJobPage> {
                   hint: 'Enter a simple job title (e.g. Sales Assistant)',
                   prefix: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Icon(Icons.work_outline_rounded, size: 20, color: Colors.grey[400]),
+                    child: Icon(Icons.work_outline_rounded,
+                        size: 20, color: Colors.grey[400]),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Please add job title' : null,
                 ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Please add job title'
+                    : null,
               ),
               const SizedBox(height: 20),
 
-              // ── Location ────────────────────────────────────────────────
+              // Location
               _sectionLabel('Location', showInfo: true),
               TextFormField(
                 controller: _locationController,
                 decoration: _fieldDecoration(
                   hint: 'Enter a suburb, city or region (e.g. Kuala Lumpur)',
-                  prefix: const Icon(Icons.location_on_outlined, size: 20, color: _inactiveGrey),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter location' : null,
+                  prefix: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(Icons.location_on_outlined,
+                        size: 20, color: _inactiveGrey),
+                  ),
                 ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Please enter location'
+                    : null,
               ),
-              const SizedBox(height: 20),
+              _helperText('Suggestions will appear below the field as you type'),
+              const SizedBox(height: 16),
 
-              // ── Workplace Option ────────────────────────────────────────
+              // Workplace Option
               _sectionLabel('Workplace Option'),
               Container(
                 height: 50,
@@ -339,7 +417,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
                   child: DropdownButton<String>(
                     value: _selectedWorkplace,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Colors.grey),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                        size: 20, color: Colors.grey),
                     style: const TextStyle(fontSize: 14, color: _labelColor),
                     items: ['On-site', 'Remote', 'Hybrid']
                         .map((w) => DropdownMenuItem(value: w, child: Text(w)))
@@ -351,7 +430,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               _helperText('Suggestions will appear below the field as you type'),
               const SizedBox(height: 16),
 
-              // ── Work Type ───────────────────────────────────────────────
+              // Work Type
               _sectionLabel('Work type'),
               _chipSelector(
                 options: _workTypeOptions,
@@ -360,7 +439,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               ),
               const SizedBox(height: 20),
 
-              // ── Pay Type ────────────────────────────────────────────────
+              // Pay Type
               _sectionLabel('Pay type'),
               _chipSelector(
                 options: _payTypeOptions,
@@ -369,7 +448,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
               ),
               const SizedBox(height: 20),
 
-              // ── Pay Range ───────────────────────────────────────────────
+              // Pay Range
               _sectionLabel('Pay Range', showInfo: true),
               const Text(
                 'Enter a range to offer candidates. If pay is an exact amount, enter the same in both fields.',
@@ -377,30 +456,27 @@ class _CreateJobPageState extends State<CreateJobPage> {
               ),
               const SizedBox(height: 14),
 
-              // Currency row
               _sectionLabel('Currency'),
               _currencyDropdown(),
               const SizedBox(height: 14),
 
-              // From
               _sectionLabel('From'),
               TextFormField(
                 controller: _minPayController,
                 keyboardType: TextInputType.number,
-                decoration: _fieldDecoration(hint: 'Enter minimum pay', validator: null),
+                decoration: _fieldDecoration(hint: 'Enter minimum pay'),
               ),
               const SizedBox(height: 12),
 
-              // To
               _sectionLabel('To'),
               TextFormField(
                 controller: _maxPayController,
                 keyboardType: TextInputType.number,
-                decoration: _fieldDecoration(hint: 'Enter maximum pay', validator: null),
+                decoration: _fieldDecoration(hint: 'Enter maximum pay'),
               ),
               const SizedBox(height: 20),
 
-              // ── Pay Shown on Ad ─────────────────────────────────────────
+              // Pay Shown on Ad
               _sectionLabel('Pay shown on ad'),
               Row(
                 children: ['Yes', 'No'].map((opt) {
@@ -437,40 +513,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
               ),
               const SizedBox(height: 36),
 
-              // ── Next Button ─────────────────────────────────────────────
+              // Save / Update Button
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      final salary = "RM${_minPayController.text} - RM${_maxPayController.text}";
-
-                      final job = Job(
-                        title: _jobTitleController.text,
-                        company: isEditing ? widget.jobToEdit!.company : "Your Company",
-                        location: _locationController.text,
-                        workType: _selectedWorkType,
-                        workplace: _selectedWorkplace,
-                        salary: salary,
-                        postedTime: isEditing ? widget.jobToEdit!.postedTime : "1 hour ago",
-                        applicants: isEditing ? widget.jobToEdit!.applicants : "0 applied",
-                      );
-
-                      // If editing, we should update the existing job
-                      // For now, navigate back with the edited job
-                      if (isEditing) {
-                        Navigator.pop(context, job);
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => JobListScreen(jobs: [job]),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onPressed: _saveJob,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primaryBlue,
                     elevation: 0,
@@ -479,7 +527,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
                     ),
                   ),
                   child: Text(
-                    isEditing ? 'Update Job' : 'Next',
+                    isEditing ? 'Update Job' : 'Save',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         fontFamily: 'Poppins',
       ),
-      home: LoginPage(), // Remove 'const' here
+      home: GoogleLogin(), // Remove 'const' here
       //home: JobApplicationScreen(),
       debugShowCheckedModeBanner: false,
     );
