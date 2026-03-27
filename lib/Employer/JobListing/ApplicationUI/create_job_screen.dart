@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/job_model.dart';
+import '../../models/job_model.dart';
 import 'job_list_screen.dart';
 
 class CreateJobPage extends StatefulWidget {

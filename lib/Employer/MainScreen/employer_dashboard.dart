@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../JobListing/ApplicationUI/create_job_screen.dart';
 import '../JobListing/ApplicationUI/job_list_screen.dart';
 import '../../../services/job_service.dart';
-import '../JobListing/models/job_model.dart';
+import '../models/job_model.dart';
 import 'employer_profile_screen.dart';
 
 // ==================== JobListScreenWrapper ====================

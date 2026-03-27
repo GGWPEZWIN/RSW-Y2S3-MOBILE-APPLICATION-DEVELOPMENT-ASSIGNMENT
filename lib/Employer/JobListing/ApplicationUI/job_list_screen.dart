@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/job_model.dart';
+import '../../models/job_model.dart';
 import './create_job_screen.dart';
 
 class JobListScreen extends StatefulWidget {
