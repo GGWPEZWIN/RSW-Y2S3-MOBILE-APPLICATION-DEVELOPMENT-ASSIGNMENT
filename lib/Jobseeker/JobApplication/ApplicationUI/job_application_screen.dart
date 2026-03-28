@@ -1,16 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
-import 'package:assignment/Jobseeker/JobApplication/ApplicationServices//applicant_service.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
+import 'package:flutter_svg/flutter_svg.dart';                   // ← fixed import
 import '../../../services/firestore_services.dart';
 import '../Widgets/resume_upload_widget.dart';
+import 'package:firebase_auth/firebase_auth.dart';               // ← NEW
+import 'package:assignment/services/fcm_service.dart';           // ← NEW
 
 class JobApplicationScreen extends StatefulWidget {
-
   final Applicant? applicant;
 
-  // accept the applicant object from the job detail
   const JobApplicationScreen({super.key, this.applicant});
 
   @override
@@ -29,20 +29,24 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   void initState() {
     super.initState();
 
+    // ── NEW: save this jobseeker's FCM token so employer can notify them ──
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      FCMService().saveCandidateToken(userId);
+    }
+
     if (widget.applicant != null) {
       _coverLetterController.text = widget.applicant!.coverLetter;
-      _portfolioController.text = widget.applicant!.portfolioUrl;
+      _portfolioController.text   = widget.applicant!.portfolioUrl;
 
       String rawResume = widget.applicant!.resume;
-
       if (rawResume.contains('|')) {
         List<String> parts = rawResume.split('|');
-        // We assign values to the class variables here
         _resumeFileName = parts[0];
-        _resumePath = parts[1];
+        _resumePath     = parts[1];
       } else if (rawResume.isNotEmpty) {
-        _resumePath = rawResume;
-        _resumeFileName = "Uploaded Resume";
+        _resumePath     = rawResume;
+        _resumeFileName = 'Uploaded Resume';
       }
     }
   }
@@ -54,16 +58,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     'assets/icons/applied.svg',
     'assets/icons/profile.svg',
   ];
-
   final List<String> _labels = ['Home', 'Saved', 'Applied', 'Profile'];
 
   String? _portfolioError;
   String  _resumePath     = '';
   String  _resumeFileName = '';
   bool    _isSubmitting   = false;
-  int _currentIndex = 0;
+  int     _currentIndex   = 0;
 
-  // 2. MOVE THE FUNCTION HERE
   bool _isValidUrl(String url) {
     if (url.isEmpty) return true;
     final urlRegExp = RegExp(
@@ -76,7 +78,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   // TEXT CONTROLLERS
   //=====================================================================================
 
-  final TextEditingController _portfolioController = TextEditingController();
+  final TextEditingController _portfolioController   = TextEditingController();
   final TextEditingController _coverLetterController = TextEditingController();
 
   //=====================================================================================
@@ -94,13 +96,9 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   static const Color kAiGreen         = Color(0xFF0BA87E);
   static const Color kAiPurple        = Color(0xFF7C3AED);
 
-  // Job details (swap these out for route arguments in a real app)
   static const String _jobTitle = 'Senior Product Designer';
   static const String _company  = 'TechFlow Inc.';
 
-
-  //TODO: NEED TO IMPLEMENT CUSTOM USER ADDED
-  // Pre-populated from user profile — user cannot edit these in this screen
   final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
 
   //=====================================================================================
@@ -115,21 +113,20 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   //=====================================================================================
-  // HELPERS — build Applicant from current UI state
+  // HELPERS
   //=====================================================================================
 
   Applicant _buildApplicant() {
-    final combinedResumeData = "${_resumeFileName}|${_resumePath}";
-
+    final combinedResumeData = '${_resumeFileName}|${_resumePath}';
     return Applicant(
-      id: widget.applicant?.id ?? '',
-      jobTitle: _jobTitle,
-      company: _company,
-      resume: combinedResumeData, // <--- Store both here (data prefixing)
+      id:           widget.applicant?.id ?? '',
+      jobTitle:     _jobTitle,
+      company:      _company,
+      resume:       combinedResumeData,
       portfolioUrl: _portfolioController.text,
-      coverLetter: _coverLetterController.text,
-      skills: _skills,
-      submittedAt: widget.applicant?.submittedAt ?? DateTime.now().toIso8601String(),
+      coverLetter:  _coverLetterController.text,
+      skills:       _skills,
+      submittedAt:  widget.applicant?.submittedAt ?? DateTime.now().toIso8601String(),
     );
   }
 
@@ -147,24 +144,32 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     final draft = _buildApplicant();
 
-    // "Peel off" the filename prefix for the final database entry
+    // Strip filename prefix for the DB entry
     String cleanResume = draft.resume;
     if (cleanResume.contains('|')) {
       cleanResume = cleanResume.split('|')[1];
     }
 
-    // Create a unique ID for this specific application entry
     final String docId = DateTime.now().millisecondsSinceEpoch.toString();
 
+    // ── NEW: attach the logged-in jobseeker's userId so the Cloud Function
+    //         knows whose device to push the notification to
+    final String? jobseekerId = FirebaseAuth.instance.currentUser?.uid;
+    final String  seekerName  =
+        FirebaseAuth.instance.currentUser?.displayName ??
+            FirebaseAuth.instance.currentUser?.email ??
+            'Applicant';
+
     final finalApplicant = draft.copyWith(
-      id: docId,
-      resume: cleanResume,
+      id:         docId,
+      resume:     cleanResume,
       submittedAt: DateTime.now().toIso8601String(),
     );
 
     if (!finalApplicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload a resume and write a cover letter.')),
+        const SnackBar(
+            content: Text('Please upload a resume and write a cover letter.')),
       );
       return;
     }
@@ -172,27 +177,36 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // === THE FIREBASE CALL ===
+      // Save applicant fields to Firestore
       await _firestoreService.add(docId, finalApplicant);
 
-      // Success!
+      // ── NEW: also store candidateUserId + candidateName so the employer's
+      //         status update can trigger the Cloud Function correctly
+      if (jobseekerId != null) {
+        await FirebaseFirestore.instance
+            .collection('applications')
+            .doc(docId)
+            .update({
+          'candidateUserId': jobseekerId,
+          'candidateName':   seekerName,
+          'status':          'pending',   // initial status
+        });
+      }
+
       setState(() => _isSubmitting = false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Application submitted to Firebase!'),
+            content: Text('Application submitted!'),
             backgroundColor: Color(0xFF0BA87E),
           ),
         );
-
-        // Delay slightly so the user can see the success message
         Future.delayed(const Duration(milliseconds: 500), () {
           Navigator.pop(context);
         });
       }
     } catch (e) {
-      // Handle errors (like the 1MB Firestore limit)
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +221,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   void _handleAiDraft() {
     final applicant = _buildApplicant();
-    // generateAiDraft uses jobTitle, company, and skills from the applicant
     _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
   }
 
@@ -232,13 +245,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     _buildJobCard(),
                     const SizedBox(height: 20),
                     ResumeUploadWidget(
-                      // Use the state variables here so the widget "remembers" the selection
-                      initialFileName: _resumeFileName.isNotEmpty ? _resumeFileName : null,
-                      initialFileBase64: _resumePath.isNotEmpty ? _resumePath : null,
-
+                      initialFileName:
+                      _resumeFileName.isNotEmpty ? _resumeFileName : null,
+                      initialFileBase64:
+                      _resumePath.isNotEmpty ? _resumePath : null,
                       onFileSelected: (path, name) {
                         setState(() {
-                          _resumePath = path;
+                          _resumePath     = path;
                           _resumeFileName = name;
                         });
                       },
@@ -265,7 +278,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   //=====================================================================================
-  // WIDGET BUILDERS
+  // WIDGET BUILDERS (all unchanged from your original)
   //=====================================================================================
 
   Widget _buildHeader() {
@@ -279,9 +292,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             alignment: Alignment.centerLeft,
             child: GestureDetector(
               onTap: () {
-                // Build the applicant object with current text field values
                 final currentDraft = _buildApplicant();
-                Navigator.pop(context, currentDraft); // Pass the draft back
+                Navigator.pop(context, currentDraft);
               },
               child: Container(
                 width: 36,
@@ -319,10 +331,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         border: Border.all(color: kBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0A0F1624),
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
+              color: Color(0x0A0F1624), blurRadius: 16, offset: Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -353,10 +362,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               SizedBox(height: 3),
               Text(
                 '$_company • San Francisco, CA',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: kTextSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: kTextSecondary),
               ),
             ],
           ),
@@ -393,26 +399,23 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           controller: _portfolioController,
           onChanged: (value) {
             setState(() {
-              if (value.isNotEmpty && !_isValidUrl(value)) {
-                _portfolioError = 'Please enter a valid URL (e.g., https://...)';
-              } else {
-                _portfolioError = null;
-              }
+              _portfolioError = (value.isNotEmpty && !_isValidUrl(value))
+                  ? 'Please enter a valid URL (e.g., https://...)'
+                  : null;
             });
           },
           style: const TextStyle(fontSize: 14, color: kTextPrimary),
           decoration: InputDecoration(
             hintText: 'https://portfolio.com',
-            hintStyle: const TextStyle(fontSize: 14, color: kTextPlaceholder),
-            prefixIcon: const Icon(Icons.link_rounded, color: kTextPlaceholder, size: 20),
-
-            // Styling to match your existing design
+            hintStyle:
+            const TextStyle(fontSize: 14, color: kTextPlaceholder),
+            prefixIcon: const Icon(Icons.link_rounded,
+                color: kTextPlaceholder, size: 20),
             filled: true,
             fillColor: Colors.white,
-            errorText: _portfolioError, // This displays the red text automatically
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-
-            // Border logic
+            errorText: _portfolioError,
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: kBorder),
@@ -514,7 +517,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: const InputDecoration(
               hintText: 'Explain why you are a good fit for this role...',
-              hintStyle: TextStyle(fontSize: 13.5, color: kTextPlaceholder),
+              hintStyle:
+              TextStyle(fontSize: 13.5, color: kTextPlaceholder),
               border: InputBorder.none,
               contentPadding: EdgeInsets.all(14),
             ),
@@ -589,9 +593,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2.5,
-          ),
+              color: Colors.white, strokeWidth: 2.5),
         )
             : const Text(
           'Submit Application',
@@ -606,7 +608,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   Widget _buildBottomNav() {
-    // Add 'return' and a parent widget (like Container)
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,

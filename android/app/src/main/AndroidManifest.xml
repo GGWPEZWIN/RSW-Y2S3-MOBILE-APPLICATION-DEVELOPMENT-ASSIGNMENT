@@ -9,8 +9,7 @@
     <application
         android:label="assignment"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        >
+        android:icon="@mipmap/ic_launcher">
 
         <activity
             android:name=".MainActivity"
@@ -37,9 +36,24 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <receiver android:exported="false"
+        <service
+            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="application_status_channel" />
+
+        <receiver
+            android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-        <receiver android:exported="false"
+
+        <receiver
+            android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../JobListing/create_job_page.dart';  // Add this import
+import '../JobListing/ApplicationUI/create_job_page.dart';
+import '../Interview/schedule_interview_page.dart'; // Add this import
 
 class EmployerDashboard extends StatefulWidget {
   const EmployerDashboard({super.key});
@@ -11,7 +12,6 @@ class EmployerDashboard extends StatefulWidget {
 class _EmployerDashboardState extends State<EmployerDashboard> {
   int _selectedIndex = 0;
 
-  // Sample data for UI preview
   final List<Map<String, dynamic>> _sampleJobs = [
     {
       'title': 'Product Designer',
@@ -39,17 +39,151 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     },
   ];
 
-  // Function to navigate to Create Job Page
+  // Sample candidates per job (keyed by job title)
+  final Map<String, List<Map<String, dynamic>>> _sampleApplicants = {
+    'Product Designer': [
+      {'name': 'Ahmad Faris', 'status': 'Shortlisted'},
+      {'name': 'Nurul Aina', 'status': 'New'},
+      {'name': 'Ravi Kumar', 'status': 'Shortlisted'},
+    ],
+    'Flutter Developer': [
+      {'name': 'Jason Lim', 'status': 'Shortlisted'},
+      {'name': 'Siti Hajar', 'status': 'New'},
+    ],
+    'UI/UX Designer': [
+      {'name': 'Mei Ling', 'status': 'Shortlisted'},
+    ],
+  };
+
   void _navigateToCreateJob() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => CreateJobPage(),
+      MaterialPageRoute(builder: (context) => CreateJobPage()),
+    ).then((_) => setState(() {}));
+  }
+
+  /// Opens a bottom sheet listing applicants, with a "Schedule Interview" button
+  void _showApplicants(String jobTitle) {
+    final applicants = _sampleApplicants[jobTitle] ?? [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        maxChildSize: 0.85,
+        minChildSize: 0.3,
+        builder: (_, controller) => SafeArea( // ✅ FIX
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30), // ✅ FIX
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Applicants — $jobTitle',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ✅ FIX: Expanded → Flexible
+                Flexible(
+                  child: ListView.separated(
+                    controller: controller,
+                    itemCount: applicants.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final applicant = applicants[index];
+                      final isShortlisted =
+                          applicant['status'] == 'Shortlisted';
+
+                      return ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: Color(0xFFEEF0FD),
+                          child: Icon(Icons.person,
+                              color: Color(0xFF425AE2)),
+                        ),
+                        title: Text(
+                          applicant['name'],
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isShortlisted
+                                ? Colors.green.withOpacity(0.1)
+                                : Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            applicant['status'],
+                            style: TextStyle(
+                              fontSize: 11,
+                              color:
+                              isShortlisted ? Colors.green : Colors.orange,
+                            ),
+                          ),
+                        ),
+                        trailing: isShortlisted
+                            ? ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ScheduleInterviewPage(
+                                      candidateName: applicant['name'],
+                                      jobTitle: jobTitle,
+                                    ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                            const Color(0xFF425AE2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Schedule',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        )
+                            : null,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-    ).then((_) {
-      // Refresh the page when returning from CreateJobPage
-      setState(() {});
-    });
+    );
   }
 
   @override
@@ -104,7 +238,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 20),
-
             // Welcome Section
             Container(
               padding: const EdgeInsets.all(16),
@@ -134,9 +267,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                         Text(
                           'Welcome back,',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
+                              fontSize: 14, color: Colors.grey[600]),
                         ),
                         const Text(
                           'Tech Solutions Sdn Bhd',
@@ -162,7 +293,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
                 fillColor: Colors.white,
                 filled: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
@@ -175,18 +307,15 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             ),
             const SizedBox(height: 35),
 
-            // Dashboard Title
             const Text(
               "Dashboard",
               style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87),
             ),
             const SizedBox(height: 20),
 
-            // Stats Grid
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -203,32 +332,28 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             ),
             const SizedBox(height: 35),
 
-            // Recent Jobs Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
                   "Recent job posts",
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87),
                 ),
                 GestureDetector(
-                  onTap: _navigateToCreateJob,  // Added navigation
+                  onTap: _navigateToCreateJob,
                   child: Row(
                     children: const [
-                      Text(
-                        "view all",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF425AE2),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Text("view all",
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF425AE2),
+                              fontWeight: FontWeight.w500)),
                       SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF425AE2)),
+                      Icon(Icons.arrow_forward_ios,
+                          size: 14, color: Color(0xFF425AE2)),
                     ],
                   ),
                 ),
@@ -236,7 +361,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             ),
             const SizedBox(height: 15),
 
-            // Job Listings
             ..._sampleJobs.map((job) => _buildJobCard(
               title: job['title'] as String,
               company: job['company'] as String,
@@ -244,43 +368,35 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               workType: job['workType'] as String,
               applicants: job['applicants'] as int,
               timePosted: job['timePosted'] as String,
-              onEdit: () {
-                // Add edit functionality later
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+              onEdit: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
                     content: Text('Edit feature coming soon!'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              },
-              onDelete: () {
-                // Add delete functionality later
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+                    backgroundColor: Colors.orange),
+              ),
+              onDelete: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
                     content: Text('Delete feature coming soon!'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              },
+                    backgroundColor: Colors.red),
+              ),
+              // ✅ Now opens applicants bottom sheet
+              onViewApplicants: () =>
+                  _showApplicants(job['title'] as String),
             )),
             const SizedBox(height: 30),
 
-            // Create New Job Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _navigateToCreateJob,  // Added navigation
+                onPressed: _navigateToCreateJob,
                 icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text(
-                  'Create New Job',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                label: const Text('Create New Job',
+                    style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF425AE2),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -290,7 +406,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
+          border:
+          Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
         ),
         child: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -299,35 +416,34 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
           unselectedItemColor: Colors.grey.shade400,
           currentIndex: _selectedIndex,
           onTap: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-
-            // Navigate based on selected tab
-            if (index == 1) {
-              // Jobs tab - navigate to Create Job
-              _navigateToCreateJob();
-            }
+            setState(() => _selectedIndex = index);
+            if (index == 1) _navigateToCreateJob();
           },
           showSelectedLabels: true,
           showUnselectedLabels: true,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Dashboard"),
-            BottomNavigationBarItem(icon: Icon(Icons.work_outline), label: "Jobs"),
-            BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: "Applicants"),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard), label: "Dashboard"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.work_outline), label: "Jobs"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.people_outline), label: "Applicants"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline), label: "Profile"),
           ],
         ),
       ),
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton(
-        onPressed: _navigateToCreateJob,  // Added navigation
+        onPressed: _navigateToCreateJob,
         backgroundColor: const Color(0xFF425AE2),
         child: const Icon(Icons.add),
       )
           : null,
     );
   }
+
+  // ─── Reusable Widgets ──────────────────────────────────────────────────────
 
   Widget _buildStatCard(String value, String label, IconData icon) {
     return Container(
@@ -355,24 +471,18 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             child: Icon(icon, color: const Color(0xFF425AE2), size: 28),
           ),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87)),
           const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -387,6 +497,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     required String timePosted,
     required VoidCallback onEdit,
     required VoidCallback onDelete,
+    required VoidCallback onViewApplicants, // ✅ new callback
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -412,37 +523,28 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87)),
                     const SizedBox(height: 4),
-                    Text(
-                      company,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
+                    Text(company,
+                        style:
+                        TextStyle(fontSize: 14, color: Colors.grey[600])),
                   ],
                 ),
               ),
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.edit, size: 20),
-                    color: const Color(0xFF425AE2),
-                    onPressed: onEdit,
-                  ),
+                      icon: const Icon(Icons.edit, size: 20),
+                      color: const Color(0xFF425AE2),
+                      onPressed: onEdit),
                   IconButton(
-                    icon: const Icon(Icons.delete, size: 20),
-                    color: Colors.red,
-                    onPressed: onDelete,
-                  ),
+                      icon: const Icon(Icons.delete, size: 20),
+                      color: Colors.red,
+                      onPressed: onDelete),
                 ],
               ),
             ],
@@ -453,7 +555,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               _buildTag(workType),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF425AE2).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -461,55 +564,49 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 child: Text(
                   '$applicants applicants',
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF425AE2),
-                    fontWeight: FontWeight.w500,
-                  ),
+                      fontSize: 12,
+                      color: Color(0xFF425AE2),
+                      fontWeight: FontWeight.w500),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 4),
-              Text(
-                location,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              ),
-            ],
-          ),
+          Row(children: [
+            Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
+            const SizedBox(width: 4),
+            Text(location,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          ]),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 4),
-              Text(
-                timePosted,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              ),
-            ],
-          ),
+          Row(children: [
+            Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+            const SizedBox(width: 4),
+            Text(timePosted,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          ]),
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "View applicants",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF425AE2),
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF425AE2)),
-              ],
+
+          // ✅ "View applicants" now calls onViewApplicants
+          GestureDetector(
+            onTap: onViewApplicants,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("View applicants",
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF425AE2))),
+                  Icon(Icons.arrow_forward_ios,
+                      size: 14, color: Color(0xFF425AE2)),
+                ],
+              ),
             ),
           ),
         ],
@@ -524,14 +621,11 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         color: const Color(0xFF425AE2).withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF425AE2),
-        ),
-      ),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF425AE2))),
     );
   }
 }
