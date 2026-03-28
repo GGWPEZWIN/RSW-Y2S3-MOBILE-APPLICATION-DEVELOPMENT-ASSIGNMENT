@@ -10,26 +10,28 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_svg: ^2.0.10
   firebase_core: ^2.24.2
   firebase_auth: ^4.17.0
   firebase_database: ^10.2.2
   firebase_storage: ^11.3.0
   cloud_firestore: ^4.7.0
   google_sign_in: ^6.1.4
+  firebase_messaging: ^14.7.10
+  flutter_local_notifications: ^16.3.3
   cupertino_icons: ^1.0.8
   flutter_spinkit: ^5.2.0
   url_launcher: ^6.2.0
   file_picker: 8.0.7
-  flutter_svg: ^2.1.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-
 flutter:
   uses-material-design: true
+
   assets:
     - assets/icons/applied.svg
     - assets/icons/home.svg
@@ -39,7 +41,6 @@ flutter:
     - assets/icons/LoginPic.png
     - assets/icons/google.webp
     - assets/icons/email.png
-    - assets/icons/searchbarnavdeco.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
