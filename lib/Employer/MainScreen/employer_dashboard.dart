@@ -42,7 +42,7 @@ class JobListScreenWrapper extends StatelessWidget {
           );
         }).toList();
 
-        return JobListScreen(jobs: jobs);
+        return JobListScreen();
       },
     );
   }
