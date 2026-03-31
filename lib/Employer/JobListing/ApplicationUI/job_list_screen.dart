@@ -1,28 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/job_model.dart';
 import './create_job_screen.dart';
 
 class JobListScreen extends StatefulWidget {
-  final List<Job> jobs;
-
-  const JobListScreen({super.key, required this.jobs});
+  const JobListScreen({super.key});
 
   @override
   State<JobListScreen> createState() => _JobListScreenState();
 }
 
 class _JobListScreenState extends State<JobListScreen> {
-  late List<Job> _currentJobs;
   static const Color _blue1 = Color(0xFF3B4FD8);
   static const Color _blue2 = Color(0xFF2F3DBF);
 
-  @override
-  void initState() {
-    super.initState();
-    _currentJobs = List.from(widget.jobs);
+  Future<void> _deleteJob(String jobId) async {
+    await FirebaseFirestore.instance.collection('jobs').doc(jobId).delete();
   }
 
-  void _showDeleteDialog(BuildContext context, Job job, int index) {
+  void _showDeleteDialog(BuildContext context, Job job) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -71,9 +67,9 @@ class _JobListScreenState extends State<JobListScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          setState(() => _currentJobs.removeAt(index));
+                        onPressed: () async{
                           Navigator.pop(context);
+                          await _deleteJob(job.id!);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFF2D55),
@@ -96,27 +92,13 @@ class _JobListScreenState extends State<JobListScreen> {
   }
 
   // Function to navigate to edit screen
-  Future<void> _navigateToEditJob(Job job, int index) async {
+  Future<void> _navigateToEditJob(Job job) async {
     final editedJob = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CreateJobPage(jobToEdit: job),
       ),
     );
-
-    // If we got an edited job back, update the list
-    if (editedJob != null && editedJob is Job) {
-      setState(() {
-        _currentJobs[index] = editedJob;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Job updated successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
   }
 
   @override
@@ -134,25 +116,60 @@ class _JobListScreenState extends State<JobListScreen> {
         actions: [
           IconButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobPage()));
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const CreateJobPage()));
               },
               icon: const Icon(Icons.add, color: Colors.black)
           ),
         ],
       ),
-      body: _currentJobs.isEmpty
-          ? const Center(child: Text("No jobs found."))
-          : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _currentJobs.length,
-        itemBuilder: (context, index) {
-          return _jobCard(_currentJobs[index], index);
+      body: StreamBuilder <QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('jobs')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final jobs = snapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return Job(
+              id: doc.id,
+              title: data['title'] ?? '',
+              company: data['company'] ?? '',
+              location: data['location'] ?? '',
+              workType: data['workType'] ?? '',
+              workplace: data['workplace'] ?? '',
+              salary: data['salary'] ?? '',
+              postedTime: data['postedTime'] ?? '',
+              applicants: data['applicants'] ?? '',
+              createdAt: (data['createdAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+            );
+          }).toList();
+
+          if (jobs.isEmpty) {
+            return const Center(child: Text("No jobs found."));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: jobs.length,
+            itemBuilder: (context, index) {
+              return _jobCard(jobs[index]);
+            },
+          );
         },
       ),
     );
   }
 
-  Widget _jobCard(Job job, int index) {
+  Widget _jobCard(Job job) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
@@ -177,13 +194,13 @@ class _JobListScreenState extends State<JobListScreen> {
               const Spacer(),
               // Pencil Icon - Now with edit functionality
               GestureDetector(
-                onTap: () => _navigateToEditJob(job, index),
+                onTap: () => _navigateToEditJob(job),
                 child: const Icon(Icons.edit, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 10),
               // Delete Icon
               GestureDetector(
-                onTap: () => _showDeleteDialog(context, job, index),
+                onTap: () => _showDeleteDialog(context, job),
                 child: const Icon(Icons.delete, color: Colors.white, size: 18),
               ),
             ],
