@@ -1,57 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
-import 'package:assignment/Jobseeker/JobApplication/ApplicationServices//applicant_service.dart';
+import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
 import '../Widgets/resume_upload_widget.dart';
+import '../ApplicationServices/applicant_service.dart';
 
 class JobApplicationScreen extends StatefulWidget {
-  const JobApplicationScreen({super.key});
+  final String jobId;
+  final String jobTitle;
+  final String company;
+  final String? companyId;
+
+  const JobApplicationScreen({
+    super.key,
+    required this.jobId,
+    required this.jobTitle,
+    required this.company,
+    this.companyId,
+  });
 
   @override
   State<JobApplicationScreen> createState() => _JobApplicationScreenState();
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-
-  //=====================================================================================
-  // TEXT CONTROLLERS
-  //=====================================================================================
-
   final TextEditingController _portfolioController = TextEditingController();
   final TextEditingController _coverLetterController = TextEditingController();
 
-  //=====================================================================================
-  // CONSTANTS
-  //=====================================================================================
-
-  static const Color kBlue            = Color(0xFF2F6FED);
-  static const Color kBlueDark        = Color(0xFF1A57D4);
-  static const Color kBlueLight       = Color(0xFFEEF3FD);
-  static const Color kTextPrimary     = Color(0xFF0F1624);
-  static const Color kTextSecondary   = Color(0xFF6B7280);
+  static const Color kBlue = Color(0xFF2F6FED);
+  static const Color kBlueDark = Color(0xFF1A57D4);
+  static const Color kBlueLight = Color(0xFFEEF3FD);
+  static const Color kTextPrimary = Color(0xFF0F1624);
+  static const Color kTextSecondary = Color(0xFF6B7280);
   static const Color kTextPlaceholder = Color(0xFFADBAC7);
-  static const Color kBorder          = Color(0xFFE4E9F0);
-  static const Color kBg              = Color(0xFFF5F7FA);
-  static const Color kAiGreen         = Color(0xFF0BA87E);
-  static const Color kAiPurple        = Color(0xFF7C3AED);
+  static const Color kBorder = Color(0xFFE4E9F0);
+  static const Color kBg = Color(0xFFF5F7FA);
+  static const Color kAiGreen = Color(0xFF0BA87E);
+  static const Color kAiPurple = Color(0xFF7C3AED);
 
-  // Job details (swap these out for route arguments in a real app)
-  static const String _jobTitle = 'Senior Product Designer';
-  static const String _company  = 'TechFlow Inc.';
-
-  //=====================================================================================
-  // STATE
-  //=====================================================================================
-
-  String _resumePath     = '';
+  String _resumePath = '';
   String _resumeFileName = '';
-  bool   _isSubmitting   = false;
+  bool _isSubmitting = false;
 
-  // Pre-populated from user profile — user cannot edit these in this screen
+  // TODO: Replace with actual user skills from profile
   final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
-
-  //=====================================================================================
-  // LIFECYCLE
-  //=====================================================================================
 
   @override
   void dispose() {
@@ -60,29 +51,22 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     super.dispose();
   }
 
-  //=====================================================================================
-  // HELPERS — build Applicant from current UI state
-  //=====================================================================================
-
   Applicant _buildApplicant() {
     return ApplicantService.buildApplicant(
-      resumePath:   _resumePath,
+      resumePath: _resumePath,
       portfolioUrl: _portfolioController.text,
-      coverLetter:  _coverLetterController.text,
-      skills:       _skills,
-      jobTitle:     _jobTitle,
-      company:      _company,
+      coverLetter: _coverLetterController.text,
+      skills: _skills,
+      jobTitle: widget.jobTitle,
+      company: widget.company,
+      jobId: widget.jobId,
+      companyId: widget.companyId,
     );
   }
-
-  //=====================================================================================
-  // HANDLERS
-  //=====================================================================================
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
 
-    // validate() checks: resume, coverLetter, skills all non-empty
     if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -98,7 +82,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     setState(() => _isSubmitting = true);
 
-    // submitApplicant prints every field to the console on success
     final success = await ApplicantService.submitApplicant(applicant);
 
     setState(() => _isSubmitting = false);
@@ -114,17 +97,15 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         backgroundColor: success ? const Color(0xFF0BA87E) : Colors.redAccent,
       ),
     );
+    if (success) {
+      Navigator.pop(context);
+    }
   }
 
   void _handleAiDraft() {
     final applicant = _buildApplicant();
-    // generateAiDraft uses jobTitle, company, and skills from the applicant
     _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
   }
-
-  //=====================================================================================
-  // BUILD
-  //=====================================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -143,10 +124,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     _buildJobCard(),
                     const SizedBox(height: 20),
                     ResumeUploadWidget(
-                      initialFileName: null, // no pre-filled file
+                      initialFileName: null,
                       onFileSelected: (path, name) {
                         setState(() {
-                          _resumePath     = path;
+                          _resumePath = path;
                           _resumeFileName = name;
                         });
                       },
@@ -172,10 +153,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
-  //=====================================================================================
-  // WIDGET BUILDERS
-  //=====================================================================================
-
+  // ===== Widget builders (unchanged from your original) =====
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
@@ -242,22 +220,22 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _jobTitle,
-                style: TextStyle(
+                widget.jobTitle,
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: kTextPrimary,
                   letterSpacing: -0.2,
                 ),
               ),
-              SizedBox(height: 3),
+              const SizedBox(height: 3),
               Text(
-                '$_company • San Francisco, CA',
-                style: TextStyle(
+                widget.company,
+                style: const TextStyle(
                   fontSize: 13,
                   color: kTextSecondary,
                 ),
@@ -438,7 +416,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         Expanded(
           child: Text(
             'Applications are usually reviewed within 48 hours. '
-                'Your profile details will be shared with $_company.',
+                'Your profile details will be shared with ${widget.company}.',
             style: TextStyle(
               fontSize: 12,
               color: kTextSecondary.withOpacity(0.85),
