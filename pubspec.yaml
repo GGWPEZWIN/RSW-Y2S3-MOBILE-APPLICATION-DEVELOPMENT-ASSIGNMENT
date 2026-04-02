@@ -33,6 +33,7 @@ flutter:
   assets:
     - assets/icons/applied.svg
     - assets/icons/home.svg
+    - assets/icons/homedeco.png
     - assets/icons/profile.svg
     - assets/icons/saved.svg
     - assets/icons/JobBuddyLogo.png

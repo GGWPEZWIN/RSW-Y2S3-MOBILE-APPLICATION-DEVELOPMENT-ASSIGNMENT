@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/job_model.dart';
 
 class CreateJobPage extends StatefulWidget {
@@ -222,13 +223,48 @@ class _CreateJobPageState extends State<CreateJobPage> {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   Future<void> _saveJob() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isSaving = true);
     try {
+      // Get current user (without login check)
+      final user = FirebaseAuth.instance.currentUser;
+
+      // Use default values if user is null (for testing)
+      String companyName = "Your Company";
+      String? companyId = user?.uid ?? "test_user_123"; // Use test ID if no user
+
+      if (user != null) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          if (userDoc.exists) {
+            final data = userDoc.data() as Map<String, dynamic>?;
+            if (data != null) {
+              if (data['companyName'] != null && data['companyName'].toString().isNotEmpty) {
+                companyName = data['companyName'];
+              }
+              if (data['companyId'] != null) {
+                companyId = data['companyId'];
+              }
+            }
+          }
+        } catch (e) {
+          print('Error getting user data: $e');
+          // Continue with default values
+        }
+      }
+
       final salary = 'RM${_minPayController.text.trim()} - RM${_maxPayController.text.trim()}';
       final now    = DateTime.now();
+
       final jobData = {
         'title':             _jobTitleController.text.trim(),
-        'company':           isEditing ? widget.jobToEdit!.company : 'Your Company',
+        'company':           companyName,
+        'companyId':         companyId,
         'location':          _locationController.text.trim(),
         'workType':          _selectedWorkType,
         'workplace':         _selectedWorkplace,
@@ -252,23 +288,35 @@ class _CreateJobPageState extends State<CreateJobPage> {
       };
 
       if (isEditing && widget.jobToEdit!.id != null) {
-        await FirebaseFirestore.instance.collection('jobs').doc(widget.jobToEdit!.id).update(jobData);
+        await FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(widget.jobToEdit!.id)
+            .update(jobData);
       } else {
         await FirebaseFirestore.instance.collection('jobs').add(jobData);
       }
 
-      if (mounted) setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isEditing ? 'Job updated!' : 'Job posted!'),
-          backgroundColor: Colors.green,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isEditing ? 'Job updated!' : 'Job posted!'),
+            backgroundColor: Colors.green,
+          ),
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
+      print('Save error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
       if (mounted) setState(() => _isSaving = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
