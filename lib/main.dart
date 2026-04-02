@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'google_login.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationUI/job_details_screen.dart';
+import 'package:assignment/Jobseeker/JobApplication/ApplicationUI/edit_job_application.dart';
+import 'package:assignment/Jobseeker/MainScreen/AI_Matching.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +30,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Poppins',
       ),
       //home: GoogleLogin(), // Remove 'const' here
-      home: JobDetailsPage(),
+      home: UpdateApplicationScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
