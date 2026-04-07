@@ -76,7 +76,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       portfolioUrl: _portfolioController.text.trim(),
       coverLetter: _coverLetterController.text.trim(),
       skills: List<String>.from(_skills),
-      submittedAt: DateTime.now().toIso8601String(),
+      submittedAt: DateTime.now().toIso8601String(), jobId: '',
     );
   }
 

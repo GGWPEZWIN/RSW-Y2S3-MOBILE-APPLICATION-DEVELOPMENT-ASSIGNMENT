@@ -489,7 +489,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  // ── ✅ FIX 2: Suggestion chip row — tapping appends to the field ──────────
   Widget _suggestionRow(List<String> suggestions, TextEditingController ctrl) {
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
