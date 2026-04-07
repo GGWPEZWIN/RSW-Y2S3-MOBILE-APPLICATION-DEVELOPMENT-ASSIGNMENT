@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
 import '../JobApplication/ApplicationUI/job_details_screen.dart';
 import '../JobApplication/ApplicationServices/apply_job_service.dart';
+import '../Widgets/nav_bar_widget.dart';
+import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
 
 class HomePage extends StatefulWidget {
@@ -305,16 +307,29 @@ class _HomePageState extends State<HomePage> {
                                   height: 1.5),
                             ),
                             const SizedBox(height: 10),
-                            Row(children: const [
-                              Text('Learn more',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      color: _blue,
-                                      fontWeight: FontWeight.w700)),
-                              SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_rounded,
-                                  size: 14, color: _blue),
-                            ]),
+                            // Navigate to AI matching page
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AiMatchingScreen(),
+                                  ),
+                                );
+                              },
+                              child: Row(
+                                children: const [
+                                  Text('Learn more',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: _blue,
+                                          fontWeight: FontWeight.w700)),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_rounded,
+                                      size: 14, color: _blue),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -467,7 +482,25 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      //bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: NavBarWidget(
+        currentIndex: 0, // Hardcoded to 0 because this IS the Home Page
+        onTabSelected: (index) {
+          if (index == 0) return; // Already on Home
+          if (index == 1) {
+            // TODO: implement Saved route
+            // Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedJobsPage()));
+          } else if (index == 2) {
+            // TODO: implement applied
+            // logic for applied?
+          } else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProfilePage(user: widget.user)),
+            );
+          }
+        },
+      ),
     );
   }
 
@@ -674,6 +707,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // TODO: Used a reusable nav bar widget, so else need to maintain the widget to every route/page
   Widget _buildBottomNav() {
     final items = [
       {'icon': Icons.home_outlined, 'active': Icons.home_rounded, 'label': 'Home'},

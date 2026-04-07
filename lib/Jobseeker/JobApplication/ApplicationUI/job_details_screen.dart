@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
 import '../../../Employer/JobListing/ApplicationUI/create_job_screen.dart';
 import '../../JobApplication/ApplicationServices/apply_job_service.dart';
+import '../../MainScreen/jobseeker_profile.dart';
+import '../../Widgets/nav_bar_widget.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Job job;
@@ -474,51 +476,76 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       ),
 
       // ── Bottom nav ────────────────────────────────────────────────────────
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_icons.length, (index) {
-              final isActive = _currentIndex == index;
-              return GestureDetector(
-                onTap: () => setState(() => _currentIndex = index),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isActive ? _activeIcons[index] : _icons[index],
-                      size: 24,
-                      color: isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _labels[index],
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isActive
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: isActive
-                            ? const Color(0xFF2563EB)
-                            : const Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ),
+      //bottomNavigationBar: Container(
+      //  decoration: const BoxDecoration(
+      //    color: Colors.white,
+      //    boxShadow: [
+      //      BoxShadow(
+      //          color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
+      //    ],
+      //  ),
+      //  child: Padding(
+      //    padding: const EdgeInsets.symmetric(vertical: 10),
+      //    child: Row(
+      //      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      //      children: List.generate(_icons.length, (index) {
+      //        final isActive = _currentIndex == index;
+      //        return GestureDetector(
+      //          onTap: () => setState(() => _currentIndex = index),
+      //          child: Column(
+      //            mainAxisSize: MainAxisSize.min,
+      //            children: [
+      //              Icon(
+      //                isActive ? _activeIcons[index] : _icons[index],
+      //                size: 24,
+      //                color: isActive
+      //                    ? const Color(0xFF2563EB)
+      //                    : const Color(0xFF94A3B8),
+      //              ),
+      //              const SizedBox(height: 4),
+      //              Text(
+      //                _labels[index],
+      //                style: TextStyle(
+      //                  fontSize: 12,
+      //                  fontWeight: isActive
+      //                      ? FontWeight.w600
+      //                      : FontWeight.normal,
+      //                  color: isActive
+      //                      ? const Color(0xFF2563EB)
+      //                      : const Color(0xFF94A3B8),
+      //                ),
+      //              ),
+      //            ],
+      //          ),
+      //        );
+      //      }),
+      //    ),
+      //  ),
+      //),
+
+      bottomNavigationBar: NavBarWidget(
+        currentIndex: _currentIndex,
+        onTabSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+
+          // Navigation Logic:
+          if (index == 0) {
+            Navigator.pop(context);
+          } else if(index == 1) {
+            // TODO: saved route
+          }
+          else if(index == 2) {
+            // TODO: Applied route
+          }
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+            );
+          }
+        },
       ),
     );
   }

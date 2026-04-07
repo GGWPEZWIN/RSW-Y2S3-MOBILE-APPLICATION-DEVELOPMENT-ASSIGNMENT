@@ -1,8 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
-import '../Widgets/resume_upload_widget.dart';
+import '../../MainScreen/jobseeker_profile.dart';
+import '../../Widgets/resume_upload_widget.dart';
 import '../ApplicationServices/applicant_service.dart';
+import '../../Widgets/nav_bar_widget.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final String jobId;
@@ -40,6 +43,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   String _resumePath = '';
   String _resumeFileName = '';
   bool _isSubmitting = false;
+
+  int _currentIndex = 2;
 
   // TODO: Replace with actual user skills from profile
   final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
@@ -146,7 +151,27 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 ),
               ),
             ),
-            _buildBottomNav(),
+            NavBarWidget(
+              currentIndex: _currentIndex,
+              onTabSelected: (index) {
+                // 1. If the user clicks the 'Applied' tab (index 2), do nothing as we are already here
+                if (index == _currentIndex) return;
+                setState(() {
+                  _currentIndex = index;
+                });
+                if (index == 0) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                } else if (index == 1) {
+                  // TODO: Navigate to  Saved Jobs screen
+                  // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SavedJobsScreen()));
+                } else if (index == 3) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+                  );
+                }
+              },
+            ),
           ],
         ),
       ),
@@ -462,45 +487,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: kBorder)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(Icons.home_rounded, 'Home', isActive: true),
-          _buildNavItem(Icons.bookmark_border_rounded, 'Saved'),
-          _buildNavItem(Icons.work_outline_rounded, 'Applied'),
-          _buildNavItem(Icons.person_outline_rounded, 'Profile'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label,
-      {bool isActive = false}) {
-    final color = isActive ? kBlue : kTextSecondary;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 24, color: color),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-            color: color,
-          ),
-        ),
-      ],
     );
   }
 }

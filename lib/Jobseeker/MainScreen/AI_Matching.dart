@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -69,7 +70,9 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               size: 18, color: _C.textDark),
-          onPressed: () {},
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
         title: Text('AI Matching',
             style: TextStyle(
@@ -115,7 +118,9 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
             label: 'Start Matching Now',
             trailing: const Icon(Icons.arrow_forward_rounded,
                 color: _C.white, size: 18),
-            onTap: () {},
+            onTap: () {
+              //TODO: implement the AI logic.
+            },
           ),
         ),
         _BottomNav(
