@@ -1,109 +1,53 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
-import 'package:flutter_svg/flutter_svg.dart';                   // ← fixed import
-import '../../../services/firestore_services.dart';
-import '../Widgets/resume_upload_widget.dart';
-import 'package:firebase_auth/firebase_auth.dart';               // ← NEW
-import 'package:assignment/services/fcm_service.dart';           // ← NEW
+import '../../MainScreen/jobseeker_profile.dart';
+import '../../Widgets/resume_upload_widget.dart';
+import '../ApplicationServices/applicant_service.dart';
+import '../../Widgets/nav_bar_widget.dart';
 
 class JobApplicationScreen extends StatefulWidget {
-  final Applicant? applicant;
+  final String jobId;
+  final String jobTitle;
+  final String company;
+  final String? companyId;
 
-  const JobApplicationScreen({super.key, this.applicant});
+  const JobApplicationScreen({
+    super.key,
+    required this.jobId,
+    required this.jobTitle,
+    required this.company,
+    this.companyId,
+  });
 
   @override
   State<JobApplicationScreen> createState() => _JobApplicationScreenState();
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-
-  final FirestoreService<Applicant> _firestoreService = FirestoreService<Applicant>(
-    ref: FirebaseFirestore.instance.collection('applications'),
-    fromMap: (id, data) => Applicant.fromMap(id, data),
-    toMap: (applicant) => applicant.toMap(),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-
-    // ── NEW: save this jobseeker's FCM token so employer can notify them ──
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      FCMService().saveCandidateToken(userId);
-    }
-
-    if (widget.applicant != null) {
-      _coverLetterController.text = widget.applicant!.coverLetter;
-      _portfolioController.text   = widget.applicant!.portfolioUrl;
-
-      String rawResume = widget.applicant!.resume;
-      if (rawResume.contains('|')) {
-        List<String> parts = rawResume.split('|');
-        _resumeFileName = parts[0];
-        _resumePath     = parts[1];
-      } else if (rawResume.isNotEmpty) {
-        _resumePath     = rawResume;
-        _resumeFileName = 'Uploaded Resume';
-      }
-    }
-  }
-
-  // SVG icons
-  final List<String> _icons = [
-    'assets/icons/home.svg',
-    'assets/icons/saved.svg',
-    'assets/icons/applied.svg',
-    'assets/icons/profile.svg',
-  ];
-  final List<String> _labels = ['Home', 'Saved', 'Applied', 'Profile'];
-
-  String? _portfolioError;
-  String  _resumePath     = '';
-  String  _resumeFileName = '';
-  bool    _isSubmitting   = false;
-  int     _currentIndex   = 0;
-
-  bool _isValidUrl(String url) {
-    if (url.isEmpty) return true;
-    final urlRegExp = RegExp(
-      r"^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$",
-    );
-    return urlRegExp.hasMatch(url);
-  }
-
-  //=====================================================================================
-  // TEXT CONTROLLERS
-  //=====================================================================================
-
-  final TextEditingController _portfolioController   = TextEditingController();
+  final TextEditingController _portfolioController = TextEditingController();
   final TextEditingController _coverLetterController = TextEditingController();
 
-  //=====================================================================================
-  // CONSTANTS
-  //=====================================================================================
-
-  static const Color kBlue            = Color(0xFF2F6FED);
-  static const Color kBlueDark        = Color(0xFF1A57D4);
-  static const Color kBlueLight       = Color(0xFFEEF3FD);
-  static const Color kTextPrimary     = Color(0xFF0F1624);
-  static const Color kTextSecondary   = Color(0xFF6B7280);
+  static const Color kBlue = Color(0xFF2F6FED);
+  static const Color kBlueDark = Color(0xFF1A57D4);
+  static const Color kBlueLight = Color(0xFFEEF3FD);
+  static const Color kTextPrimary = Color(0xFF0F1624);
+  static const Color kTextSecondary = Color(0xFF6B7280);
   static const Color kTextPlaceholder = Color(0xFFADBAC7);
-  static const Color kBorder          = Color(0xFFE4E9F0);
-  static const Color kBg              = Color(0xFFF5F7FA);
-  static const Color kAiGreen         = Color(0xFF0BA87E);
-  static const Color kAiPurple        = Color(0xFF7C3AED);
+  static const Color kBorder = Color(0xFFE4E9F0);
+  static const Color kBg = Color(0xFFF5F7FA);
+  static const Color kAiGreen = Color(0xFF0BA87E);
+  static const Color kAiPurple = Color(0xFF7C3AED);
 
-  static const String _jobTitle = 'Senior Product Designer';
-  static const String _company  = 'TechFlow Inc.';
+  String _resumePath = '';
+  String _resumeFileName = '';
+  bool _isSubmitting = false;
 
+  int _currentIndex = 2;
+
+  // TODO: Replace with actual user skills from profile
   final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
-
-  //=====================================================================================
-  // LIFECYCLE
-  //=====================================================================================
 
   @override
   void dispose() {
@@ -112,110 +56,54 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     super.dispose();
   }
 
-  //=====================================================================================
-  // HELPERS
-  //=====================================================================================
-
   Applicant _buildApplicant() {
-    final combinedResumeData = '${_resumeFileName}|${_resumePath}';
-    return Applicant(
-      id:           widget.applicant?.id ?? '',
-      jobTitle:     _jobTitle,
-      company:      _company,
-      resume:       combinedResumeData,
+    return ApplicantService.buildApplicant(
+      resumePath: _resumePath,
       portfolioUrl: _portfolioController.text,
-      coverLetter:  _coverLetterController.text,
-      skills:       _skills,
-      submittedAt:  widget.applicant?.submittedAt ?? DateTime.now().toIso8601String(),
+      coverLetter: _coverLetterController.text,
+      skills: _skills,
+      jobTitle: widget.jobTitle,
+      company: widget.company,
+      jobId: widget.jobId,
+      companyId: widget.companyId,
     );
   }
 
-  //=====================================================================================
-  // HANDLERS
-  //=====================================================================================
-
   Future<void> _handleSubmit() async {
-    if (_portfolioError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fix the Portfolio URL error.')),
-      );
-      return;
-    }
+    final applicant = _buildApplicant();
 
-    final draft = _buildApplicant();
-
-    // Strip filename prefix for the DB entry
-    String cleanResume = draft.resume;
-    if (cleanResume.contains('|')) {
-      cleanResume = cleanResume.split('|')[1];
-    }
-
-    final String docId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    // ── NEW: attach the logged-in jobseeker's userId so the Cloud Function
-    //         knows whose device to push the notification to
-    final String? jobseekerId = FirebaseAuth.instance.currentUser?.uid;
-    final String  seekerName  =
-        FirebaseAuth.instance.currentUser?.displayName ??
-            FirebaseAuth.instance.currentUser?.email ??
-            'Applicant';
-
-    final finalApplicant = draft.copyWith(
-      id:         docId,
-      resume:     cleanResume,
-      submittedAt: DateTime.now().toIso8601String(),
-    );
-
-    if (!finalApplicant.validate()) {
+    if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Please upload a resume and write a cover letter.')),
+          content: Text(
+            'Please upload a resume, write a cover letter, '
+                'and select at least one skill.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
       );
       return;
     }
 
     setState(() => _isSubmitting = true);
 
-    try {
-      // Save applicant fields to Firestore
-      await _firestoreService.add(docId, finalApplicant);
+    final success = await ApplicantService.submitApplicant(applicant);
 
-      // ── NEW: also store candidateUserId + candidateName so the employer's
-      //         status update can trigger the Cloud Function correctly
-      if (jobseekerId != null) {
-        await FirebaseFirestore.instance
-            .collection('applications')
-            .doc(docId)
-            .update({
-          'candidateUserId': jobseekerId,
-          'candidateName':   seekerName,
-          'status':          'pending',   // initial status
-        });
-      }
+    setState(() => _isSubmitting = false);
 
-      setState(() => _isSubmitting = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Application submitted!'),
-            backgroundColor: Color(0xFF0BA87E),
-          ),
-        );
-        Future.delayed(const Duration(milliseconds: 500), () {
-          Navigator.pop(context);
-        });
-      }
-    } catch (e) {
-      setState(() => _isSubmitting = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Submission failed: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Application submitted successfully!'
+              : 'Submission failed. Please try again.',
+        ),
+        backgroundColor: success ? const Color(0xFF0BA87E) : Colors.redAccent,
+      ),
+    );
+    if (success) {
+      Navigator.pop(context);
     }
   }
 
@@ -223,10 +111,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     final applicant = _buildApplicant();
     _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
   }
-
-  //=====================================================================================
-  // BUILD
-  //=====================================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -245,13 +129,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     _buildJobCard(),
                     const SizedBox(height: 20),
                     ResumeUploadWidget(
-                      initialFileName:
-                      _resumeFileName.isNotEmpty ? _resumeFileName : null,
-                      initialFileBase64:
-                      _resumePath.isNotEmpty ? _resumePath : null,
+                      initialFileName: null,
                       onFileSelected: (path, name) {
                         setState(() {
-                          _resumePath     = path;
+                          _resumePath = path;
                           _resumeFileName = name;
                         });
                       },
@@ -270,17 +151,34 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 ),
               ),
             ),
-            _buildBottomNav(),
+            NavBarWidget(
+              currentIndex: _currentIndex,
+              onTabSelected: (index) {
+                // 1. If the user clicks the 'Applied' tab (index 2), do nothing as we are already here
+                if (index == _currentIndex) return;
+                setState(() {
+                  _currentIndex = index;
+                });
+                if (index == 0) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                } else if (index == 1) {
+                  // TODO: Navigate to  Saved Jobs screen
+                  // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SavedJobsScreen()));
+                } else if (index == 3) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+                  );
+                }
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  //=====================================================================================
-  // WIDGET BUILDERS (all unchanged from your original)
-  //=====================================================================================
-
+  // ===== Widget builders (unchanged from your original) =====
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
@@ -291,10 +189,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(
-              onTap: () {
-                final currentDraft = _buildApplicant();
-                Navigator.pop(context, currentDraft);
-              },
+              onTap: () => Navigator.maybePop(context),
               child: Container(
                 width: 36,
                 height: 36,
@@ -331,7 +226,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         border: Border.all(color: kBorder),
         boxShadow: const [
           BoxShadow(
-              color: Color(0x0A0F1624), blurRadius: 16, offset: Offset(0, 4)),
+            color: Color(0x0A0F1624),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -347,22 +245,25 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _jobTitle,
-                style: TextStyle(
+                widget.jobTitle,
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: kTextPrimary,
                   letterSpacing: -0.2,
                 ),
               ),
-              SizedBox(height: 3),
+              const SizedBox(height: 3),
               Text(
-                '$_company • San Francisco, CA',
-                style: TextStyle(fontSize: 13, color: kTextSecondary),
+                widget.company,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: kTextSecondary,
+                ),
               ),
             ],
           ),
@@ -395,42 +296,23 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       children: [
         _buildSectionLabel('Portfolio URL'),
         const SizedBox(height: 8),
-        TextField(
-          controller: _portfolioController,
-          onChanged: (value) {
-            setState(() {
-              _portfolioError = (value.isNotEmpty && !_isValidUrl(value))
-                  ? 'Please enter a valid URL (e.g., https://...)'
-                  : null;
-            });
-          },
-          style: const TextStyle(fontSize: 14, color: kTextPrimary),
-          decoration: InputDecoration(
-            hintText: 'https://portfolio.com',
-            hintStyle:
-            const TextStyle(fontSize: 14, color: kTextPlaceholder),
-            prefixIcon: const Icon(Icons.link_rounded,
-                color: kTextPlaceholder, size: 20),
-            filled: true,
-            fillColor: Colors.white,
-            errorText: _portfolioError,
-            contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: kBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: kBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: kBlue, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.redAccent),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kBorder),
+          ),
+          child: TextField(
+            controller: _portfolioController,
+            style: const TextStyle(fontSize: 14, color: kTextPrimary),
+            decoration: const InputDecoration(
+              hintText: 'https://portfolio.com',
+              hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
+              prefixIcon: Icon(Icons.link_rounded,
+                  color: kTextPlaceholder, size: 20),
+              border: InputBorder.none,
+              contentPadding:
+              EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
           ),
         ),
@@ -517,8 +399,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: const InputDecoration(
               hintText: 'Explain why you are a good fit for this role...',
-              hintStyle:
-              TextStyle(fontSize: 13.5, color: kTextPlaceholder),
+              hintStyle: TextStyle(fontSize: 13.5, color: kTextPlaceholder),
               border: InputBorder.none,
               contentPadding: EdgeInsets.all(14),
             ),
@@ -560,7 +441,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         Expanded(
           child: Text(
             'Applications are usually reviewed within 48 hours. '
-                'Your profile details will be shared with $_company.',
+                'Your profile details will be shared with ${widget.company}.',
             style: TextStyle(
               fontSize: 12,
               color: kTextSecondary.withOpacity(0.85),
@@ -593,7 +474,9 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-              color: Colors.white, strokeWidth: 2.5),
+            color: Colors.white,
+            strokeWidth: 2.5,
+          ),
         )
             : const Text(
           'Submit Application',
@@ -602,55 +485,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_icons.length, (index) {
-            final isActive = _currentIndex == index;
-            return GestureDetector(
-              onTap: () => setState(() => _currentIndex = index),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SvgPicture.asset(
-                    _icons[index],
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(
-                      isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF94A3B8),
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _labels[index],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                      isActive ? FontWeight.w600 : FontWeight.normal,
-                      color: isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF94A3B8),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
         ),
       ),
     );

@@ -34,10 +34,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icons/applied.svg
-    - assets/icons/home.svg
-    - assets/icons/profile.svg
-    - assets/icons/saved.svg
+    - assets/icons/homedeco.png
     - assets/icons/JobBuddyLogo.png
     - assets/icons/LoginPic.png
     - assets/icons/google.webp

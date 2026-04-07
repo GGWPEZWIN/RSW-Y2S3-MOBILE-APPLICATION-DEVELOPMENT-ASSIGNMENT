@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'Employer/MainScreen/company_registration_page.dart';
 import 'email_login.dart';
 import 'services/google_sign_in_service.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
@@ -61,6 +63,14 @@ class _GoogleLoginState extends State<GoogleLogin> {
     }
   }
 
+  // ── Direct navigation to Employer Dashboard — no login required ──────────
+  void _navigateToEmployer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmployerDashboard()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,7 +83,7 @@ class _GoogleLoginState extends State<GoogleLogin> {
             children: [
               const SizedBox(height: 20),
 
-              // --- Header Logo ---
+              // ── Header Logo ─────────────────────────────────────────
               Align(
                 alignment: Alignment.topLeft,
                 child: Row(
@@ -108,41 +118,38 @@ class _GoogleLoginState extends State<GoogleLogin> {
 
               const SizedBox(height: 30),
 
-              // --- Login Method ---
-              Column(
-                children: [
-                  const Center(
-                    child: Text(
-                      "Find the right job",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF425AE2),
-                      ),
-                    ),
+              // ── Tagline ─────────────────────────────────────────────
+              const Center(
+                child: Text(
+                  "Find the right job",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF425AE2),
                   ),
-                  const SizedBox(height: 12),
-                  const Center(
-                    child: Text(
-                      "Build your career",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Center(
+                child: Text(
+                  "Build your career",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
-                ],
+                ),
               ),
 
               const Spacer(flex: 2),
 
-              // --- Google Button with Loading State ---
+              // ── Google Sign-In Button ───────────────────────────────
               _isLoading
                   ? Container(
                 height: 56,
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF7B4DFF), width: 1.5),
+                  border: Border.all(
+                      color: const Color(0xFF7B4DFF), width: 1.5),
                   borderRadius: BorderRadius.circular(12),
                   color: Colors.white,
                 ),
@@ -158,7 +165,8 @@ class _GoogleLoginState extends State<GoogleLogin> {
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  side: const BorderSide(
+                      color: Color(0xFF7B4DFF), width: 1.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -177,7 +185,8 @@ class _GoogleLoginState extends State<GoogleLogin> {
                     const SizedBox(width: 12),
                     const Text(
                       "Continue with Google",
-                      style: TextStyle(color: Colors.black, fontSize: 16),
+                      style: TextStyle(
+                          color: Colors.black, fontSize: 16),
                     ),
                   ],
                 ),
@@ -185,7 +194,7 @@ class _GoogleLoginState extends State<GoogleLogin> {
 
               const SizedBox(height: 12),
 
-              // --- Email Button ---
+              // ── Email Sign-In Button ────────────────────────────────
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
@@ -196,7 +205,8 @@ class _GoogleLoginState extends State<GoogleLogin> {
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  side: const BorderSide(
+                      color: Color(0xFF7B4DFF), width: 1.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -215,7 +225,8 @@ class _GoogleLoginState extends State<GoogleLogin> {
                     const SizedBox(width: 12),
                     const Text(
                       "Continue with Email",
-                      style: TextStyle(color: Colors.black, fontSize: 16),
+                      style: TextStyle(
+                          color: Colors.black, fontSize: 16),
                     ),
                   ],
                 ),
@@ -223,12 +234,12 @@ class _GoogleLoginState extends State<GoogleLogin> {
 
               const SizedBox(height: 20),
 
-              // --- Register Link ---
+              // ── Register Link ───────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    "Don’t have an account? ",
+                    "Don't have an account? ",
                     style: TextStyle(color: Colors.black54),
                   ),
                   GestureDetector(
@@ -246,7 +257,7 @@ class _GoogleLoginState extends State<GoogleLogin> {
 
               const Spacer(flex: 1),
 
-              // --- Footer - Navigate to Employer Dashboard ---
+              // ── Employer Footer Link ────────────────────────────────
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(
@@ -254,18 +265,11 @@ class _GoogleLoginState extends State<GoogleLogin> {
                   children: [
                     const Text(
                       "Recruitment? Visit ",
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        // Navigate directly to Employer Dashboard (JUST TEMPORARY DESTINATION)
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const EmployerDashboard(),
-                          ),
-                        );
-                      },
+                      onTap: _navigateToEmployer,
                       child: const Text(
                         "here",
                         style: TextStyle(
