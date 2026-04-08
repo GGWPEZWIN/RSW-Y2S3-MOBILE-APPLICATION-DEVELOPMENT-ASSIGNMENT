@@ -63,17 +63,6 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
       // Save company to Firestore
       final docRef = await FirebaseFirestore.instance.collection('companies').add(companyData);
 
-      // Update the user's document to link this company
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'role': 'employer',
-        'companyId': docRef.id,
-        'companyName': _companyNameController.text.trim(),
-        'email': user.email,
-        'name': user.displayName ?? 'Employer',
-        'photoURL': user.photoURL,
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Company created!'), backgroundColor: Colors.green),
