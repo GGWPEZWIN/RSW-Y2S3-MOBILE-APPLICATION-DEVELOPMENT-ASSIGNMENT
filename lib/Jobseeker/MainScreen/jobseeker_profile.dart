@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'edit_profile.dart';
+
 class ProfilePage extends StatelessWidget {
   final User? user;
 
@@ -105,11 +107,17 @@ class ProfilePage extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Edit profile feature coming soon!'),
-                      ),
-                    );
+                    if (user != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditProfilePage(user: user!),
+                        ),
+                      ).then((_) {
+                        // This part refreshes the profile page UI when you come back
+                        (context as Element).markNeedsBuild();
+                      });
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF425AE2),

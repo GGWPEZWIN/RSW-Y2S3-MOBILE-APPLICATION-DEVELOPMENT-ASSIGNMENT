@@ -1,3 +1,4 @@
+import 'package:assignment/register.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -243,7 +244,12 @@ class _GoogleLoginState extends State<GoogleLogin> {
                     style: TextStyle(color: Colors.black54),
                   ),
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const RegisterPage()),
+                      );
+                    },
                     child: const Text(
                       "Register",
                       style: TextStyle(
