@@ -441,6 +441,7 @@ class _HomePageState extends State<HomePage> {
                             final job = Job(
                               id: doc.id,
                               title: data['title'] ?? 'Untitled',
+                              companyId: data['companyId'] ?? '',
                               company: data['company'] ?? 'Company',
                               location: data['location'] ?? '',
                               workType: data['workType'] ?? 'Full-time',
@@ -482,7 +483,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      //bottomNavigationBar: _buildBottomNav(),
       bottomNavigationBar: NavBarWidget(
         currentIndex: 0, // Hardcoded to 0 because this IS the Home Page
         onTabSelected: (index) {
@@ -664,7 +664,16 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.white60, fontSize: 12)),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () => _handleApply(job.id!, job.title),
+                  //TODO:
+                  //onTap: () => _handleApply(job.id!, job.title),
+                  onTap: () async {
+                    // Wait for result to see if they applied while on the details page
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+                    );
+                    _loadAppliedJobs(); // Refresh the 'Applied' checkmarks on home
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 18, vertical: 8),
@@ -704,70 +713,6 @@ class _HomePageState extends State<HomePage> {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: Colors.black87)),
-    );
-  }
-
-  // TODO: Used a reusable nav bar widget, so else need to maintain the widget to every route/page
-  Widget _buildBottomNav() {
-    final items = [
-      {'icon': Icons.home_outlined, 'active': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.bookmark_border_outlined, 'active': Icons.bookmark_rounded, 'label': 'Saved'},
-      {'icon': Icons.work_outline, 'active': Icons.work_rounded, 'label': 'Applied'},
-      {'icon': Icons.person_outline, 'active': Icons.person_rounded, 'label': 'Profile'},
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final active = _navIndex == i;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _navIndex = i);
-                  if (i == 3) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ProfilePage(user: widget.user)),
-                    ).then((_) => setState(() => _navIndex = 0));
-                  }
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      active
-                          ? items[i]['active'] as IconData
-                          : items[i]['icon'] as IconData,
-                      size: 24,
-                      color: active ? _blue : const Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(items[i]['label'] as String,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight:
-                          active ? FontWeight.w700 : FontWeight.normal,
-                          color: active ? _blue : const Color(0xFF94A3B8),
-                        )),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
     );
   }
 }

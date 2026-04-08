@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
+import '../../../Employer/models/job_model.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/resume_upload_widget.dart';
 import '../ApplicationServices/applicant_service.dart';
@@ -12,6 +13,7 @@ class JobApplicationScreen extends StatefulWidget {
   final String jobTitle;
   final String company;
   final String? companyId;
+  final Job? job;
 
   const JobApplicationScreen({
     super.key,
@@ -19,6 +21,7 @@ class JobApplicationScreen extends StatefulWidget {
     required this.jobTitle,
     required this.company,
     this.companyId,
+    this.job,
   });
 
   @override
@@ -66,6 +69,11 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       company: widget.company,
       jobId: widget.jobId,
       companyId: widget.companyId,
+      salary: widget.job?.salary ?? '',
+      workType: widget.job?.workType ?? '',
+      workplace: widget.job?.workplace ?? '',
+      education: widget.job?.educationLevel ?? '',
+      experienceLevel: widget.job?.experienceLevel ?? '',
     );
   }
 
@@ -103,8 +111,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       ),
     );
     if (success) {
-      Navigator.pop(context);
+      //Navigator.pop(context);
+      // MUST pass 'true' back so the Details page knows to update
+      // the 'Apply' button to 'Applied' immediately.
+      Navigator.pop(context, true);
     }
+
   }
 
   void _handleAiDraft() {
@@ -165,7 +177,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   // TODO: Navigate to  Saved Jobs screen
                   // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SavedJobsScreen()));
                 } else if (index == 3) {
-                  Navigator.push(
+                  // Use Replacement to keep the stack clean
+                  Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
                   );

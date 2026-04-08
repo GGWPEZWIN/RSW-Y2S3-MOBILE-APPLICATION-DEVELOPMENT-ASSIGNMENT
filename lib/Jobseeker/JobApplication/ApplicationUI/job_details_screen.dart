@@ -6,6 +6,7 @@ import '../../../Employer/JobListing/ApplicationUI/create_job_screen.dart';
 import '../../JobApplication/ApplicationServices/apply_job_service.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
+import 'job_application_screen.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Job job;
@@ -26,19 +27,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   String? _userCompanyId;
   int _applicantCount = 0;
 
-  final List<String> _labels = ['Home', 'Saved', 'Applied', 'Profile'];
-  final List<IconData> _icons = [
-    Icons.home_outlined,
-    Icons.bookmark_border_outlined,
-    Icons.work_outline,
-    Icons.person_outline,
-  ];
-  final List<IconData> _activeIcons = [
-    Icons.home_rounded,
-    Icons.bookmark_rounded,
-    Icons.work_rounded,
-    Icons.person_rounded,
-  ];
+  String _fetchedEducation = '';
+  String _fetchedExperience = '';
 
   static const Color _blue  = Color(0xFF2563EB);
   static const Color _green = Color(0xFF0BA87E);
@@ -85,22 +75,71 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     }
   }
 
+  //Future<void> _handleApply() async {
+  //  if (_hasApplied || _isApplying) return;
+
+  //  setState(() => _isApplying = true);
+
+  //  final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
+
+  //  if (!mounted) return;
+
+  //  setState(() {
+  //    _isApplying = false;
+  //    if (success) {
+  //      _hasApplied = true;
+  //      _applicantCount++;
+  //    }
+  //  });
+
+  //  ScaffoldMessenger.of(context).showSnackBar(
+  //    SnackBar(
+  //      content: Text(
+  //        success
+  //            ? 'Application submitted! The employer will review it soon.'
+  //            : 'You have already applied for this job.',
+  //      ),
+  //      backgroundColor: success ? _green : Colors.orange,
+  //      duration: const Duration(seconds: 3),
+  //    ),
+  //  );
+  //}
+
   Future<void> _handleApply() async {
-    if (_hasApplied || _isApplying) return;
+    if (_hasApplied) return;
 
     setState(() => _isApplying = true);
 
     final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
 
-    if (!mounted) return;
+    // Use copyWith to "patch" the null fields with the values we fetched
+    final updatedJob = widget.job.copyWith(
+      educationLevel: _fetchedEducation,
+      experienceLevel: _fetchedExperience,
+    );
 
-    setState(() {
-      _isApplying = false;
-      if (success) {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JobApplicationScreen(
+          jobId: updatedJob.id!,
+          jobTitle: updatedJob.title,
+          company: updatedJob.company,
+          companyId: updatedJob.companyId,
+          job: updatedJob, // CRITICAL: Pass the patched object!
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() {
         _hasApplied = true;
         _applicantCount++;
-      }
-    });
+        _isApplying = false;
+      });
+    } else {
+      setState(() => _isApplying = false);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -270,6 +309,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         experience        = data['experienceLevel']   ?? '';
                         education         = data['educationLevel']    ?? '';
                         applicationMethod = data['applicationMethod'] ?? 'In-app';
+
+                        _fetchedEducation = education;
+                        _fetchedExperience = experience;
                       }
 
                       return Column(
@@ -474,54 +516,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           ],
         ),
       ),
-
-      // ── Bottom nav ────────────────────────────────────────────────────────
-      //bottomNavigationBar: Container(
-      //  decoration: const BoxDecoration(
-      //    color: Colors.white,
-      //    boxShadow: [
-      //      BoxShadow(
-      //          color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
-      //    ],
-      //  ),
-      //  child: Padding(
-      //    padding: const EdgeInsets.symmetric(vertical: 10),
-      //    child: Row(
-      //      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      //      children: List.generate(_icons.length, (index) {
-      //        final isActive = _currentIndex == index;
-      //        return GestureDetector(
-      //          onTap: () => setState(() => _currentIndex = index),
-      //          child: Column(
-      //            mainAxisSize: MainAxisSize.min,
-      //            children: [
-      //              Icon(
-      //                isActive ? _activeIcons[index] : _icons[index],
-      //                size: 24,
-      //                color: isActive
-      //                    ? const Color(0xFF2563EB)
-      //                    : const Color(0xFF94A3B8),
-      //              ),
-      //              const SizedBox(height: 4),
-      //              Text(
-      //                _labels[index],
-      //                style: TextStyle(
-      //                  fontSize: 12,
-      //                  fontWeight: isActive
-      //                      ? FontWeight.w600
-      //                      : FontWeight.normal,
-      //                  color: isActive
-      //                      ? const Color(0xFF2563EB)
-      //                      : const Color(0xFF94A3B8),
-      //                ),
-      //              ),
-      //            ],
-      //          ),
-      //        );
-      //      }),
-      //    ),
-      //  ),
-      //),
 
       bottomNavigationBar: NavBarWidget(
         currentIndex: _currentIndex,

@@ -112,6 +112,60 @@ class Job {
     );
   }
 
+  Job copyWith({
+    String? id,
+    String? title,
+    String? company,
+    String? companyId,
+    String? location,
+    String? workType,
+    String? workplace,
+    String? salary,
+    String? postedTime,
+    String? applicants,
+    DateTime? createdAt,
+    String? description,
+    String? requirements,
+    String? benefits,
+    int? vacancies,
+    String? experienceLevel,
+    String? educationLevel,
+    DateTime? publishDate,
+    DateTime? expiryDate,
+    String? applicationMethod,
+    String? applicationUrl,
+    String? applicationEmail,
+    String? payType,
+    String? showPayOnAd,
+  }) {
+    return Job(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      company: company ?? this.company,
+      companyId: companyId ?? this.companyId,
+      location: location ?? this.location,
+      workType: workType ?? this.workType,
+      workplace: workplace ?? this.workplace,
+      salary: salary ?? this.salary,
+      postedTime: postedTime ?? this.postedTime,
+      applicants: applicants ?? this.applicants,
+      createdAt: createdAt ?? this.createdAt,
+      description: description ?? this.description,
+      requirements: requirements ?? this.requirements,
+      benefits: benefits ?? this.benefits,
+      vacancies: vacancies ?? this.vacancies,
+      experienceLevel: experienceLevel ?? this.experienceLevel,
+      educationLevel: educationLevel ?? this.educationLevel,
+      publishDate: publishDate ?? this.publishDate,
+      expiryDate: expiryDate ?? this.expiryDate,
+      applicationMethod: applicationMethod ?? this.applicationMethod,
+      applicationUrl: applicationUrl ?? this.applicationUrl,
+      applicationEmail: applicationEmail ?? this.applicationEmail,
+      payType: payType ?? this.payType,
+      showPayOnAd: showPayOnAd ?? this.showPayOnAd,
+    );
+  }
+
   String get timeAgo {
     final now = DateTime.now();
     final diff = now.difference(createdAt);

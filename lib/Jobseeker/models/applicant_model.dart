@@ -1,6 +1,3 @@
-// lib/Jobseeker/models/applicant_model.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Applicant {
   final String id;
   final String jobId;
@@ -12,6 +9,12 @@ class Applicant {
   final String coverLetter;
   final List<String> skills;
   final String submittedAt;
+  final String salary;
+  final String workType;
+  final String workplace;
+  final String education;
+  final String experienceLevel;
+
 
   Applicant({
     required this.id,
@@ -24,6 +27,11 @@ class Applicant {
     required this.coverLetter,
     required this.skills,
     required this.submittedAt,
+    this.salary = '',
+    this.workType = '',
+    this.workplace = '',
+    this.education = '',
+    this.experienceLevel = '',
   });
 
   // Update specific fields without recreating the whole object
@@ -38,6 +46,8 @@ class Applicant {
     String? coverLetter,
     List<String>? skills,
     String? submittedAt,
+    String? education,
+    String? experienceLevel,
   }) {
     return Applicant(
       id: id ?? this.id,
@@ -50,6 +60,8 @@ class Applicant {
       coverLetter: coverLetter ?? this.coverLetter,
       skills: skills ?? this.skills,
       submittedAt: submittedAt ?? this.submittedAt,
+      education: education ?? this.education,
+      experienceLevel: experienceLevel ?? this.experienceLevel,
     );
   }
 
@@ -75,6 +87,11 @@ class Applicant {
       'coverLetter': coverLetter,
       'skills': skills,
       'submittedAt': submittedAt,
+      'salary': salary,
+      'workType': workType,
+      'workplace': workplace,
+      'education': education,
+      'experienceLevel': experienceLevel,
     };
   }
 
@@ -91,6 +108,12 @@ class Applicant {
       coverLetter: map['coverLetter'] ?? '',
       skills: List<String>.from(map['skills'] ?? []),
       submittedAt: map['submittedAt'] ?? '',
+      // ADD THESE LINES:
+      salary: map['salary'] ?? '',
+      workType: map['workType'] ?? '',
+      workplace: map['workplace'] ?? '',
+      education: map['education'] ?? '',
+      experienceLevel: map['experienceLevel'] ?? '',
     );
   }
 }
