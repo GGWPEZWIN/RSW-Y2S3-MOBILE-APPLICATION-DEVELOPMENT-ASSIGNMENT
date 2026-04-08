@@ -77,7 +77,7 @@ class _HomePageState extends State<HomePage> {
 
   String _getFirstName() {
     final displayName = widget.user?.displayName ?? '';
-    if (displayName.trim().isEmpty) return 'there';
+    if (displayName.trim().isEmpty) return 'user';
     return displayName.trim().split(RegExp(r'\s+')).first;
   }
 
