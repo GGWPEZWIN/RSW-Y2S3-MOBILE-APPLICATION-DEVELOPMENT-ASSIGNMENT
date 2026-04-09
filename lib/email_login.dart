@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// Ensure this path matches your project structure
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
+import 'Employer/MainScreen/employer_dashboard.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EmailLoginPage extends StatefulWidget {
   const EmailLoginPage({super.key});
@@ -40,7 +41,17 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       final user = credential.user;
 
       if (user != null && mounted) {
-        // 2. Success Feedback
+        // 1. Fetch role from Firestore users/{uid}
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final role = userDoc.data()?['role'] as String? ?? 'jobseeker';
+
+        if (!mounted) return;
+
+        // 2. Success feedback
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome back, ${user.displayName ?? "User"}!'),
@@ -49,11 +60,14 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
           ),
         );
 
-        // 3. Redirect to Jobseeker Home
-        // We use pushAndRemoveUntil so the user can't "Go Back" to the login screen
+        // 3. Redirect based on role — pushAndRemoveUntil prevents going back to login
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => HomePage(user: user)),
+          MaterialPageRoute(
+            builder: (context) => role == 'employer'
+                ? const EmployerDashboard()
+                : HomePage(user: user),
+          ),
               (route) => false,
         );
       }

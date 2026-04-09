@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Interview/schedule_interview_page.dart';
 import '../JobListing/ApplicationUI/create_job_screen.dart';
 import '../JobListing/ApplicationUI/job_list_screen.dart';
 import '../models/job_model.dart';
+import 'applicants_interview_screen.dart';
 import 'employer_profile_screen.dart';
 import '../MainScreen/applicants_list_screen.dart';
 
@@ -547,12 +549,13 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               });
               break;
             case 3:
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Interviews - Coming Soon'),
-                    backgroundColor: Colors.orange),
-              );
-              setState(() => _selectedIndex = 0);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ApplicantsInterviewScreen()),
+              ).then((_) {
+                if (mounted) setState(() => _selectedIndex = 0);
+              });
               break;
             case 4:
               Navigator.push(
