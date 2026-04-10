@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
+import '../../InterviewPractice/interview_practice_screen.dart';
+import 'saved_job_list.dart';  // ✅ Make sure this path is correct
 
 class AppliedJobsScreen extends StatefulWidget {
   const AppliedJobsScreen({Key? key}) : super(key: key);
@@ -12,42 +14,51 @@ class AppliedJobsScreen extends StatefulWidget {
 }
 
 class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
-  int _navIndex = 2;
   bool _showWithdrawn = false;
 
-  static const Color _cardColor      = Color(0xFF2D3A8C);
-  static const Color _cardColorDeep  = Color(0xFF1E2A6E);
-  static const Color _blue           = Color(0xFF3B52E8);
-  static const Color _navBlue        = Color(0xFF3B52E8);
-  static const Color _bg             = Color(0xFFF4F5FA);
+  static const Color _cardColor = Color(0xFF2D3A8C);
+  static const Color _cardColorDeep = Color(0xFF1E2A6E);
+  static const Color _blue = Color(0xFF3B52E8);
+  static const Color _bg = Color(0xFFF4F5FA);
 
   // ── Status helpers ───────────────────────────────────────────────────────
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'shortlisted':  return const Color(0xFF22C55E);
+      case 'shortlisted':
+        return const Color(0xFF22C55E);
       case 'pending review':
-      case 'unprocessed':  return const Color(0xFFF59E0B);
-      case 'under review': return const Color(0xFF60A5FA);
-      case 'rejected':     return const Color(0xFFEF4444);
-      case 'withdrawn':    return const Color(0xFF94A3B8);
-      default:             return const Color(0xFF94A3B8);
+      case 'unprocessed':
+        return const Color(0xFFF59E0B);
+      case 'under review':
+        return const Color(0xFF60A5FA);
+      case 'rejected':
+        return const Color(0xFFEF4444);
+      case 'withdrawn':
+        return const Color(0xFF94A3B8);
+      default:
+        return const Color(0xFF94A3B8);
     }
   }
 
   String _statusLabel(String status) {
     switch (status.toLowerCase()) {
-      case 'unprocessed':  return 'PENDING REVIEW';
-      case 'shortlisted':  return 'SHORTLISTED';
-      case 'under review': return 'UNDER REVIEW';
-      case 'rejected':     return 'REJECTED';
-      case 'withdrawn':    return 'WITHDRAWN';
-      default:             return status.toUpperCase();
+      case 'unprocessed':
+        return 'PENDING REVIEW';
+      case 'shortlisted':
+        return 'SHORTLISTED';
+      case 'under review':
+        return 'UNDER REVIEW';
+      case 'rejected':
+        return 'REJECTED';
+      case 'withdrawn':
+        return 'WITHDRAWN';
+      default:
+        return status.toUpperCase();
     }
   }
 
-  bool _isWithdrawn(String status) =>
-      status.toLowerCase() == 'withdrawn';
+  bool _isWithdrawn(String status) => status.toLowerCase() == 'withdrawn';
 
   String _timeAgo(dynamic appliedAt) {
     if (appliedAt == null) return 'Recently';
@@ -58,10 +69,12 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
       return appliedAt.toString();
     }
     final diff = DateTime.now().difference(dt);
-    if (diff.inDays >= 7)    return '${(diff.inDays / 7).floor()} week${(diff.inDays / 7).floor() > 1 ? 's' : ''} ago';
-    if (diff.inDays > 0)     return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    if (diff.inHours > 0)    return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
-    if (diff.inMinutes > 0)  return '${diff.inMinutes}m ago';
+    if (diff.inDays >= 7)
+      return '${(diff.inDays / 7).floor()} week${(diff.inDays / 7).floor() > 1 ? 's' : ''} ago';
+    if (diff.inDays > 0)
+      return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
   }
 
@@ -86,14 +99,46 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
               color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17),
         ),
         centerTitle: true,
+
+        // ── Practice Interview button ──────────
         actions: [
-          IconButton(
-            icon: const Icon(Icons.more_horiz, color: Colors.black),
-            onPressed: () {},
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const InterviewPracticeJobSelectScreen(),
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B52E8),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.record_voice_over_rounded,
+                        color: Colors.white, size: 15),
+                    SizedBox(width: 5),
+                    Text(
+                      'Practice',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
-
       body: Column(
         children: [
           // ── Tab toggle ────────────────────────────────────────────────
@@ -118,7 +163,8 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
           // ── Job list ──────────────────────────────────────────────────
           Expanded(
             child: user == null
-                ? const Center(child: Text('Please log in to see applications.'))
+                ? const Center(
+                child: Text('Please log in to see applications.'))
                 : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('applications')
@@ -127,7 +173,8 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                      child: CircularProgressIndicator());
                 }
 
                 final all = snapshot.data!.docs;
@@ -144,7 +191,7 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 if (docs.isEmpty) {
                   return Center(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.work_off_outlined,
                             size: 56, color: Colors.grey[400]),
@@ -176,20 +223,29 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: NavBarWidget(
-        currentIndex: 2, // This screen is the 'Applied' tab
-        onTabSelected: (index) {
-          if (index == 2) return; // Stay here if already on Applied
 
-          // Navigation Logic:
+      // ── Bottom Navigation Bar ─────────────────────────────────────────
+      bottomNavigationBar: NavBarWidget(
+        currentIndex: 2,
+        onTabSelected: (index) {
+          if (index == 2) return; // Already on Applied Jobs
+
           if (index == 0) {
-            Navigator.pop(context);
-          } else if (index == 1) {
-            //TODO: Saved job route
-          } else if (index == 3) {
+            Navigator.pop(context); // Go back to Home
+          }
+          else if (index == 1) {
+            // ✅ Navigate to Saved Jobs Screen - USING CORRECT CLASS NAME
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
+            );
+          }
+          else if (index == 3) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+              MaterialPageRoute(
+                builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser),
+              ),
             );
           }
         },
@@ -202,7 +258,8 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
   Widget _tabBtn(String label, bool active) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _showWithdrawn = label == 'Withdrawn'),
+        onTap: () =>
+            setState(() => _showWithdrawn = label == 'Withdrawned'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           margin: const EdgeInsets.all(4),
@@ -235,11 +292,11 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
   // ── Job card ─────────────────────────────────────────────────────────────
 
   Widget _jobCard(Map<String, dynamic> data) {
-    final title     = data['jobTitle']  ?? 'Unknown Job';
-    final company   = data['company']   ?? '';
-    final location  = data['workplace'] ?? data['location'] ?? '';
+    final title = data['jobTitle'] ?? 'Unknown Job';
+    final company = data['company'] ?? '';
+    final location = data['workplace'] ?? data['location'] ?? '';
     final appliedAt = data['appliedAt'];
-    final status    = (data['status']   ?? 'unprocessed').toString();
+    final status = (data['status'] ?? 'unprocessed').toString();
 
     final statusColor = _statusColor(status);
     final statusLabel = _statusLabel(status);
@@ -308,25 +365,29 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
 
                 // Location
                 if (location.isNotEmpty)
-                  Row(children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 13, color: Colors.white54),
-                    const SizedBox(width: 4),
-                    Text(location,
-                        style: const TextStyle(
-                            color: Colors.white54, fontSize: 12)),
-                  ]),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined,
+                          size: 13, color: Colors.white54),
+                      const SizedBox(width: 4),
+                      Text(location,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
                 const SizedBox(height: 4),
 
                 // Applied time
-                Row(children: [
-                  const Icon(Icons.access_time,
-                      size: 13, color: Colors.white54),
-                  const SizedBox(width: 4),
-                  Text('Applied ${_timeAgo(appliedAt)}',
-                      style: const TextStyle(
-                          color: Colors.white54, fontSize: 12)),
-                ]),
+                Row(
+                  children: [
+                    const Icon(Icons.access_time,
+                        size: 13, color: Colors.white54),
+                    const SizedBox(width: 4),
+                    Text('Applied ${_timeAgo(appliedAt)}',
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
               ],
             ),
           ),
@@ -398,64 +459,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Bottom nav ───────────────────────────────────────────────────────────
-
-  Widget _buildBottomNav2() {
-    final items = [
-      {'icon': Icons.home_outlined,           'active': Icons.home_rounded,      'label': 'Home'},
-      {'icon': Icons.bookmark_border_outlined, 'active': Icons.bookmark_rounded,  'label': 'Saved'},
-      {'icon': Icons.work_outline,             'active': Icons.work_rounded,      'label': 'Applied'},
-      {'icon': Icons.person_outline,           'active': Icons.person_rounded,    'label': 'Profile'},
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final active = _navIndex == i;
-              return GestureDetector(
-                onTap: () => setState(() => _navIndex = i),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      active
-                          ? items[i]['active'] as IconData
-                          : items[i]['icon'] as IconData,
-                      size: 24,
-                      color: active ? _navBlue : const Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      items[i]['label'] as String,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight:
-                        active ? FontWeight.w700 : FontWeight.normal,
-                        color: active ? _navBlue : const Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ),
       ),
     );
   }

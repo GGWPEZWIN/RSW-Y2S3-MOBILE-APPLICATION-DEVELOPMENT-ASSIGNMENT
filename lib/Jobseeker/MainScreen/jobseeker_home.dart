@@ -8,6 +8,7 @@ import '../Widgets/nav_bar_widget.dart';
 import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
 import '../JobApplication/ApplicationUI/saved_job_list.dart';
+import '../JobApplication/ApplicationUI/applied_job_list.dart';
 
 class HomePage extends StatefulWidget {
   final User? user;
@@ -482,17 +483,24 @@ class _HomePageState extends State<HomePage> {
           if (index == 0) return; // Already on Home
 
           if (index == 1) {
-            // ── Navigate to Saved Jobs ──────────────────────────────
+            // Navigate to Saved Jobs
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
-            ).then((_) => setState(() => _navIndex = 0));
+            ).then((_) => _loadAppliedJobs());
             return;
           }
 
           if (index == 2) {
-            // TODO: implement Applied Jobs route
-          } else if (index == 3) {
+            // ✅ FIXED - Navigate to Applied Jobs Screen
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
+            ).then((_) => _loadAppliedJobs());
+            return;
+          }
+
+          if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(
