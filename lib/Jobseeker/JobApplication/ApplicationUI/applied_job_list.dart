@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
 import '../../InterviewPractice/interview_practice_screen.dart';
-import 'saved_job_list.dart';  // ✅ Make sure this path is correct
+import 'saved_job_list.dart';
 
 class AppliedJobsScreen extends StatefulWidget {
   const AppliedJobsScreen({Key? key}) : super(key: key);
@@ -234,7 +234,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
             Navigator.pop(context); // Go back to Home
           }
           else if (index == 1) {
-            // ✅ Navigate to Saved Jobs Screen - USING CORRECT CLASS NAME
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
