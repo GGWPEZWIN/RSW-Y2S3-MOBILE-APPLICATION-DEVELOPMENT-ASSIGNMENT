@@ -17,34 +17,35 @@ class SavedJobsScreen extends StatefulWidget {
 }
 
 class _SavedJobsScreenState extends State<SavedJobsScreen> {
-  static const Color _blue      = Color(0xFF3B52E8);
-  static const Color _cardColor = Color(0xFF2D3A8C);
-  static const Color _cardDeep  = Color(0xFF1E2A6E);
-  static const Color _bg        = Color(0xFFF4F5FA);
+  static const Color _blue = Color(0xFF3B52E8);
+  static const Color _bg   = Color(0xFFF4F5FA);
 
   String _timeAgo(dynamic ts) {
     if (ts == null) return '';
     DateTime dt;
-    try {
-      dt = (ts as Timestamp).toDate();
-    } catch (_) {
-      return '';
-    }
+    try { dt = (ts as Timestamp).toDate(); } catch (_) { return ''; }
     final diff = DateTime.now().difference(dt);
-    if (diff.inDays >= 7)
-      return 'Saved ${diff.inDays ~/ 7}w ago';
-    if (diff.inDays > 0)
-      return 'Saved ${diff.inDays}d ago';
-    if (diff.inHours > 0)
-      return 'Saved ${diff.inHours}h ago';
+    if (diff.inDays >= 7) return 'Saved ${diff.inDays ~/ 7}w ago';
+    if (diff.inDays > 0)  return 'Saved ${diff.inDays}d ago';
+    if (diff.inHours > 0) return 'Saved ${diff.inHours}h ago';
     return 'Saved just now';
   }
 
   Future<void> _unsaveJob(String jobId, String uid) async {
-    final ref = FirebaseFirestore.instance.collection('users').doc(uid);
-    await ref.update({
-      'savedJobs': FieldValue.arrayRemove([jobId]),
-    });
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('savedJobs')
+        .doc(jobId)
+        .delete();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Job removed from saved'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -63,29 +64,24 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
         title: const Text(
           'My Saved Jobs',
           style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.w700,
-              fontSize: 17),
+              color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17),
         ),
         centerTitle: true,
-
-        // ── Practice Interview button ──────────────────────────────────
         actions: [
+          // Practice Interview button — top right of AppBar only
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                  const InterviewPracticeJobSelectScreen(),
+                  builder: (_) => const InterviewPracticeJobSelectScreen(),
                 ),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B52E8),
+                  color: _blue,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -113,63 +109,36 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           child: Container(height: 1, color: const Color(0xFFEEEEEE)),
         ),
       ),
+
       body: user == null
-          ? const Center(
-          child: Text('Please log in to see saved jobs.'))
-          : StreamBuilder<DocumentSnapshot>(
+          ? const Center(child: Text('Please log in to see saved jobs.'))
+          : StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
+            .collection('savedJobs')
+            .orderBy('savedAt', descending: true)
             .snapshots(),
-        builder: (context, userSnap) {
-          if (!userSnap.hasData) {
-            return const Center(
-                child: CircularProgressIndicator());
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final userData =
-          userSnap.data!.data() as Map<String, dynamic>?;
-          final savedIds = List<String>.from(
-              userData?['savedJobs'] ?? []);
+          final docs = snap.data!.docs;
+          if (docs.isEmpty) return _buildEmpty();
 
-          if (savedIds.isEmpty) {
-            return _buildEmpty();
-          }
-
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('jobs')
-                .where(FieldPath.documentId,
-                whereIn: savedIds)
-                .snapshots(),
-            builder: (context, jobSnap) {
-              if (!jobSnap.hasData) {
-                return const Center(
-                    child: CircularProgressIndicator());
-              }
-
-              final docs = jobSnap.data!.docs;
-
-              if (docs.isEmpty) {
-                return _buildEmpty();
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(
-                    20, 16, 20, 24),
-                itemCount: docs.length,
-                itemBuilder: (_, i) {
-                  final data =
-                  docs[i].data() as Map<String, dynamic>;
-                  final jobId = docs[i].id;
-                  return _savedJobCard(
-                      data, jobId, user.uid);
-                },
-              );
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            itemCount: docs.length,
+            itemBuilder: (_, i) {
+              final data = docs[i].data() as Map<String, dynamic>;
+              final jobId = docs[i].id;
+              return _savedJobCard(data, jobId, user.uid);
             },
           );
         },
       ),
+
       bottomNavigationBar: NavBarWidget(
         currentIndex: 1,
         onTabSelected: (index) {
@@ -179,15 +148,14 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           } else if (index == 2) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const AppliedJobsScreen()),
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
             );
           } else if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ProfilePage(
-                    user: FirebaseAuth.instance.currentUser),
+                builder: (_) =>
+                    ProfilePage(user: FirebaseAuth.instance.currentUser),
               ),
             );
           }
@@ -196,14 +164,26 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
     );
   }
 
-  Widget _savedJobCard(
-      Map<String, dynamic> data, String jobId, String uid) {
-    final title    = data['title'] ?? 'Job Title';
-    final company  = data['company'] ?? '';
-    final location = data['location'] ?? '';
-    final salary   = data['salary'] ?? '';
-    final workType = data['workType'] ?? '';
+  Widget _savedJobCard(Map<String, dynamic> data, String jobId, String uid) {
+    final title     = data['jobTitle']  ?? data['title']   ?? 'Job Title';
+    final company   = data['company']   ?? '';
+    final location  = data['location']  ?? '';
+    final salary    = data['salary']    ?? '';
+    final workType  = data['workType']  ?? '';
     final workplace = data['workplace'] ?? '';
+
+    final job = Job(
+      id:        jobId,
+      title:     title,
+      company:   company,
+      location:  location,
+      workType:  workType,
+      workplace: workplace,
+      salary:    salary,
+      postedTime: '',
+      applicants: '0 applied',
+      createdAt: DateTime.now(),
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -224,45 +204,26 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () {
-          final job = Job(
-            id: jobId,
-            title: title,
-            company: company,
-            location: location,
-            workType: workType,
-            workplace: workplace,
-            salary: salary,
-            postedTime: '',
-            applicants: '0 applied',
-            createdAt: (data['createdAt'] as Timestamp?)
-                ?.toDate() ??
-                DateTime.now(),
-          );
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => JobDetailsPage(job: job)),
-          );
-        },
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title + filled bookmark (tap to unsave)
+              // Title + yellow bookmark (tap to unsave)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: Text(title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        )),
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
@@ -282,8 +243,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
               const SizedBox(height: 4),
 
               Text(company,
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 13)),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 10),
 
               if (location.isNotEmpty)
@@ -312,13 +272,46 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
 
               const SizedBox(height: 4),
               Row(children: [
-                const Icon(Icons.access_time,
-                    size: 13, color: Colors.white54),
+                const Icon(Icons.access_time, size: 13, color: Colors.white54),
                 const SizedBox(width: 4),
-                Text(_timeAgo(data['createdAt']),
+                Text(_timeAgo(data['savedAt']),
                     style: const TextStyle(
                         color: Colors.white54, fontSize: 12)),
               ]),
+
+              const SizedBox(height: 14),
+
+              // ✅ CHANGED: View Job Details button (Practice Interview removed from card)
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5C842),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.arrow_forward_rounded,
+                          size: 14, color: Color(0xFF1A1A2E)),
+                      SizedBox(width: 6),
+                      Text(
+                        'View Job Details',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A2E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),

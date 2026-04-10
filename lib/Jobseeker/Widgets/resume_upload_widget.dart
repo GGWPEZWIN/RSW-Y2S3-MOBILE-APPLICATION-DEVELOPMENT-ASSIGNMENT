@@ -62,7 +62,7 @@ class _ResumeUploadWidgetState extends State<ResumeUploadWidget> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         // UPDATED: Added image extensions to allowed formats
         allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp'],
