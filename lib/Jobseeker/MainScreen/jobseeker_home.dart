@@ -4,9 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
 import '../JobApplication/ApplicationUI/job_details_screen.dart';
 import '../JobApplication/ApplicationServices/apply_job_service.dart';
+import '../JobApplication/ApplicationUI/jobseeker_notification_page.dart';
 import '../Widgets/nav_bar_widget.dart';
 import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
+import '../JobApplication/ApplicationUI/saved_job_list.dart';
+import '../JobApplication/ApplicationUI/applied_job_list.dart';
 
 class HomePage extends StatefulWidget {
   final User? user;
@@ -129,6 +132,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             // ── Hero Header ──────────────────────────────────────────
+// ── Hero Header ──────────────────────────────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 20),
@@ -185,13 +189,64 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      Image.asset(
-                        'assets/icons/homedeco.png',
-                        width: 130,
-                        height: 130,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                        const SizedBox(width: 130, height: 130),
+                      // ── Notification Icon with Badge ──
+                      Column(
+                        children: [
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser?.uid)
+                                .collection('notifications')
+                                .where('isRead', isEqualTo: false)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+
+                              return Stack(
+                                children: [
+                                  IconButton(
+                                    onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const JobseekerNotificationsPage()));
+                                    },
+                                    icon: const Icon(Icons.notifications_none_rounded,
+                                        color: Colors.black, size: 28),
+                                  ),
+                                  if (unreadCount > 0)
+                                    Positioned(
+                                      right: 8,
+                                      top: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFEF4444),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          unreadCount > 9 ? '9+' : '$unreadCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          Image.asset(
+                            'assets/icons/homedeco.png',
+                            width: 80, // Reduced size slightly to accommodate the icon above
+                            height: 80,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox(),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -206,13 +261,10 @@ class _HomePageState extends State<HomePage> {
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Search for jobs ......',
-                        hintStyle:
-                        TextStyle(color: Colors.grey[500], fontSize: 14),
-                        suffixIcon: Icon(Icons.search,
-                            color: Colors.grey[500], size: 22),
+                        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                        suffixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
                     ),
                   ),
@@ -307,13 +359,13 @@ class _HomePageState extends State<HomePage> {
                                   height: 1.5),
                             ),
                             const SizedBox(height: 10),
-                            // Navigate to AI matching page
                             InkWell(
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => const AiMatchingScreen(),
+                                    builder: (context) =>
+                                    const AiMatchingScreen(),
                                   ),
                                 );
                               },
@@ -377,7 +429,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Job cards with publish/expiry filtering ────────
+                    // ── Job cards ────────────────────────────────────
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('jobs')
@@ -395,26 +447,16 @@ class _HomePageState extends State<HomePage> {
 
                         final now = DateTime.now();
 
-                        // ── Filter: only show live jobs ─────────────────
                         final docs = snapshot.data!.docs.where((doc) {
                           final data = doc.data() as Map<String, dynamic>;
-
-                          // Hide if publishDate is in the future (scheduled)
                           final publishDate =
                           (data['publishDate'] as Timestamp?)?.toDate();
                           if (publishDate != null &&
-                              publishDate.isAfter(now)) {
-                            return false;
-                          }
-
-                          // Hide if expiryDate has already passed (expired)
+                              publishDate.isAfter(now)) return false;
                           final expiryDate =
                           (data['expiryDate'] as Timestamp?)?.toDate();
                           if (expiryDate != null &&
-                              expiryDate.isBefore(now)) {
-                            return false;
-                          }
-
+                              expiryDate.isBefore(now)) return false;
                           return true;
                         }).toList();
 
@@ -483,20 +525,36 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+
+      // ── Bottom Nav ───────────────────────────────────────────────
       bottomNavigationBar: NavBarWidget(
-        currentIndex: 0, // Hardcoded to 0 because this IS the Home Page
+        currentIndex: 0,
         onTabSelected: (index) {
           if (index == 0) return; // Already on Home
+
           if (index == 1) {
-            // TODO: implement Saved route
-            // Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedJobsPage()));
-          } else if (index == 2) {
-            // TODO: implement applied
-            // logic for applied?
-          } else if (index == 3) {
+            // Navigate to Saved Jobs
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ProfilePage(user: widget.user)),
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
+            ).then((_) => _loadAppliedJobs());
+            return;
+          }
+
+          if (index == 2) {
+            // ✅ FIXED - Navigate to Applied Jobs Screen
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
+            ).then((_) => _loadAppliedJobs());
+            return;
+          }
+
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ProfilePage(user: widget.user)),
             );
           }
         },
@@ -504,6 +562,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── Job Card ─────────────────────────────────────────────────────
   Widget _jobCard(BuildContext context, Job job, List<String> benefits,
       bool hasApplied) {
     return GestureDetector(
@@ -650,7 +709,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               child: Row(children: [
-                const Icon(Icons.access_time, size: 13, color: Colors.white60),
+                const Icon(Icons.access_time,
+                    size: 13, color: Colors.white60),
                 const SizedBox(width: 4),
                 Text(_getTimeAgo(job.createdAt),
                     style: const TextStyle(
@@ -664,15 +724,13 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.white60, fontSize: 12)),
                 const Spacer(),
                 GestureDetector(
-                  //TODO:
-                  //onTap: () => _handleApply(job.id!, job.title),
                   onTap: () async {
-                    // Wait for result to see if they applied while on the details page
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+                      MaterialPageRoute(
+                          builder: (_) => JobDetailsPage(job: job)),
                     );
-                    _loadAppliedJobs(); // Refresh the 'Applied' checkmarks on home
+                    _loadAppliedJobs();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -688,7 +746,8 @@ class _HomePageState extends State<HomePage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: hasApplied ? Colors.white : Colors.black,
+                        color:
+                        hasApplied ? Colors.white : Colors.black,
                       ),
                     ),
                   ),
