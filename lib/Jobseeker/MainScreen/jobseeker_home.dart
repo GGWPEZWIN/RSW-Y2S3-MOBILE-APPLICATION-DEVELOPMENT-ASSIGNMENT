@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
 import '../JobApplication/ApplicationUI/job_details_screen.dart';
 import '../JobApplication/ApplicationServices/apply_job_service.dart';
+import '../JobApplication/ApplicationUI/jobseeker_notification_page.dart';
 import '../Widgets/nav_bar_widget.dart';
 import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
@@ -129,6 +130,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             // ── Hero Header ──────────────────────────────────────────
+// ── Hero Header ──────────────────────────────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 20),
@@ -185,13 +187,64 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      Image.asset(
-                        'assets/icons/homedeco.png',
-                        width: 130,
-                        height: 130,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                        const SizedBox(width: 130, height: 130),
+                      // ── Notification Icon with Badge ──
+                      Column(
+                        children: [
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser?.uid)
+                                .collection('notifications')
+                                .where('isRead', isEqualTo: false)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+
+                              return Stack(
+                                children: [
+                                  IconButton(
+                                    onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const JobseekerNotificationsPage()));
+                                    },
+                                    icon: const Icon(Icons.notifications_none_rounded,
+                                        color: Colors.black, size: 28),
+                                  ),
+                                  if (unreadCount > 0)
+                                    Positioned(
+                                      right: 8,
+                                      top: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFEF4444),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          unreadCount > 9 ? '9+' : '$unreadCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          Image.asset(
+                            'assets/icons/homedeco.png',
+                            width: 80, // Reduced size slightly to accommodate the icon above
+                            height: 80,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox(),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -206,13 +259,10 @@ class _HomePageState extends State<HomePage> {
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Search for jobs ......',
-                        hintStyle:
-                        TextStyle(color: Colors.grey[500], fontSize: 14),
-                        suffixIcon: Icon(Icons.search,
-                            color: Colors.grey[500], size: 22),
+                        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                        suffixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
                     ),
                   ),

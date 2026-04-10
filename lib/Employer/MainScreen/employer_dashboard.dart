@@ -7,6 +7,7 @@ import '../models/job_model.dart';
 import 'applicants_interview_screen.dart';
 import 'employer_profile_screen.dart';
 import '../MainScreen/applicants_list_screen.dart';
+import 'employer_notifications_page.dart';
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 String _parseApplicants(dynamic raw) {
@@ -87,8 +88,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
           children: [
             // ── Header ────────────────────────────────────────────────
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(
@@ -107,25 +107,43 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                         color: _primaryBlue, size: 24),
                   ),
                   const SizedBox(width: 10),
-                  RichText(
-                    text: const TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'JobBuddy ',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.black),
-                        ),
-                        TextSpan(
-                          text: 'Employer',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.black),
-                        ),
-                      ],
+                  Expanded( // Added Expanded to keep the title on the left
+                    child: RichText(
+                      text: const TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'JobBuddy ',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.black),
+                          ),
+                          TextSpan(
+                            text: 'Employer',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.black),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
+                  // Notification Icon
+                  Stack( // Stack allows for a red dot badge if you want to add one later
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const EmployerNotificationsPage()),
+                          );
+                        },
+                        icon: const Icon(Icons.notifications_none_rounded,
+                            color: Colors.black87, size: 26),
+                      ),
+                    ],
                   ),
                 ],
               ),

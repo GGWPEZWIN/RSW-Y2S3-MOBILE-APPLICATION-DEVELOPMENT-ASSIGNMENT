@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';              // ← NEW
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
 import '../../../Employer/models/job_model.dart';
@@ -29,25 +30,24 @@ class JobApplicationScreen extends StatefulWidget {
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-  final TextEditingController _portfolioController = TextEditingController();
+  final TextEditingController _portfolioController  = TextEditingController();
   final TextEditingController _coverLetterController = TextEditingController();
 
-  static const Color kBlue = Color(0xFF2F6FED);
-  static const Color kBlueDark = Color(0xFF1A57D4);
-  static const Color kBlueLight = Color(0xFFEEF3FD);
-  static const Color kTextPrimary = Color(0xFF0F1624);
-  static const Color kTextSecondary = Color(0xFF6B7280);
+  static const Color kBlue            = Color(0xFF2F6FED);
+  static const Color kBlueDark        = Color(0xFF1A57D4);
+  static const Color kBlueLight       = Color(0xFFEEF3FD);
+  static const Color kTextPrimary     = Color(0xFF0F1624);
+  static const Color kTextSecondary   = Color(0xFF6B7280);
   static const Color kTextPlaceholder = Color(0xFFADBAC7);
-  static const Color kBorder = Color(0xFFE4E9F0);
-  static const Color kBg = Color(0xFFF5F7FA);
-  static const Color kAiGreen = Color(0xFF0BA87E);
-  static const Color kAiPurple = Color(0xFF7C3AED);
+  static const Color kBorder          = Color(0xFFE4E9F0);
+  static const Color kBg              = Color(0xFFF5F7FA);
+  static const Color kAiGreen         = Color(0xFF0BA87E);
+  static const Color kAiPurple        = Color(0xFF7C3AED);
 
-  String _resumePath = '';
+  String _resumePath     = '';
   String _resumeFileName = '';
-  bool _isSubmitting = false;
-
-  int _currentIndex = 2;
+  bool   _isSubmitting   = false;
+  int    _currentIndex   = 2;
 
   // TODO: Replace with actual user skills from profile
   final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
@@ -61,21 +61,23 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Applicant _buildApplicant() {
     return ApplicantService.buildApplicant(
-      resumePath: _resumePath,
-      portfolioUrl: _portfolioController.text,
-      coverLetter: _coverLetterController.text,
-      skills: _skills,
-      jobTitle: widget.jobTitle,
-      company: widget.company,
-      jobId: widget.jobId,
-      companyId: widget.companyId,
-      salary: widget.job?.salary ?? '',
-      workType: widget.job?.workType ?? '',
-      workplace: widget.job?.workplace ?? '',
-      education: widget.job?.educationLevel ?? '',
+      resumePath:      _resumePath,
+      portfolioUrl:    _portfolioController.text,
+      coverLetter:     _coverLetterController.text,
+      skills:          _skills,
+      jobTitle:        widget.jobTitle,
+      company:         widget.company,
+      jobId:           widget.jobId,
+      companyId:       widget.companyId,
+      salary:          widget.job?.salary         ?? '',
+      workType:        widget.job?.workType        ?? '',
+      workplace:       widget.job?.workplace       ?? '',
+      education:       widget.job?.educationLevel  ?? '',
       experienceLevel: widget.job?.experienceLevel ?? '',
     );
   }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
@@ -97,9 +99,15 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     final success = await ApplicantService.submitApplicant(applicant);
 
+    // ── After successful save, notify the employer ─────────────────────────
+    if (success) {
+      await _notifyEmployer(applicant);
+    }
+
     setState(() => _isSubmitting = false);
 
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -107,22 +115,79 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               ? 'Application submitted successfully!'
               : 'Submission failed. Please try again.',
         ),
-        backgroundColor: success ? const Color(0xFF0BA87E) : Colors.redAccent,
+        backgroundColor:
+        success ? const Color(0xFF0BA87E) : Colors.redAccent,
       ),
     );
+
     if (success) {
-      //Navigator.pop(context);
-      // MUST pass 'true' back so the Details page knows to update
-      // the 'Apply' button to 'Applied' immediately.
+      // Pass true back so JobDetailsPage updates the Apply button immediately
       Navigator.pop(context, true);
     }
+  }
 
+  // ── Employer notification write ───────────────────────────────────────────
+  /// Called only after ApplicantService.submitApplicant() returns true.
+  /// Writes one doc to employer_notifications so the employer sees the
+  /// new application in their notification inbox immediately.
+  Future<void> _notifyEmployer(Applicant applicant) async {
+    try {
+      final db        = FirebaseFirestore.instance;
+      final jobseeker = FirebaseAuth.instance.currentUser;
+      final seekerName = jobseeker?.displayName
+          ?? jobseeker?.email
+          ?? 'A candidate';
+
+      // Resolve employer uid ─────────────────────────────────────────────────
+      // 1st choice: companyId passed directly to this screen
+      // 2nd choice: look up jobs/{jobId}.companyId or .createdBy
+      String employerId = widget.companyId ?? '';
+
+      if (employerId.isEmpty) {
+        final jobDoc =
+        await db.collection('jobs').doc(widget.jobId).get();
+        employerId =
+            (jobDoc.data()?['companyId'] as String?) ??
+                (jobDoc.data()?['createdBy'] as String?) ??
+                '';
+      }
+
+      if (employerId.isEmpty) {
+        debugPrint('_notifyEmployer: could not resolve employerId, skipping.');
+        return;
+      }
+
+      // Write notification doc ───────────────────────────────────────────────
+      await db.collection('employer_notifications').add({
+        'employerId':      employerId,
+        'applicationId':   applicant.id,   // set by ApplicantService
+        'jobId':           widget.jobId,
+        'candidateUserId': jobseeker?.uid ?? '',
+        // Pre-rendered display strings (no joins needed in the inbox)
+        'candidateName':   seekerName,
+        'jobTitle':        widget.jobTitle,
+        'title':  '📋 New Application — ${widget.jobTitle}',
+        'body':   '$seekerName has applied for ${widget.jobTitle}.',
+        'type':   'new_application',
+        'status': 'unprocessed',
+        'appliedAt': FieldValue.serverTimestamp(),  // matches applications.appliedAt
+        'isRead':    false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('Employer notified: $employerId');
+    } catch (e) {
+      // Non-fatal — the application was already saved successfully
+      debugPrint('_notifyEmployer error: $e');
+    }
   }
 
   void _handleAiDraft() {
     final applicant = _buildApplicant();
     _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +209,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       initialFileName: null,
                       onFileSelected: (path, name) {
                         setState(() {
-                          _resumePath = path;
+                          _resumePath     = path;
                           _resumeFileName = name;
                         });
                       },
@@ -166,21 +231,19 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             NavBarWidget(
               currentIndex: _currentIndex,
               onTabSelected: (index) {
-                // 1. If the user clicks the 'Applied' tab (index 2), do nothing as we are already here
                 if (index == _currentIndex) return;
-                setState(() {
-                  _currentIndex = index;
-                });
+                setState(() => _currentIndex = index);
                 if (index == 0) {
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 } else if (index == 1) {
-                  // TODO: Navigate to  Saved Jobs screen
-                  // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SavedJobsScreen()));
+                  // TODO: Navigate to Saved Jobs screen
                 } else if (index == 3) {
-                  // Use Replacement to keep the stack clean
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+                    MaterialPageRoute(
+                      builder: (_) => ProfilePage(
+                          user: FirebaseAuth.instance.currentUser),
+                    ),
                   );
                 }
               },
@@ -191,7 +254,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
-  // ===== Widget builders (unchanged from your original) =====
+  // ── Widget builders — all unchanged from your original ────────────────────
+
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
@@ -239,10 +303,9 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         border: Border.all(color: kBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0A0F1624),
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
+              color: Color(0x0A0F1624),
+              blurRadius: 16,
+              offset: Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -274,9 +337,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               Text(
                 widget.company,
                 style: const TextStyle(
-                  fontSize: 13,
-                  color: kTextSecondary,
-                ),
+                    fontSize: 13, color: kTextSecondary),
               ),
             ],
           ),
@@ -289,15 +350,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: kTextPrimary,
-            letterSpacing: -0.1,
-          ),
-        ),
+        Text(text,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: kTextPrimary,
+              letterSpacing: -0.1,
+            )),
         if (trailing != null) trailing,
       ],
     );
@@ -320,7 +379,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: const InputDecoration(
               hintText: 'https://portfolio.com',
-              hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
+              hintStyle:
+              TextStyle(fontSize: 14, color: kTextPlaceholder),
               prefixIcon: Icon(Icons.link_rounded,
                   color: kTextPlaceholder, size: 20),
               border: InputBorder.none,
@@ -362,15 +422,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         children: [
           Icon(Icons.auto_awesome_rounded, size: 12, color: kAiGreen),
           SizedBox(width: 4),
-          Text(
-            'AI VERIFIED',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: kAiGreen,
-              letterSpacing: 0.3,
-            ),
-          ),
+          Text('AI VERIFIED',
+              style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: kAiGreen,
+                  letterSpacing: 0.3)),
         ],
       ),
     );
@@ -380,17 +437,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: kBlue,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: Colors.white,
-        ),
-      ),
+          color: kBlue, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.white)),
     );
   }
 
@@ -411,8 +463,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             maxLines: 6,
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
             decoration: const InputDecoration(
-              hintText: 'Explain why you are a good fit for this role...',
-              hintStyle: TextStyle(fontSize: 13.5, color: kTextPlaceholder),
+              hintText:
+              'Explain why you are a good fit for this role...',
+              hintStyle:
+              TextStyle(fontSize: 13.5, color: kTextPlaceholder),
               border: InputBorder.none,
               contentPadding: EdgeInsets.all(14),
             ),
@@ -430,15 +484,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         children: [
           Icon(Icons.auto_awesome_rounded, size: 14, color: kAiPurple),
           SizedBox(width: 4),
-          Text(
-            'AI DRAFT',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: kAiPurple,
-              letterSpacing: 0.3,
-            ),
-          ),
+          Text('AI DRAFT',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: kAiPurple,
+                  letterSpacing: 0.3)),
         ],
       ),
     );
@@ -487,9 +538,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2.5,
-          ),
+              color: Colors.white, strokeWidth: 2.5),
         )
             : const Text(
           'Submit Application',
