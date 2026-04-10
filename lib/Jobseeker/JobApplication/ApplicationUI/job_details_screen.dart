@@ -77,13 +77,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
   //Future<void> _handleApply() async {
   //  if (_hasApplied || _isApplying) return;
-
   //  setState(() => _isApplying = true);
-
   //  final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
-
   //  if (!mounted) return;
-
   //  setState(() {
   //    _isApplying = false;
   //    if (success) {
@@ -91,7 +87,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   //      _applicantCount++;
   //    }
   //  });
-
   //  ScaffoldMessenger.of(context).showSnackBar(
   //    SnackBar(
   //      content: Text(
@@ -108,11 +103,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   Future<void> _handleApply() async {
     if (_hasApplied) return;
 
-    setState(() => _isApplying = true);
-
-    final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
-
-    // Use copyWith to "patch" the null fields with the values we fetched
     final updatedJob = widget.job.copyWith(
       educationLevel: _fetchedEducation,
       experienceLevel: _fetchedExperience,
@@ -126,7 +116,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           jobTitle: updatedJob.title,
           company: updatedJob.company,
           companyId: updatedJob.companyId,
-          job: updatedJob, // CRITICAL: Pass the patched object!
+          job: updatedJob,
         ),
       ),
     );
@@ -135,23 +125,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       setState(() {
         _hasApplied = true;
         _applicantCount++;
-        _isApplying = false;
       });
-    } else {
-      setState(() => _isApplying = false);
-    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Application submitted! The employer will review it soon.'
-              : 'You have already applied for this job.',
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Application submitted! The employer will review it soon.'),
+          backgroundColor: _green, // Using your green constant
+          duration: Duration(seconds: 3),
         ),
-        backgroundColor: success ? _green : Colors.orange,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+      );
+    }
   }
 
   String _getTimeAgo(DateTime? dateTime) {
