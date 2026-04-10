@@ -7,6 +7,7 @@ import '../JobApplication/ApplicationServices/apply_job_service.dart';
 import '../Widgets/nav_bar_widget.dart';
 import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
+import '../JobApplication/ApplicationUI/saved_job_list.dart';
 
 class HomePage extends StatefulWidget {
   final User? user;
@@ -307,13 +308,13 @@ class _HomePageState extends State<HomePage> {
                                   height: 1.5),
                             ),
                             const SizedBox(height: 10),
-                            // Navigate to AI matching page
                             InkWell(
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => const AiMatchingScreen(),
+                                    builder: (context) =>
+                                    const AiMatchingScreen(),
                                   ),
                                 );
                               },
@@ -377,7 +378,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Job cards with publish/expiry filtering ────────
+                    // ── Job cards ────────────────────────────────────
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('jobs')
@@ -395,26 +396,16 @@ class _HomePageState extends State<HomePage> {
 
                         final now = DateTime.now();
 
-                        // ── Filter: only show live jobs ─────────────────
                         final docs = snapshot.data!.docs.where((doc) {
                           final data = doc.data() as Map<String, dynamic>;
-
-                          // Hide if publishDate is in the future (scheduled)
                           final publishDate =
                           (data['publishDate'] as Timestamp?)?.toDate();
                           if (publishDate != null &&
-                              publishDate.isAfter(now)) {
-                            return false;
-                          }
-
-                          // Hide if expiryDate has already passed (expired)
+                              publishDate.isAfter(now)) return false;
                           final expiryDate =
                           (data['expiryDate'] as Timestamp?)?.toDate();
                           if (expiryDate != null &&
-                              expiryDate.isBefore(now)) {
-                            return false;
-                          }
-
+                              expiryDate.isBefore(now)) return false;
                           return true;
                         }).toList();
 
@@ -483,20 +474,29 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+
+      // ── Bottom Nav ───────────────────────────────────────────────
       bottomNavigationBar: NavBarWidget(
-        currentIndex: 0, // Hardcoded to 0 because this IS the Home Page
+        currentIndex: 0,
         onTabSelected: (index) {
           if (index == 0) return; // Already on Home
+
           if (index == 1) {
-            // TODO: implement Saved route
-            // Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedJobsPage()));
-          } else if (index == 2) {
-            // TODO: implement applied
-            // logic for applied?
+            // ── Navigate to Saved Jobs ──────────────────────────────
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
+            ).then((_) => setState(() => _navIndex = 0));
+            return;
+          }
+
+          if (index == 2) {
+            // TODO: implement Applied Jobs route
           } else if (index == 3) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ProfilePage(user: widget.user)),
+              MaterialPageRoute(
+                  builder: (_) => ProfilePage(user: widget.user)),
             );
           }
         },
@@ -504,6 +504,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── Job Card ─────────────────────────────────────────────────────
   Widget _jobCard(BuildContext context, Job job, List<String> benefits,
       bool hasApplied) {
     return GestureDetector(
@@ -650,7 +651,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               child: Row(children: [
-                const Icon(Icons.access_time, size: 13, color: Colors.white60),
+                const Icon(Icons.access_time,
+                    size: 13, color: Colors.white60),
                 const SizedBox(width: 4),
                 Text(_getTimeAgo(job.createdAt),
                     style: const TextStyle(
@@ -664,15 +666,13 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.white60, fontSize: 12)),
                 const Spacer(),
                 GestureDetector(
-                  //TODO:
-                  //onTap: () => _handleApply(job.id!, job.title),
                   onTap: () async {
-                    // Wait for result to see if they applied while on the details page
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+                      MaterialPageRoute(
+                          builder: (_) => JobDetailsPage(job: job)),
                     );
-                    _loadAppliedJobs(); // Refresh the 'Applied' checkmarks on home
+                    _loadAppliedJobs();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -688,7 +688,8 @@ class _HomePageState extends State<HomePage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: hasApplied ? Colors.white : Colors.black,
+                        color:
+                        hasApplied ? Colors.white : Colors.black,
                       ),
                     ),
                   ),
