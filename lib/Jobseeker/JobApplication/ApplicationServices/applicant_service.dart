@@ -13,54 +13,59 @@ class ApplicantService {
     required String company,
     required String jobId,
     String? companyId,
-    String salary = '',
-    String workType = '',
-    String workplace = '',
-    String education = '',
+    String salary          = '',
+    String workType        = '',
+    String workplace       = '',
+    String education       = '',
     String experienceLevel = '',
   }) {
     return Applicant(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      jobId: jobId,
-      jobTitle: jobTitle,
-      company: company,
-      companyId: companyId,
-      resume: resumePath,
-      portfolioUrl: portfolioUrl.trim(),
-      coverLetter: coverLetter.trim(),
-      skills: List<String>.from(skills),
-      submittedAt: DateTime.now().toIso8601String(),
-      salary: salary,
-      workType: workType,
-      workplace: workplace,
-      education: education,
-      experienceLevel: experienceLevel
+      id:              DateTime.now().millisecondsSinceEpoch.toString(),
+      jobId:           jobId,
+      jobTitle:        jobTitle,
+      company:         company,
+      companyId:       companyId,
+      resume:          resumePath,
+      portfolioUrl:    portfolioUrl.trim(),
+      coverLetter:     coverLetter.trim(),
+      skills:          List<String>.from(skills),
+      submittedAt:     DateTime.now().toIso8601String(),
+      salary:          salary,
+      workType:        workType,
+      workplace:       workplace,
+      education:       education,
+      experienceLevel: experienceLevel,
     );
   }
 
-  static Future<bool> submitApplicant(Applicant applicant) async {
-    if (!applicant.validate()) return false;
+  /// Returns the Firestore-generated doc ID on success, null on failure.
+  /// Changed from bool so callers have the real doc ID for follow-up writes
+  /// (e.g. employer_notifications needs applicationId = the real Firestore ID).
+  static Future<String?> submitApplicant(Applicant applicant) async {
+    if (!applicant.validate()) return null;
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return false;
+    if (user == null) return null;
 
     try {
       final data = applicant.toMap();
 
-      // Add user + status metadata
-      data['userId'] = user.uid;
-      data['candidateName'] = user.displayName ?? '';
+      // Auth + status metadata
+      data['userId']         = user.uid;
+      data['candidateName']  = user.displayName ?? '';
       data['candidateEmail'] = user.email ?? '';
-      data['status'] = 'unprocessed';
-      data['appliedAt'] = FieldValue.serverTimestamp();
+      data['status']         = 'unprocessed';
+      data['appliedAt']      = FieldValue.serverTimestamp();
 
-      await FirebaseFirestore.instance
+      // .add() returns a DocumentReference — we grab the real generated ID
+      final docRef = await FirebaseFirestore.instance
           .collection('applications')
           .add(data);
-      return true;
+
+      return docRef.id; // ← real Firestore ID, e.g. "xT7JFO7KfsmrpGzDhUVz"
     } catch (e) {
       debugPrint('Error saving application: $e');
-      return false;
+      return null;
     }
   }
 
