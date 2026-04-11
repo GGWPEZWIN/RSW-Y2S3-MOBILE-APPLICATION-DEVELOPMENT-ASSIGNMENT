@@ -230,9 +230,9 @@ class _CreateJobPageState extends State<CreateJobPage> {
       // Get current user (without login check)
       final user = FirebaseAuth.instance.currentUser;
 
-      // Use default values if user is null (for testing)
-      String companyName = "Your Company";
-      String? companyId = user?.uid ?? "test_user_123"; // Use test ID if no user
+      // Default values — overwritten once we read from Firestore
+      String companyName = 'Your Company';
+      String companyId   = user?.uid ?? 'unknown';
 
       if (user != null) {
         try {
@@ -242,15 +242,20 @@ class _CreateJobPageState extends State<CreateJobPage> {
               .get();
 
           if (userDoc.exists) {
-            final data = userDoc.data() as Map<String, dynamic>?;
-            if (data != null) {
-              if (data['companyName'] != null && data['companyName'].toString().isNotEmpty) {
-                companyName = data['companyName'];
-              }
-              if (data['companyId'] != null) {
-                companyId = data['companyId'];
-              }
+            final data = userDoc.data() as Map<String, dynamic>? ?? {};
+
+            // ── companyName: prefer 'companyName', fall back to 'name' ──
+            final cn = data['companyName']?.toString().trim() ?? '';
+            final n  = data['name']?.toString().trim() ?? '';
+            if (cn.isNotEmpty) {
+              companyName = cn;
+            } else if (n.isNotEmpty) {
+              companyName = n;
             }
+
+            // ── companyId: use stored company doc ID if available ──────
+            final cid = data['companyId']?.toString().trim() ?? '';
+            if (cid.isNotEmpty) companyId = cid;
           }
         } catch (e) {
           print('Error getting user data: $e');
@@ -285,6 +290,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
         'postedTime':        'Just now',
         'applicants':        isEditing ? widget.jobToEdit!.applicants : '0 applied',
         'createdAt':         isEditing ? widget.jobToEdit!.createdAt : now,
+        'employerId':        user?.uid ?? '',   // ← used by delete-account & applicant queries
       };
 
       if (isEditing && widget.jobToEdit!.id != null) {

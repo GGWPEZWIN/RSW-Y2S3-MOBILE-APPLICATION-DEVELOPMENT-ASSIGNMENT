@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../google_login.dart';
+import '../../../login.dart';
 
 class EmployerProfileScreen extends StatelessWidget {
   const EmployerProfileScreen({super.key});
@@ -196,7 +196,7 @@ class EmployerProfileScreen extends StatelessWidget {
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (_) => const GoogleLogin()),
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
                       (route) => false,
                 );
               }
@@ -262,7 +262,7 @@ class EmployerProfileScreen extends StatelessWidget {
                   if (context.mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const GoogleLogin()),
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
                           (route) => false,
                     );
                   }
