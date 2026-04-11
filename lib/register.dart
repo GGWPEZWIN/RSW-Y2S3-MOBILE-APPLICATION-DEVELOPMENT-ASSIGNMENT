@@ -4,11 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-
-// ── Route imports — adjust paths to match your project structure ──────────────
-// import '../Employer/employer_dashboard.dart';
-// import '../Jobseeker/home_page.dart';
-// import 'login_page.dart';
+import 'Jobseeker/MainScreen/jobseeker_home.dart';
+import 'Employer/MainScreen/employer_dashboard.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -20,25 +17,21 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage>
     with SingleTickerProviderStateMixin {
 
-  // ── Form ───────────────────────────────────────────────────────────────────
   final _formKey             = GlobalKey<FormState>();
   final _nameController      = TextEditingController();
   final _emailController     = TextEditingController();
   final _passwordController  = TextEditingController();
   final _confirmController   = TextEditingController();
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  String   _role             = 'jobseeker'; // 'jobseeker' | 'employer'
+  String   _role             = 'jobseeker';
   File?    _profileImage;
   bool     _isLoading        = false;
   bool     _obscurePassword  = true;
   bool     _obscureConfirm   = true;
 
-  // ── Animation ──────────────────────────────────────────────────────────────
   late final AnimationController _animController;
   late final Animation<double>   _fadeAnim;
 
-  // ── Colours ────────────────────────────────────────────────────────────────
   static const Color kBlue       = Color(0xFF3B52E8);
   static const Color kBlueDark   = Color(0xFF2A3BC4);
   static const Color kBg         = Color(0xFFF5F6FA);
@@ -71,7 +64,6 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
-  // ── Pick profile photo ─────────────────────────────────────────────────────
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -84,7 +76,6 @@ class _RegisterPageState extends State<RegisterPage>
     }
   }
 
-  // ── Upload photo to Firebase Storage ──────────────────────────────────────
   Future<String?> _uploadProfilePhoto(String uid) async {
     if (_profileImage == null) return null;
     try {
@@ -99,14 +90,12 @@ class _RegisterPageState extends State<RegisterPage>
     }
   }
 
-  // ── Register handler ───────────────────────────────────────────────────────
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // 1. Create Firebase Auth account
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
         email:    _emailController.text.trim(),
@@ -116,22 +105,17 @@ class _RegisterPageState extends State<RegisterPage>
       final user = credential.user!;
       final uid  = user.uid;
 
-      // 2. Upload profile photo (optional)
       final photoUrl = await _uploadProfilePhoto(uid);
 
-      // 3. Update Auth display name + photoURL
       await user.updateDisplayName(_nameController.text.trim());
       if (photoUrl != null) await user.updatePhotoURL(photoUrl);
 
-      // 4. Save user document to Firestore
-      //    Fields: name, email, photoUrl, createdAt, role
-      //    Note: password is NOT stored in Firestore (Firebase Auth handles it)
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'name':      _nameController.text.trim(),
         'email':     _emailController.text.trim(),
         'photoUrl':  photoUrl ?? '',
         'createdAt': FieldValue.serverTimestamp(),
-        'role':      _role,               // 'jobseeker' or 'employer'
+        'role':      _role,
       });
 
       if (!mounted) return;
@@ -147,23 +131,24 @@ class _RegisterPageState extends State<RegisterPage>
           ),
           backgroundColor: const Color(0xFF22C55E),
           behavior: SnackBarBehavior.floating,
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
 
-      // 5. Navigate based on role
-      // Replace these with your actual routes:
+      // ✅ FIXED: Navigate based on role – replace the whole stack
       if (_role == 'employer') {
-        // Navigator.pushReplacement(context,
-        //   MaterialPageRoute(builder: (_) => const CompanyRegistrationPage()));
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const EmployerDashboard()),
+              (route) => false,
+        );
       } else {
-        // Navigator.pushReplacement(context,
-        //   MaterialPageRoute(builder: (_) => HomePage(user: user)));
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => HomePage(user: user)),
+              (route) => false,
+        );
       }
-
-      // Temporary: just pop back to login
-      Navigator.pop(context);
 
     } on FirebaseAuthException catch (e) {
       String msg;
@@ -203,7 +188,6 @@ class _RegisterPageState extends State<RegisterPage>
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,8 +202,6 @@ class _RegisterPageState extends State<RegisterPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // ── Back button ────────────────────────────────────────
                   GestureDetector(
                     onTap: () => Navigator.maybePop(context),
                     child: Container(
@@ -236,7 +218,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 24),
 
-                  // ── Title ──────────────────────────────────────────────
                   const Text(
                     'Create Account',
                     style: TextStyle(
@@ -253,7 +234,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 32),
 
-                  // ── Profile photo picker ───────────────────────────────
                   Center(
                     child: GestureDetector(
                       onTap: _pickImage,
@@ -286,8 +266,7 @@ class _RegisterPageState extends State<RegisterPage>
                               decoration: BoxDecoration(
                                 color: kBlue,
                                 shape: BoxShape.circle,
-                                border:
-                                Border.all(color: Colors.white, width: 2),
+                                border: Border.all(color: Colors.white, width: 2),
                               ),
                               child: const Icon(Icons.camera_alt_rounded,
                                   size: 14, color: Colors.white),
@@ -306,7 +285,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Role selector ──────────────────────────────────────
                   _sectionLabel('I am a...'),
                   const SizedBox(height: 10),
                   Row(
@@ -332,7 +310,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 24),
 
-                  // ── Full Name ──────────────────────────────────────────
                   _sectionLabel('Full Name'),
                   const SizedBox(height: 8),
                   _buildField(
@@ -345,7 +322,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Email ──────────────────────────────────────────────
                   _sectionLabel('Email Address'),
                   const SizedBox(height: 8),
                   _buildField(
@@ -361,7 +337,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Password ───────────────────────────────────────────
                   _sectionLabel('Password'),
                   const SizedBox(height: 8),
                   _buildField(
@@ -388,7 +363,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Confirm Password ───────────────────────────────────
                   _sectionLabel('Confirm Password'),
                   const SizedBox(height: 8),
                   _buildField(
@@ -417,7 +391,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 32),
 
-                  // ── Register button ────────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -450,7 +423,6 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Login link ─────────────────────────────────────────
                   Center(
                     child: GestureDetector(
                       onTap: () => Navigator.maybePop(context),
@@ -481,7 +453,6 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  // ── Role card widget ───────────────────────────────────────────────────────
   Widget _roleCard({
     required String label,
     required String subtitle,
@@ -507,9 +478,7 @@ class _RegisterPageState extends State<RegisterPage>
           children: [
             Row(
               children: [
-                Icon(icon,
-                    size: 22,
-                    color: isSelected ? kBlue : kSubtext),
+                Icon(icon, size: 22, color: isSelected ? kBlue : kSubtext),
                 const Spacer(),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -524,8 +493,7 @@ class _RegisterPageState extends State<RegisterPage>
                     ),
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check_rounded,
-                      size: 12, color: Colors.white)
+                      ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
                       : null,
                 ),
               ],
@@ -550,7 +518,6 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  // ── Section label ──────────────────────────────────────────────────────────
   Widget _sectionLabel(String text) {
     return Text(
       text,
@@ -562,7 +529,6 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  // ── Reusable text field ────────────────────────────────────────────────────
   Widget _buildField({
     required TextEditingController controller,
     required String hint,
@@ -585,8 +551,7 @@ class _RegisterPageState extends State<RegisterPage>
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: kCard,
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: kBorder),

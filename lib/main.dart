@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart'; // ← add this
-import 'google_login.dart';
-import 'services/google_sign_in_service.dart'; // ← add this (adjust path if needed)
+import 'login.dart';
+import 'services/google_sign_in_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         fontFamily: 'Poppins',
       ),
-      home: const GoogleLogin(),
+      home: const LoginPage(),
       debugShowCheckedModeBanner: false,
     );
   }
