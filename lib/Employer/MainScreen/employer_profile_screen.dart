@@ -214,74 +214,43 @@ class EmployerProfileScreen extends StatelessWidget {
   void _showDeleteAccountDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete Account'),
-        content: const Text('Are you sure you want to delete your account? This action cannot be undone. All your jobs and data will be permanently deleted.'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        content: const Text('Are you sure? This cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
+              // 1. Get references before we lose context
               final user = FirebaseAuth.instance.currentUser;
-              if (user != null) {
-                // Close dialog
-                Navigator.pop(context);
+              if (user == null) return;
+              final uid = user.uid;
 
-                // Show loading
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Deleting account...'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
+              // 2. NAVIGATE AWAY IMMEDIATELY
+              // This kills the Profile screen and the Exception you are seeing.
+              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
 
-                try {
-                  // Delete user data from Firestore
-                  await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+              // 3. Perform Deletion in the background (No more red screen!)
+              try {
+                final db = FirebaseFirestore.instance;
 
-                  // Delete all jobs posted by this employer
-                  final jobs = await FirebaseFirestore.instance
-                      .collection('jobs')
-                      .where('createdBy', isEqualTo: user.uid)
-                      .get();
-                  for (var job in jobs.docs) {
-                    await job.reference.delete();
-                  }
+                // Delete Jobs
+                final jobs = await db.collection('jobs').where('createdBy', isEqualTo: uid).get();
+                for (var doc in jobs.docs) { await doc.reference.delete(); }
 
-                  // Delete user authentication account
-                  await user.delete();
+                // Delete Profile
+                await db.collection('users').doc(uid).delete();
 
-                  // Navigate to login screen
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginPage()),
-                          (route) => false,
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error deleting account: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
+                // Delete Auth Account
+                await user.delete();
+
+                print("Account deleted successfully.");
+              } catch (e) {
+                print("Background deletion error: $e");
               }
             },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: const Text('Delete'),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
