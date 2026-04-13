@@ -53,82 +53,73 @@ class EmployerNotificationsPage extends StatelessWidget {
   }
 
   // ── Tap handler — routes to the right screen per type ─────────────────────
-  Future<void> _handleTap(BuildContext context, String notifId,
-      Map<String, dynamic> data) async {
-    // Mark read
-    await FirebaseFirestore.instance
+  Future<void> _handleTap(BuildContext context, String notifId, Map<String, dynamic> data) async {
+    // 1. Mark as read immediately
+    FirebaseFirestore.instance
         .collection('employer_notifications')
         .doc(notifId)
         .update({'isRead': true});
 
-    final type          = data['type']          as String? ?? '';
+    final type = data['type'] as String? ?? '';
     final applicationId = data['applicationId'] as String? ?? '';
-    final jobId         = data['jobId']         as String? ?? '';
-    final jobTitle      = data['jobTitle']      as String? ?? 'Job';
+    final jobId = data['jobId'] as String? ?? '';
     final candidateUserId = data['candidateUserId'] as String? ?? '';
-    final candidateName   = data['candidateName']   as String? ?? 'Candidate';
-    final rescheduleReason = data['rescheduleReason'] as String?;
 
-    if (type == 'new_application') {
-      // Open the applicants list filtered to this job
-      if (!context.mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ApplicantsByJobScreen(
-            jobId:    jobId,
-            jobTitle: jobTitle,
-          ),
-        ),
-      );
-      return;
-    }
+    // Show a loading indicator if fetching extra data
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: kBlue)),
+    );
 
-    if (type == 'reschedule_request' ||
-        type == 'interview_scheduled' ||
-        type == 'interview_cancelled') {
-      if (applicationId.isEmpty) return;
-
-      // Fetch existing interview + display info in parallel
+    try {
+      // 2. Fetch Job and User details in parallel to ensure ScheduleInterviewPage has data
       final results = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('interviews')
-            .doc(applicationId)
-            .get(),
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(candidateUserId)
-            .get(),
+        FirebaseFirestore.instance.collection('jobs').doc(jobId).get(),
+        FirebaseFirestore.instance.collection('users').doc(candidateUserId).get(),
+        FirebaseFirestore.instance.collection('interviews').doc(applicationId).get(),
       ]);
 
-      final interviewDoc = results[0];
-      final userDoc      = results[1];
-
-      final existing = interviewDoc.exists
-          ? interviewDoc.data() as Map<String, dynamic>
-          : null;
-      final email = (userDoc.data() as Map<String, dynamic>?)?['email']
-      as String? ?? '';
-
       if (!context.mounted) return;
+      Navigator.pop(context); // Remove loading indicator
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ScheduleInterviewPage(
-            applicationId:     applicationId,
-            candidateUserId:   candidateUserId,
-            jobId:             jobId,
-            jobTitle:          jobTitle,
-            candidateName:     candidateName,
-            candidateEmail:    email,
-            existingInterview: existing,
-            // Only pass reason for reschedule requests
-            rescheduleReason:  type == 'reschedule_request'
-                ? rescheduleReason : null,
+      final jobDoc = results[0];
+      final userDoc = results[1];
+      final interviewDoc = results[2];
+
+      final jobTitle = (jobDoc.data() as Map?)?['title'] ?? 'Job';
+      final candidateName = (userDoc.data() as Map?)?['name'] ?? 'Candidate';
+      final candidateEmail = (userDoc.data() as Map?)?['email'] ?? '';
+      final existingInterview = interviewDoc.exists ? interviewDoc.data() as Map<String, dynamic> : null;
+
+      if (type == 'new_application') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ApplicantsByJobScreen(jobId: jobId, jobTitle: jobTitle),
           ),
-        ),
-      );
+        );
+      } else if (type == 'reschedule_request' || type == 'interview_scheduled') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ScheduleInterviewPage(
+              applicationId: applicationId,
+              candidateUserId: candidateUserId,
+              jobId: jobId,
+              jobTitle: jobTitle,
+              candidateName: candidateName,
+              candidateEmail: candidateEmail,
+              existingInterview: existingInterview,
+              // Pass the reason from the notification data
+              rescheduleReason: data['rescheduleReason'],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      debugPrint("Error handling notification tap: $e");
     }
   }
 

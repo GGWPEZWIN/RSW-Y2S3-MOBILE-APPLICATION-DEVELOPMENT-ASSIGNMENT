@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../Interview/schedule_interview_page.dart';
 import '../JobListing/ApplicationUI/create_job_screen.dart';
 import '../JobListing/ApplicationUI/job_list_screen.dart';
@@ -40,6 +41,8 @@ class EmployerDashboard extends StatefulWidget {
 class _EmployerDashboardState extends State<EmployerDashboard> {
   int _selectedIndex = 0;
   static const Color _primaryBlue = Color(0xFF3B4FD8);
+
+  String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   void _navigateToCreateJob() {
     Navigator.push(
@@ -129,21 +132,56 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                       ),
                     ),
                   ),
-                  // Notification Icon
-                  Stack( // Stack allows for a red dot badge if you want to add one later
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const EmployerNotificationsPage()),
-                          );
-                        },
-                        icon: const Icon(Icons.notifications_none_rounded,
-                            color: Colors.black87, size: 26),
-                      ),
-                    ],
+                  // Notification Icon with Badge
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('employer_notifications')
+                        .where('employerId', isEqualTo: _employerId)
+                        .where('isRead', isEqualTo: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      final unread = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                      return Stack(
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const EmployerNotificationsPage()),
+                              );
+                            },
+                            icon: const Icon(Icons.notifications_none_rounded,
+                                color: Colors.black87, size: 26),
+                          ),
+                          if (unread > 0)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFEF4444),
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  unread > 9 ? '9+' : '$unread',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -179,160 +217,171 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                       final totalApplicants =
                       appSnap.hasData ? appSnap.data!.docs.length : 0;
 
-                      final stats = [
-                        {
-                          'value': jobCount.toString(),
-                          'label': 'Jobs Posted',
-                          'icon': Icons.assignment_outlined,
-                          'bg': const Color(0xFFFFF3E0),
-                          'iconColor': const Color(0xFFE07B39),
-                        },
-                        {
-                          'value': totalApplicants.toString(),
-                          'label': 'Applicants',
-                          'icon': Icons.group_outlined,
-                          'bg': const Color(0xFFF0F2FF),
-                          'iconColor': const Color(0xFF3B4FD8),
-                        },
-                        {
-                          'value': '0',
-                          'label': 'Jobs Closed',
-                          'icon': Icons.receipt_long_outlined,
-                          'bg': const Color(0xFFFFF3E0),
-                          'iconColor': const Color(0xFFE07B39),
-                        },
-                        {
-                          'value': '0%',
-                          'label': 'Hired Success',
-                          'icon': Icons.bar_chart_rounded,
-                          'bg': const Color(0xFFE8FBF0),
-                          'iconColor': const Color(0xFF2CB06A),
-                        },
-                        {
-                          'value': '0',
-                          'label': 'Upcoming Interviews',
-                          'icon': Icons.event_note_outlined,
-                          'bg': const Color(0xFFF0F2FF),
-                          'iconColor': const Color(0xFF3B4FD8),
-                        },
-                        {
-                          'value': '0',
-                          'label': 'Notifications',
-                          'icon': Icons.notifications_outlined,
-                          'bg': const Color(0xFFFFF0EC),
-                          'iconColor': const Color(0xFFE07B39),
-                        },
-                      ];
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('employer_notifications')
+                            .where('employerId', isEqualTo: _employerId)
+                            .where('isRead', isEqualTo: false)
+                            .snapshots(),
+                        builder: (context, notifSnap) {
+                          final unreadNotifs = notifSnap.hasData ? notifSnap.data!.docs.length : 0;
 
-                      return SingleChildScrollView(
-                        padding:
-                        const EdgeInsets.symmetric(horizontal: 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 18),
+                          final stats = [
+                            {
+                              'value': jobCount.toString(),
+                              'label': 'Jobs Posted',
+                              'icon': Icons.assignment_outlined,
+                              'bg': const Color(0xFFFFF3E0),
+                              'iconColor': const Color(0xFFE07B39),
+                            },
+                            {
+                              'value': totalApplicants.toString(),
+                              'label': 'Applicants',
+                              'icon': Icons.group_outlined,
+                              'bg': const Color(0xFFF0F2FF),
+                              'iconColor': const Color(0xFF3B4FD8),
+                            },
+                            {
+                              'value': '0',
+                              'label': 'Jobs Closed',
+                              'icon': Icons.receipt_long_outlined,
+                              'bg': const Color(0xFFFFF3E0),
+                              'iconColor': const Color(0xFFE07B39),
+                            },
+                            {
+                              'value': '0%',
+                              'label': 'Hired Success',
+                              'icon': Icons.bar_chart_rounded,
+                              'bg': const Color(0xFFE8FBF0),
+                              'iconColor': const Color(0xFF2CB06A),
+                            },
+                            {
+                              'value': '0',
+                              'label': 'Upcoming Interviews',
+                              'icon': Icons.event_note_outlined,
+                              'bg': const Color(0xFFF0F2FF),
+                              'iconColor': const Color(0xFF3B4FD8),
+                            },
+                            {
+                              'value': unreadNotifs.toString(),
+                              'label': 'Notifications',
+                              'icon': Icons.notifications_outlined,
+                              'bg': const Color(0xFFFFF0EC),
+                              'iconColor': const Color(0xFFE07B39),
+                            },
+                          ];
 
-                            // Search bar
-                            Container(
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF2F2F7),
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: TextField(
-                                decoration: InputDecoration(
-                                  hintText:
-                                  'Search anything here ......',
-                                  hintStyle: TextStyle(
-                                      color: Colors.grey[500],
-                                      fontSize: 14),
-                                  suffixIcon: Icon(Icons.search,
-                                      color: Colors.grey[500], size: 22),
-                                  border: InputBorder.none,
-                                  contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            const Text('Dashboard',
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 16),
-
-                            // Stats grid
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics:
-                              const NeverScrollableScrollPhysics(),
-                              itemCount: stats.length,
-                              gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 0.95,
-                              ),
-                              itemBuilder: (_, i) =>
-                                  _buildStatCard(stats[i]),
-                            ),
-                            const SizedBox(height: 28),
-
-                            // Recent job post header
-                            Row(
-                              mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          return SingleChildScrollView(
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Recent job post',
-                                    style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800)),
-                                GestureDetector(
-                                  onTap: _navigateToAllJobs,
-                                  child: Row(
-                                    children: const [
-                                      Text('view all',
-                                          style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.black54)),
-                                      SizedBox(width: 2),
-                                      Icon(Icons.chevron_right,
-                                          size: 18,
-                                          color: Colors.black54),
-                                    ],
+                                const SizedBox(height: 18),
+
+                                // Search bar
+                                Container(
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF2F2F7),
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  child: TextField(
+                                    decoration: InputDecoration(
+                                      hintText:
+                                      'Search anything here ......',
+                                      hintStyle: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 14),
+                                      suffixIcon: Icon(Icons.search,
+                                          color: Colors.grey[500], size: 22),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 14),
+                                    ),
                                   ),
                                 ),
+                                const SizedBox(height: 24),
+
+                                const Text('Dashboard',
+                                    style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 16),
+
+                                // Stats grid
+                                GridView.builder(
+                                  shrinkWrap: true,
+                                  physics:
+                                  const NeverScrollableScrollPhysics(),
+                                  itemCount: stats.length,
+                                  gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: 0.95,
+                                  ),
+                                  itemBuilder: (_, i) =>
+                                      _buildStatCard(stats[i]),
+                                ),
+                                const SizedBox(height: 28),
+
+                                // Recent job post header
+                                Row(
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Recent job post',
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800)),
+                                    GestureDetector(
+                                      onTap: _navigateToAllJobs,
+                                      child: Row(
+                                        children: const [
+                                          Text('view all',
+                                              style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.black54)),
+                                          SizedBox(width: 2),
+                                          Icon(Icons.chevron_right,
+                                              size: 18,
+                                              color: Colors.black54),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+
+                                // Recent job card
+                                if (recentJob != null)
+                                  _buildRecentJobCard(
+                                      recentJob, appSnap.data?.docs ?? [])
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.all(40),
+                                    decoration: BoxDecoration(
+                                      color: _primaryBlue,
+                                      borderRadius:
+                                      BorderRadius.circular(18),
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'No jobs posted yet.\nClick + to create one!',
+                                        textAlign: TextAlign.center,
+                                        style:
+                                        TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(height: 30),
                               ],
                             ),
-                            const SizedBox(height: 14),
-
-                            // Recent job card
-                            if (recentJob != null)
-                              _buildRecentJobCard(
-                                  recentJob, appSnap.data?.docs ?? [])
-                            else
-                              Container(
-                                padding: const EdgeInsets.all(40),
-                                decoration: BoxDecoration(
-                                  color: _primaryBlue,
-                                  borderRadius:
-                                  BorderRadius.circular(18),
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    'No jobs posted yet.\nClick + to create one!',
-                                    textAlign: TextAlign.center,
-                                    style:
-                                    TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 30),
-                          ],
-                        ),
+                          );
+                        },
                       );
                     },
                   );

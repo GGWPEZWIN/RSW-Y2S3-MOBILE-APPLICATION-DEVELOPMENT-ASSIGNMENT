@@ -225,12 +225,16 @@ class _HomePageState extends State<HomePage> {
                               return Stack(
                                 children: [
                                   IconButton(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (_) =>
-                                          const JobseekerNotificationsPage()),
-                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                            const JobseekerNotificationsPage()),
+                                      ).then((_) {
+                                        if (mounted) setState(() {});
+                                      });
+                                    },
                                     icon: const Icon(
                                         Icons.notifications_none_rounded,
                                         color: Colors.black,
@@ -247,12 +251,14 @@ class _HomePageState extends State<HomePage> {
                                         ),
                                         constraints: const BoxConstraints(
                                             minWidth: 16, minHeight: 16),
-                                        child: Text(
-                                          unread > 9 ? '9+' : '$unread',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
+                                        child: Center(
+                                          child: Text(
+                                            unread > 9 ? '9+' : '$unread',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
                                       ),

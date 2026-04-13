@@ -364,7 +364,7 @@ class _InterviewCard extends StatelessWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Interview cancelled.'),
+        content: Text('Application cancelled.'),
         backgroundColor: kRed,
         behavior: SnackBarBehavior.floating,
       ));
@@ -436,7 +436,7 @@ class _InterviewCard extends StatelessWidget {
     if (reason.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Please write a reason before sending.'),
+          content: Text('Please provide a reason for rescheduling.'),
           backgroundColor: Colors.orange,
         ));
       }
@@ -446,59 +446,78 @@ class _InterviewCard extends StatelessWidget {
     final db  = FirebaseFirestore.instance;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-    // 1. Update interview status to reschedule_pending + store reason
-    await db.collection('interviews').doc(interviewId).update({
+    final batch = db.batch();
+
+    // 1. Update the Interview document status and reason
+    final interviewRef = db.collection('interviews').doc(interviewId);
+    batch.update(interviewRef, {
       'status':            'reschedule_pending',
       'rescheduleReason':  reason,
       'rescheduleBy':      uid,
       'updatedAt':         FieldValue.serverTimestamp(),
     });
 
-    // 2. Notify employer via employer_notifications
-    final interviewDoc = await db.collection('interviews').doc(interviewId).get();
-    final employerId   = interviewDoc.data()?['employerId'] as String? ?? '';
+    // 2. Update the Application document status
+    final appRef = db.collection('applications').doc(interviewId);
+    batch.update(appRef, {
+      'status':            'reschedule_pending',
+      'updatedAt':         FieldValue.serverTimestamp(),
+    });
 
-    if (employerId.isNotEmpty) {
-      await db.collection('employer_notifications').add({
-        'employerId':      employerId,
-        'applicationId':   interviewId,
-        'jobId':           data['jobId'] ?? '',
-        'candidateUserId': uid,
-        'rescheduleReason': reason,
-        'title':  '🔄 Reschedule Request — $jobTitle',
-        'body':   'A candidate has requested to reschedule their interview for $jobTitle.',
+    try {
+      await batch.commit();
+
+      // 3. Notify employer
+      String employerId = data['employerId'] as String? ?? '';
+      if (employerId.isEmpty) {
+        final interviewDoc = await interviewRef.get();
+        employerId = interviewDoc.data()?['employerId'] as String? ?? '';
+      }
+
+      if (employerId.isNotEmpty) {
+        await db.collection('employer_notifications').add({
+          'employerId':      employerId,
+          'applicationId':   interviewId,
+          'jobId':           data['jobId'] ?? '',
+          'candidateUserId': uid,
+          'rescheduleReason': reason,
+          'title':  '🔄 Reschedule Request — $jobTitle',
+          'body':   'A candidate has requested to reschedule their interview for $jobTitle.',
+          'type':   'reschedule_request',
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // 4. Record in user's own notifications
+      final notifTitle = '🔄 Reschedule Requested — $jobTitle';
+      final notifBody  = 'You requested to reschedule your interview. The employer has been notified.';
+      
+      await db.collection('users').doc(uid).collection('notifications').add({
+        'applicationId': interviewId,
+        'title':  notifTitle,
+        'body':   notifBody,
         'type':   'reschedule_request',
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
-    }
 
-    // 3. Write to jobseeker's own inbox as confirmation
-    await db
-        .collection('users').doc(uid)
-        .collection('notifications')
-        .add({
-      'applicationId': interviewId,
-      'title':  '🔄 Reschedule Request Sent — $jobTitle',
-      'body':   'Your reschedule request has been sent to the employer. '
-          'You will be notified once they update the interview.',
-      'type':   'interview',
-      'isRead': false,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      await _LocalNotifier.show(notifTitle, notifBody);
 
-    // 4. Local device notification
-    await _LocalNotifier.show(
-      '🔄 Reschedule Request Sent',
-      'Your request for $jobTitle has been sent to the employer.',
-    );
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Reschedule request sent to employer.'),
-        backgroundColor: Color(0xFFF59E0B),
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Reschedule request sent.'),
+          backgroundColor: kOrange,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
     }
   }
 

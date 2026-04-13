@@ -27,7 +27,6 @@ class ApplicantsInterviewScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('applications')
-            .where('status', isEqualTo: 'interview')
             .orderBy('appliedAt', descending: true)
             .snapshots(),
         builder: (context, snap) {
@@ -123,8 +122,8 @@ class _InterviewCard extends StatelessWidget {
     final workType   = appData['workType'] as String? ?? '';
     final workplace  = appData['workplace'] as String? ?? '';
     final salary     = appData['salary']   as String? ?? '';
+    final String currentStatus = appData['status'] ?? '';
 
-    // Join jobs/{jobId} and users/{userId} in parallel
     return FutureBuilder<List<DocumentSnapshot>>(
       future: Future.wait([
         FirebaseFirestore.instance.collection('jobs').doc(jobId).get(),
@@ -150,23 +149,39 @@ class _InterviewCard extends StatelessWidget {
         final userDoc      = snap.data![1];
         final interviewDoc = snap.data![2];
 
-        // Job data
         final jobData  = jobDoc.exists ? jobDoc.data() as Map<String, dynamic> : {};
         final jobTitle = jobData['title'] as String? ?? 'Unknown Job';
         final location = jobData['location'] as String? ?? '';
 
-        // User data
         final userData  = userDoc.exists ? userDoc.data() as Map<String, dynamic> : {};
         final name  = userData['name']  as String? ?? 'Unknown';
         final email = userData['email'] as String? ?? '';
 
-        // Interview data (if already scheduled)
         final hasInterview = interviewDoc.exists;
         final interviewData = hasInterview
             ? interviewDoc.data() as Map<String, dynamic>
             : null;
 
-        // Format scheduled time from single interviewTimestamp
+        // ── Determine Status UI Logic ──────────────────────────────────────────
+        String badgeLabel;
+        Color badgeColor;
+        final String? rescheduleReason = interviewData?['rescheduleReason'];
+
+        if (currentStatus == 'reschedule_pending') {
+          badgeLabel = 'Reschedule Requested';
+          badgeColor = Colors.orange;
+        } else if (currentStatus == 'reschedule_proposed') {
+          badgeLabel = 'Waiting for Candidate';
+          badgeColor = Colors.purple;
+        } else if (hasInterview) {
+          badgeLabel = 'Scheduled ✓';
+          badgeColor = kGreen;
+        } else {
+          badgeLabel = 'Pending';
+          badgeColor = kBlue;
+        }
+        // ───────────────────────────────────────────────────────────────────────
+
         String? scheduledText;
         String? locText;
         if (interviewData != null) {
@@ -185,11 +200,11 @@ class _InterviewCard extends StatelessWidget {
                 applicationId:     applicationId,
                 candidateUserId:   userId,
                 jobId:             jobId,
-                // Display-only — not stored in Firestore
                 jobTitle:          jobTitle,
                 candidateName:     name,
                 candidateEmail:    email,
                 existingInterview: interviewData,
+                rescheduleReason:  rescheduleReason,
               ),
             ),
           ),
@@ -199,7 +214,10 @@ class _InterviewCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kBorder),
+              border: Border.all(
+                color: currentStatus == 'reschedule_pending' ? Colors.orange.withOpacity(0.5) : kBorder,
+                width: currentStatus == 'reschedule_pending' ? 1.5 : 1,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.04),
@@ -211,13 +229,12 @@ class _InterviewCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar — initials from joined user name
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: kBlue.withOpacity(0.1),
+                  backgroundColor: badgeColor.withOpacity(0.1),
                   child: Text(_initials(name),
-                      style: const TextStyle(
-                          color: kBlue,
+                      style: TextStyle(
+                          color: badgeColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 15)),
                 ),
@@ -227,7 +244,6 @@ class _InterviewCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Name + scheduled badge
                       Row(children: [
                         Expanded(
                           child: Text(name,
@@ -236,68 +252,76 @@ class _InterviewCard extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                   color: kText)),
                         ),
+                        // ── The Badge ──────────────────────────────────────────
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
-                            color: hasInterview
-                                ? kGreen.withOpacity(0.1)
-                                : kBlue.withOpacity(0.1),
+                            color: badgeColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: hasInterview
-                                  ? kGreen.withOpacity(0.4)
-                                  : kBlue.withOpacity(0.4),
-                            ),
+                            border: Border.all(color: badgeColor.withOpacity(0.4)),
                           ),
                           child: Text(
-                            hasInterview ? 'Scheduled ✓' : 'Pending',
+                            badgeLabel,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: hasInterview ? kGreen : kBlue,
+                              color: badgeColor,
                             ),
                           ),
                         ),
                       ]),
                       const SizedBox(height: 3),
 
-                      // Email from users join
-                      Text(email,
-                          style: const TextStyle(
-                              fontSize: 12, color: kSubtext)),
+                      Text(email, style: const TextStyle(fontSize: 12, color: kSubtext)),
                       const SizedBox(height: 6),
 
-                      // Job title from jobs join
+                      // Reschedule reason tiny banner
+                      if (currentStatus == 'reschedule_pending' && rescheduleReason != null) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Reason: $rescheduleReason',
+                                style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w500),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ],
+
                       Row(children: [
-                        const Icon(Icons.work_outline_rounded,
-                            size: 13, color: kSubtext),
+                        const Icon(Icons.work_outline_rounded, size: 13, color: kSubtext),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(jobTitle,
-                              style: const TextStyle(
-                                  fontSize: 12, color: kSubtext),
+                              style: const TextStyle(fontSize: 12, color: kSubtext),
                               overflow: TextOverflow.ellipsis),
                         ),
                       ]),
 
-                      // Location from jobs join
                       if (location.isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Row(children: [
-                          const Icon(Icons.location_on_outlined,
-                              size: 13, color: kSubtext),
+                          const Icon(Icons.location_on_outlined, size: 13, color: kSubtext),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(location,
-                                style: const TextStyle(
-                                    fontSize: 12, color: kSubtext),
+                                style: const TextStyle(fontSize: 12, color: kSubtext),
                                 overflow: TextOverflow.ellipsis),
                           ),
                         ]),
                       ],
 
-                      // Work type + workplace chips
                       if (workType.isNotEmpty || workplace.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Wrap(spacing: 6, children: [
@@ -306,55 +330,45 @@ class _InterviewCard extends StatelessWidget {
                         ]),
                       ],
 
-                      // Salary
                       if (salary.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Row(children: [
-                          const Icon(Icons.payments_outlined,
-                              size: 13, color: kSubtext),
+                          const Icon(Icons.payments_outlined, size: 13, color: kSubtext),
                           const SizedBox(width: 4),
-                          Text(salary,
-                              style: const TextStyle(
-                                  fontSize: 12, color: kSubtext)),
+                          Text(salary, style: const TextStyle(fontSize: 12, color: kSubtext)),
                         ]),
                       ],
 
-                      // Scheduled time (from interviews join via interviewTimestamp)
+                      // Scheduled time display
                       if (scheduledText != null) ...[
                         const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: kGreen.withOpacity(0.07),
+                            color: badgeColor.withOpacity(0.07),
                             borderRadius: BorderRadius.circular(8),
-                            border:
-                            Border.all(color: kGreen.withOpacity(0.25)),
+                            border: Border.all(color: badgeColor.withOpacity(0.25)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
-                                const Icon(Icons.calendar_today_rounded,
-                                    size: 13, color: kGreen),
+                                Icon(Icons.calendar_today_rounded, size: 13, color: badgeColor),
                                 const SizedBox(width: 6),
                                 Text(scheduledText,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 12,
-                                        color: kGreen,
+                                        color: badgeColor,
                                         fontWeight: FontWeight.w600)),
                               ]),
                               if (locText != null && locText.isNotEmpty) ...[
                                 const SizedBox(height: 3),
                                 Row(children: [
-                                  const Icon(Icons.location_on_outlined,
-                                      size: 13, color: kGreen),
+                                  Icon(Icons.location_on_outlined, size: 13, color: badgeColor),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(locText,
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: kGreen)),
+                                        style: TextStyle(fontSize: 11, color: badgeColor)),
                                   ),
                                 ]),
                               ],
@@ -367,8 +381,7 @@ class _InterviewCard extends StatelessWidget {
                 ),
 
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_ios_rounded,
-                    size: 14, color: kSubtext),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: kSubtext),
               ],
             ),
           ),

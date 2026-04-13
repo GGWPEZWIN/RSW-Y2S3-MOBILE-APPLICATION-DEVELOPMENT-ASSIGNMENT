@@ -30,10 +30,12 @@
         case 'interview':    return const Color(0xFF8B5CF6);
         case 'unprocessed':  return const Color(0xFFF59E0B);
         case 'under review': return const Color(0xFF60A5FA);
+        case 'reschedule_pending': return Colors.orange;
+        case 'reschedule_proposed': return Colors.purple;
         case 'declined':
         case 'rejected':     return const Color(0xFFEF4444);
         case 'withdrawn':    return const Color(0xFF94A3B8);
-        case 'cancelled':    return const Color(0xFF94A3B8);
+        case 'cancelled':    return const Color(0xFFEF4444);
         default:             return const Color(0xFF94A3B8);
       }
     }
@@ -44,15 +46,20 @@
         case 'shortlisted':  return 'SHORTLISTED';
         case 'interview':    return 'INTERVIEW SCHEDULED';
         case 'under review': return 'UNDER REVIEW';
+        case 'reschedule_pending': return 'RESCHEDULE PENDING';
+        case 'reschedule_proposed': return 'RESCHEDULE PROPOSED';
         case 'declined':
         case 'rejected':     return 'DECLINED';
         case 'withdrawn':    return 'WITHDRAWN';
         case 'cancelled':    return 'CANCELLED';
-        default:             return status.toUpperCase();
+        default:             return status.toUpperCase().replaceAll('_', ' ');
       }
     }
 
-    bool _isWithdrawn(String s) => s.toLowerCase() == 'withdrawn';
+    bool _isWithdrawn(String s) {
+      final status = s.toLowerCase();
+      return status == 'withdrawn' || status == 'cancelled';
+    }
 
     String _timeAgo(dynamic ts) {
       if (ts == null) return 'Recently';
@@ -260,23 +267,22 @@
               const SizedBox(width: 8),
               Text(sLabel, style: TextStyle(color: sCol, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
               const Spacer(),
-              if (!_isWithdrawn(status))
-                GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => JobseekerApplicationDetailScreen(
-                        applicationId: docId, applicationData: d),
-                  )),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    ),
-                    child: const Text('View Details',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => JobseekerApplicationDetailScreen(
+                      applicationId: docId, applicationData: d),
+                )),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
                   ),
+                  child: const Text('View Details',
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
                 ),
+              ),
             ]),
           ),
         ]),
@@ -345,9 +351,12 @@
         case 'shortlisted':  return const Color(0xFF22C55E);
         case 'interview':    return const Color(0xFF8B5CF6);
         case 'unprocessed':  return const Color(0xFFF59E0B);
+        case 'reschedule_pending': return Colors.orange;
+        case 'reschedule_proposed': return Colors.purple;
         case 'declined':     return const Color(0xFFEF4444);
         case 'rejected':     return const Color(0xFFEF4444);
         case 'cancelled':     return const Color(0xFFEF4444);
+        case 'withdrawn':    return const Color(0xFF94A3B8);
         default:             return const Color(0xFF94A3B8);
       }
     }
@@ -357,10 +366,13 @@
         case 'unprocessed': return 'Pending Review';
         case 'shortlisted': return 'Shortlisted';
         case 'interview':   return 'Interview Scheduled';
+        case 'reschedule_pending': return 'Reschedule Pending';
+        case 'reschedule_proposed': return 'Reschedule Proposed';
         case 'declined':    return 'Declined';
         case 'rejected':    return 'Rejected';
         case 'cancelled':    return 'Cancelled';
-        default:            return '${s[0].toUpperCase()}${s.substring(1)}';
+        case 'withdrawn':    return 'Withdrawn';
+        default:            return '${s[0].toUpperCase()}${s.substring(1).replaceAll('_', ' ')}';
       }
     }
 
@@ -430,9 +442,17 @@
 
         // 3. Update the Application status
         await db.collection('applications').doc(widget.applicationId).update({
-          'status': 'reschedule requested',
+          'status': 'reschedule_pending',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Update the Interview status
+        await db.collection('interviews').doc(widget.applicationId).update({
+          'status': 'reschedule_pending',
           'rescheduleReason': reason,
-          'rescheduleRequestedAt': FieldValue.serverTimestamp(),
+          'rescheduleBy': FirebaseAuth.instance.currentUser?.uid,
+          'pendingAcceptance': false,
+          'updatedAt': FieldValue.serverTimestamp(),
         });
 
         // 4. Notify the employer
@@ -447,8 +467,8 @@
 
         if (mounted) {
           _snack('Request sent successfully', Colors.green);
-          // 5. CRITICAL: Pop the screen BEFORE the parent StreamBuilder forces a rebuild
-          Navigator.pop(context);
+          // 5. Update local state to reflect change if not popping
+          setState(() => _status = 'reschedule_pending');
         }
       } catch (e) {
         if (mounted) _snack('Error: $e', Colors.red);
@@ -525,13 +545,20 @@
         final db         = FirebaseFirestore.instance;
         final employerId = await _getEmployerId();
 
-        await db.collection('interviews').doc(widget.applicationId).update({
+        final batch = db.batch();
+        batch.update(db.collection('interviews').doc(widget.applicationId), {
           'status':           'scheduled',
           'rescheduleReason': FieldValue.delete(),
           'rescheduleBy':     FieldValue.delete(),
           'pendingAcceptance': false,
           'updatedAt':        FieldValue.serverTimestamp(),
         });
+        batch.update(db.collection('applications').doc(widget.applicationId), {
+          'status': 'interview',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        await batch.commit();
 
         await _notifyEmployer(
           employerId: employerId,
@@ -540,6 +567,7 @@
           body:       '${widget.applicationData['candidateName'] ?? 'Candidate'} has accepted the new interview time.',
         );
 
+        if (mounted) setState(() => _status = 'interview');
         _snack('New interview time accepted ✓', const Color(0xFF22C55E));
       } catch (e) {
         _snack('Error: $e', Colors.red);
@@ -570,14 +598,20 @@
         final db         = FirebaseFirestore.instance;
         final employerId = await _getEmployerId();
 
-        // Put the ball back in employer's court — reschedule_pending again
-        await db.collection('interviews').doc(widget.applicationId).update({
+        final batch = db.batch();
+        batch.update(db.collection('interviews').doc(widget.applicationId), {
           'status':           'reschedule_pending',
           'rescheduleReason': reason,
-          'rescheduleBy':     'candidate',
+          'rescheduleBy':     FirebaseAuth.instance.currentUser?.uid,
           'pendingAcceptance': false,
           'updatedAt':        FieldValue.serverTimestamp(),
         });
+        batch.update(db.collection('applications').doc(widget.applicationId), {
+          'status': 'reschedule_pending',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        await batch.commit();
 
         await _notifyEmployer(
           employerId:      employerId,
@@ -587,7 +621,8 @@
           rescheduleReason: reason,
         );
 
-        _snack('Decline sent — employer will propose another time', Colors.orange);
+        if (mounted) setState(() => _status = 'reschedule_pending');
+        _snack('Request sent — employer will propose another time', Colors.orange);
       } catch (e) {
         _snack('Error: $e', Colors.red);
       } finally {
@@ -601,10 +636,10 @@
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Cancel Interview',
+          title: const Text('Withdraw Application',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.red)),
           content: const Text(
-            'Are you sure you want to cancel this interview? The employer will be notified.',
+            'Are you sure you want to withdraw this application? The employer will be notified.',
             style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
           actions: [
@@ -614,7 +649,7 @@
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Yes, Cancel', style: TextStyle(color: Colors.white)),
+              child: const Text('Yes, Withdraw', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -626,24 +661,27 @@
         final db         = FirebaseFirestore.instance;
         final employerId = await _getEmployerId();
 
-        await db.collection('interviews').doc(widget.applicationId).update({
+        final batch = db.batch();
+        batch.update(db.collection('interviews').doc(widget.applicationId), {
           'status':    'cancelled',
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        await db.collection('applications').doc(widget.applicationId).update({
-          'status':    'shortlisted',
+        batch.update(db.collection('applications').doc(widget.applicationId), {
+          'status':    'cancelled',
           'updatedAt': FieldValue.serverTimestamp(),
         });
+
+        await batch.commit();
 
         await _notifyEmployer(
           employerId: employerId,
           type:       'interview_cancelled',
-          title:      'Interview Cancelled',
-          body:       '${widget.applicationData['candidateName'] ?? 'Candidate'} has cancelled the interview.',
+          title:      'Application Withdrawn',
+          body:       '${widget.applicationData['candidateName'] ?? 'Candidate'} has withdrawn their application for $_title.',
         );
 
-        if (mounted) setState(() => _status = 'shortlisted');
-        _snack('Interview cancelled', Colors.orange);
+        if (mounted) setState(() => _status = 'cancelled');
+        _snack('Application withdrawn successfully', Colors.orange);
       } catch (e) {
         _snack('Error: $e', Colors.red);
       } finally {
@@ -655,6 +693,8 @@
 
     @override
     Widget build(BuildContext context) {
+      final isWithdrawn = _status.toLowerCase() == 'withdrawn' || _status.toLowerCase() == 'cancelled';
+
       return Scaffold(
         backgroundColor: _bg,
         body: CustomScrollView(slivers: [
@@ -714,7 +754,9 @@
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
               // ── Interview panel ───────────────────────────────────────────
-              if (_status.toLowerCase() == 'interview') ...[
+              if (!isWithdrawn && (_status.toLowerCase() == 'interview' || 
+                  _status.toLowerCase() == 'reschedule_pending' || 
+                  _status.toLowerCase() == 'reschedule_proposed')) ...[
                 _sectionTitle('🗓  Interview Details'),
                 const SizedBox(height: 12),
                 StreamBuilder<DocumentSnapshot>(
@@ -797,20 +839,22 @@
                 _CvViewer(base64Image: _resume),
               ],
 
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: OutlinedButton.icon(
-                  onPressed: _isBusy ? null : _cancelInterview,
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  label: const Text('Withdraw Application', style: TextStyle(color: Colors.red)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              if (!isWithdrawn) ...[
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: OutlinedButton.icon(
+                    onPressed: _isBusy ? null : _cancelInterview,
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    label: const Text('Withdraw Application', style: TextStyle(color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 40), // Bottom padding
             ]),
           )),
@@ -834,15 +878,10 @@
           ? '—'
           : '${_wday(dt.weekday)}, ${dt.day} ${_mon(dt.month)} ${dt.year}  •  ${_fmtTime(dt)}';
 
-      // States:
-      //  • scheduled            → normal view + request reschedule + cancel buttons
-      //  • reschedule_pending (rescheduleBy==candidate) → "awaiting employer" banner
-      //  • reschedule_pending (pendingAcceptance==true)  → "new time proposed" banner + Accept/Decline
-      //  • cancelled            → cancelled info
-
-      final isAwaitingEmployer = ivStatus == 'reschedule_pending' && !pendingAcceptance;
-      final isNewTimeProposed  = ivStatus == 'reschedule_pending' &&  pendingAcceptance;
+      final isAwaitingEmployer = ivStatus == 'reschedule_pending';
+      final isNewTimeProposed  = ivStatus == 'reschedule_proposed';
       final isCancelled        = ivStatus == 'cancelled';
+      final isScheduled        = ivStatus == 'scheduled';
 
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
@@ -911,7 +950,7 @@
         ]),
 
         // SCHEDULED (normal) → Request reschedule / Cancel
-        if (ivStatus == 'scheduled') Row(children: [
+        if (isScheduled) Row(children: [
           Expanded(child: _actionBtn(
             label: 'Request Reschedule',
             icon: Icons.schedule_rounded,

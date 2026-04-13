@@ -185,7 +185,14 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
       final db = FirebaseFirestore.instance;
 
-      // interviews/{applicationId} — FK-only, normalized
+      // Logic: If the employer is responding to a reschedule request,
+      // the status becomes 'reschedule_proposed' (waiting for candidate approval).
+      // If it's a fresh schedule or a standard edit, it stays 'scheduled'.
+      final targetStatus = _isRescheduling ? 'reschedule_proposed' : 'scheduled';
+
+      // Status name for the 'applications' collection
+      final appCollectionStatus = _isRescheduling ? 'reschedule_proposed' : 'interview';
+
       final interviewData = <String, dynamic>{
         'applicationId':      widget.applicationId,
         'jobId':              widget.jobId,
@@ -195,11 +202,12 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         'locationType':       _locationType,
         'locationDetail':     _locationCtrl.text.trim(),
         'notes':              _notesCtrl.text.trim(),
-        'status':             'scheduled',
-        // Clear reschedule fields once employer has acted
+        'status':             targetStatus,
+        'updatedAt':          FieldValue.serverTimestamp(),
+        if (_isRescheduling) 'pendingAcceptance': true,
+        // Remove these fields so the request is considered "resolved"
         'rescheduleReason':   FieldValue.delete(),
         'rescheduleBy':       FieldValue.delete(),
-        'updatedAt':          FieldValue.serverTimestamp(),
       };
 
       final batch        = db.batch();
@@ -208,28 +216,32 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
       if (_isEditing) {
         batch.update(interviewRef, interviewData);
       } else {
+        // If creating new, remove the delete instructions and add createdAt
         interviewData.remove('rescheduleReason');
         interviewData.remove('rescheduleBy');
         interviewData['createdAt'] = FieldValue.serverTimestamp();
         batch.set(interviewRef, interviewData);
       }
 
+      // Update the main applications collection status
       batch.update(
         db.collection('applications').doc(widget.applicationId),
-        {'status': 'interview', 'updatedAt': FieldValue.serverTimestamp()},
+        {
+          'status': appCollectionStatus,
+          'updatedAt': FieldValue.serverTimestamp()
+        },
       );
 
       await batch.commit();
 
-      // Notification content
+      // ── Notifications ──
       final notifTitle = _isRescheduling
-          ? '📅 Interview Rescheduled — ${widget.jobTitle}'
-          : '📅 Interview ${_isEditing ? 'Updated' : 'Scheduled'} — ${widget.jobTitle}';
-      final notifBody =
-          'Hi ${widget.candidateName}! Your interview for ${widget.jobTitle} '
-          'is on $dateStr at $timeFormatted. Location: $locationText.';
+          ? '📅 New Interview Time Proposed'
+          : '📅 Interview ${_isEditing ? 'Updated' : 'Scheduled'}';
 
-      // Write to candidate's notification inbox
+      final notifBody = 'For ${widget.jobTitle}: $dateStr at $timeFormatted ($locationText). '
+          'Please check the app to confirm.';
+
       if (widget.candidateUserId.isNotEmpty) {
         await db
             .collection('users')
@@ -238,34 +250,20 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
             .add({
           'applicationId':      widget.applicationId,
           'jobId':              widget.jobId,
-          'interviewTimestamp': interviewTimestamp,
-          'locationType':       _locationType,
-          'locationDetail':     _locationCtrl.text.trim(),
           'title':              notifTitle,
           'body':               notifBody,
-          'type':               _isRescheduling
-              ? 'interview_updated'
-              : 'interview',
-          'isRead':    false,
-          'createdAt': FieldValue.serverTimestamp(),
+          'type':               _isRescheduling ? 'reschedule_proposal' : 'interview',
+          'isRead':             false,
+          'createdAt':          FieldValue.serverTimestamp(),
         });
       }
 
-      // Local device notification
       await _LocalNotifier.show(notifTitle, notifBody);
 
       if (!mounted) return;
-      _snack(
-        _isRescheduling
-            ? 'Interview rescheduled! ${widget.candidateName} has been renotified.'
-            : _isEditing
-            ? 'Interview updated! ${widget.candidateName} notified.'
-            : 'Interview scheduled! ${widget.candidateName} notified.',
-        const Color(0xFF22C55E),
-        floating: true,
-      );
-
+      _snack(_isRescheduling ? 'Proposed new time to candidate!' : 'Interview saved!', const Color(0xFF22C55E));
       Navigator.pop(context, true);
+
     } catch (e) {
       if (mounted) _snack('Error: $e', Colors.redAccent);
     } finally {
@@ -607,9 +605,10 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: _isRescheduling
-              ? [kOrange, const Color(0xFFFFB347)]
-              : [kBlue, const Color(0xFF5B6EF0)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+              ? [Colors.orange.shade700, Colors.orange.shade400] // Orange for Rescheduling
+              : [kBlue, const Color(0xFF5B6EF0)],               // Blue for standard
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
       ),
