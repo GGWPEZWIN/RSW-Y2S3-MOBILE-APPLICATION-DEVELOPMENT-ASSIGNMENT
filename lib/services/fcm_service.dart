@@ -66,9 +66,9 @@ class FCMService {
     });
   }
 
-  // ─── CANDIDATE: save FCM token after login ────────────────────────────────
+  // ─── SAVE TOKEN after login (Works for both User and Employer) ──────────
 
-  Future<void> saveCandidateToken(String userId) async {
+  Future<void> saveToken(String userId) async {
     try {
       final token = await _messaging.getToken();
       if (token == null) return;
@@ -90,38 +90,30 @@ class FCMService {
         });
       });
     } catch (e) {
-      debugPrint('saveCandidateToken error: $e');
+      debugPrint('saveToken error: $e');
     }
   }
 
-  // ─── EMPLOYER: write status update → Cloud Function sends the push ────────
+  // ─── Trigger Cloud Function via doc write (Payload Pattern) ─────────────
 
-  Future<void> updateApplicationStatus({
-    required String applicationId,
-    required String candidateUserId,
-    required String candidateName,
-    required String jobTitle,
-    required ApplicationStatus status,
-    String? rejectionReason,
+  Future<void> sendPushNotification({
+    required String recipientId,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
   }) async {
-    await _db.collection('applications').doc(applicationId).update({
-      'status': status.firestoreValue,
-      'candidateUserId': candidateUserId,
-      'candidateName': candidateName,
-      'jobTitle': jobTitle,
-      'statusUpdatedAt': FieldValue.serverTimestamp(),
-      'notificationPayload': {
-        'title': status.notificationTitle(jobTitle),
-        'body': status.notificationBody(
-          candidateName,
-          jobTitle,
-          reason: rejectionReason,
-        ),
-        'status': status.firestoreValue,
-      },
+    // This write triggers a Cloud Function (if you have one)
+    // or you can handle it via a collection listener.
+    // For a pure client-side implementation without server-side keys,
+    // we use Firestore as a 'trigger'.
+    await _db.collection('push_notifications_queue').add({
+      'recipientId': recipientId,
+      'title': title,
+      'body': body,
+      'data': data ?? {},
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
     });
-
-    debugPrint('Application status → ${status.firestoreValue}');
   }
 
   // ─── Show banner while app is open ───────────────────────────────────────
@@ -155,7 +147,7 @@ class FCMService {
 
 // ─── ApplicationStatus enum ───────────────────────────────────────────────────
 
-enum ApplicationStatus { accepted, rejected, shortlisted }
+enum ApplicationStatus { accepted, rejected, shortlisted, interview }
 
 extension ApplicationStatusX on ApplicationStatus {
   String get firestoreValue {
@@ -163,6 +155,7 @@ extension ApplicationStatusX on ApplicationStatus {
       case ApplicationStatus.accepted:    return 'accepted';
       case ApplicationStatus.rejected:    return 'rejected';
       case ApplicationStatus.shortlisted: return 'shortlisted';
+      case ApplicationStatus.interview:   return 'interview';
     }
   }
 
@@ -174,43 +167,23 @@ extension ApplicationStatusX on ApplicationStatus {
         return '📋 Application Update — $jobTitle';
       case ApplicationStatus.shortlisted:
         return '⭐ You\'ve Been Shortlisted — $jobTitle';
+      case ApplicationStatus.interview:
+        return '📅 Interview Invitation — $jobTitle';
     }
   }
 
   String notificationBody(String name, String jobTitle, {String? reason}) {
     switch (this) {
       case ApplicationStatus.accepted:
-        return 'Congratulations $name! Your application for $jobTitle has been accepted. We\'ll be in touch soon.';
+        return 'Congratulations $name! Your application for $jobTitle has been accepted.';
       case ApplicationStatus.rejected:
         return (reason != null && reason.isNotEmpty)
             ? 'Hi $name, your application for $jobTitle was not successful. Reason: $reason'
-            : 'Hi $name, your application for $jobTitle was not successful this time. Keep applying!';
+            : 'Hi $name, your application for $jobTitle was not successful this time.';
       case ApplicationStatus.shortlisted:
-        return 'Great news $name! You\'ve been shortlisted for $jobTitle. Stay tuned for next steps.';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case ApplicationStatus.accepted:    return const Color(0xFF22C55E);
-      case ApplicationStatus.rejected:    return const Color(0xFFEF4444);
-      case ApplicationStatus.shortlisted: return const Color(0xFFF59E0B);
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case ApplicationStatus.accepted:    return Icons.check_circle_rounded;
-      case ApplicationStatus.rejected:    return Icons.cancel_rounded;
-      case ApplicationStatus.shortlisted: return Icons.star_rounded;
-    }
-  }
-
-  String get label {
-    switch (this) {
-      case ApplicationStatus.accepted:    return 'Accepted';
-      case ApplicationStatus.rejected:    return 'Rejected';
-      case ApplicationStatus.shortlisted: return 'Shortlisted';
+        return 'Great news $name! You\'ve been shortlisted for $jobTitle.';
+      case ApplicationStatus.interview:
+        return 'Hi $name, the employer wants to interview you for $jobTitle. Check details in the app.';
     }
   }
 }

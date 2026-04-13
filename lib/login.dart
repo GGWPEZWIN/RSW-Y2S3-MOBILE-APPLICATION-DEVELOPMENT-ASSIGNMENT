@@ -6,6 +6,7 @@ import 'email_signup.dart';
 import 'email_login.dart';
 import 'employer_login.dart';
 import 'services/google_sign_in_service.dart';
+import 'services/fcm_service.dart'; // ✅ Add this
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
 
 class LoginPage extends StatefulWidget {
@@ -29,7 +30,10 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // ✅ Check if user doc exists in Firestore already
+      // ✅ 1. Save FCM token immediately
+      await FCMService().saveToken(user.uid);
+
+      // ✅ 2. Check if user doc exists in Firestore already
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
