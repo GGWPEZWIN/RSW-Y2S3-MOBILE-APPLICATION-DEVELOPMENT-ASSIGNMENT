@@ -249,7 +249,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                const Text('Sign in to continue',
+                const Text('Log in to continue',
                     style: TextStyle(color: Colors.grey, fontSize: 14),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 32),

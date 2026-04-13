@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../login.dart';
+import '../../edit_profile.dart';
 
 class EmployerProfileScreen extends StatelessWidget {
   const EmployerProfileScreen({super.key});
+
+  static const Color kPrimary = Color(0xFF425AE2);
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +101,35 @@ class EmployerProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
+
+            // Edit Profile
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  if (user != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            EditProfilePage(user: user!),
+                      ),
+                    ).then((_) {
+                      (context as Element).markNeedsBuild();
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Edit Profile',
+                    style: TextStyle(fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // Logout Button
             SizedBox(

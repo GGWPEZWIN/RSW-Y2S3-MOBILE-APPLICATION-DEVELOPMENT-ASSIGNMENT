@@ -301,7 +301,7 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                         letterSpacing: -0.5)),
                 const SizedBox(height: 6),
                 const Text(
-                    'Sign in to your employer account to manage hiring.',
+                    'Log in to your employer account to manage hiring.',
                     style: TextStyle(
                         fontSize: 14,
                         color: Color(0xFF8A99B8),
@@ -382,7 +382,7 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                     ),
                     const SizedBox(height: 28),
 
-                    // Sign In button
+                    // Log In button
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -400,7 +400,7 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                             width: 22, height: 22,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2.5))
-                            : const Text('Sign In',
+                            : const Text('Log In',
                             style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

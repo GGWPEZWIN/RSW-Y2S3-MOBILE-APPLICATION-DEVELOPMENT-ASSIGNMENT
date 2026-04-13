@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_profile.dart';
+import '../../edit_profile.dart';
 
 class ProfilePage extends StatelessWidget {
   final User? user;
