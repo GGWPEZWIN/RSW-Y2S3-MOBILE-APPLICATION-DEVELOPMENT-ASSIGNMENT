@@ -1,9 +1,9 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'notification_service.dart'; // ✅ Use the unified service
 
-/// Background message handler — must be a top-level function (not inside a class)
+/// Background message handler — must be a top-level function
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('Background FCM: ${message.notification?.title}');
@@ -17,10 +17,7 @@ class FCMService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  final FlutterLocalNotificationsPlugin _localNotifications =
-  FlutterLocalNotificationsPlugin();
-
-  // ─── Call once in main.dart after Firebase.initializeApp() ───────────────
+  // ─── Call once in main.dart ───────────────────────────────────────────────
 
   Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -32,33 +29,13 @@ class FCMService {
       sound: true,
     );
 
-    // Setup flutter_local_notifications (foreground banners on Android)
-    const androidSettings =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
-
-    await _localNotifications.initialize(
-      const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
-    );
-
-    // Create Android notification channel
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        'application_status_channel',
-        'Application Status',
-        description: 'Job application status updates from employers',
-        importance: Importance.max,
-      ),
-    );
+    // Initialize the unified NotificationService
+    await NotificationService().initialize();
 
     // Show banner when app is OPEN (foreground)
-    FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+    FirebaseMessaging.onMessage.listen((message) {
+      _showForegroundNotification(message);
+    });
 
     // Handle notification tap when app was in background
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
@@ -66,7 +43,7 @@ class FCMService {
     });
   }
 
-  // ─── SAVE TOKEN after login (Works for both User and Employer) ──────────
+  // ─── SAVE TOKEN after login ──────────────────────────────────────────────
 
   Future<void> saveToken(String userId) async {
     try {
@@ -94,7 +71,7 @@ class FCMService {
     }
   }
 
-  // ─── Trigger Cloud Function via doc write (Payload Pattern) ─────────────
+  // ─── Trigger Cloud Function via doc write (Push Notification) ───────────
 
   Future<void> sendPushNotification({
     required String recipientId,
@@ -102,10 +79,6 @@ class FCMService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
-    // This write triggers a Cloud Function (if you have one)
-    // or you can handle it via a collection listener.
-    // For a pure client-side implementation without server-side keys,
-    // we use Firestore as a 'trigger'.
     await _db.collection('push_notifications_queue').add({
       'recipientId': recipientId,
       'title': title,
@@ -118,29 +91,15 @@ class FCMService {
 
   // ─── Show banner while app is open ───────────────────────────────────────
 
-  Future<void> _showForegroundNotification(RemoteMessage message) async {
+  void _showForegroundNotification(RemoteMessage message) {
     final n = message.notification;
     if (n == null) return;
 
-    await _localNotifications.show(
-      n.hashCode,
-      n.title,
-      n.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'application_status_channel',
-          'Application Status',
-          importance: Importance.max,
-          priority: Priority.high,
-          color: Color(0xFF425AE2),
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
+    // Use the unified NotificationService to show the popup
+    NotificationService().showNotification(
+      title: n.title ?? '',
+      body: n.body ?? '',
+      payload: message.data.toString(),
     );
   }
 }

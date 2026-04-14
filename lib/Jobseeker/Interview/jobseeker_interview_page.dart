@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../services/fcm_service.dart'; // ✅ Add this
 
 // ── Local notifier (reused pattern) ──────────────────────────────────────────
 class _LocalNotifier {
@@ -346,17 +347,31 @@ class _InterviewCard extends StatelessWidget {
     final interviewDoc = await db.collection('interviews').doc(interviewId).get();
     final employerId   = interviewDoc.data()?['employerId'] as String? ?? '';
     if (employerId.isNotEmpty) {
+      final empTitle = '❌ Interview Cancelled — $jobTitle';
+      final empBody  = 'The candidate has cancelled their interview for $jobTitle.';
+
       await db.collection('employer_notifications').add({
         'employerId':    employerId,
         'applicationId': interviewId,
         'jobId':         data['jobId'] ?? '',
         'candidateUserId': uid,
-        'title':  '❌ Interview Cancelled — $jobTitle',
-        'body':   'The candidate has cancelled their interview for $jobTitle.',
+        'title':  empTitle,
+        'body':   empBody,
         'type':   'interview_cancelled',
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // ✅ Trigger Push Notification
+      await FCMService().sendPushNotification(
+        recipientId: employerId,
+        title:       empTitle,
+        body:        empBody,
+        data: {
+          'type':          'interview_cancelled',
+          'applicationId': interviewId,
+        },
+      );
     }
 
     // 5. Local device notification
@@ -364,7 +379,7 @@ class _InterviewCard extends StatelessWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Application cancelled.'),
+        content: Text('Interview cancelled.'),
         backgroundColor: kRed,
         behavior: SnackBarBehavior.floating,
       ));
@@ -475,6 +490,9 @@ class _InterviewCard extends StatelessWidget {
       }
 
       if (employerId.isNotEmpty) {
+        final empTitle = '🔄 Reschedule Request — $jobTitle';
+        final empBody  = 'A candidate has requested to reschedule their interview for $jobTitle.';
+
         await db.collection('employer_notifications').add({
           'employerId':      employerId,
           'applicationId':   interviewId,
@@ -487,6 +505,17 @@ class _InterviewCard extends StatelessWidget {
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        // ✅ Trigger Push Notification
+        await FCMService().sendPushNotification(
+          recipientId: employerId,
+          title:       empTitle,
+          body:        empBody,
+          data: {
+            'type':          'reschedule_request',
+            'applicationId': interviewId,
+          },
+        );
       }
 
       // 4. Record in user's own notifications

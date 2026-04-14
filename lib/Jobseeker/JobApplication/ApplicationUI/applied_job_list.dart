@@ -6,6 +6,7 @@
   import '../../Widgets/nav_bar_widget.dart';
   import '../../InterviewPractice/interview_practice_screen.dart';
   import 'saved_job_list.dart';
+  import '../../../services/fcm_service.dart'; // ✅ Add this
 
   // ══════════════════════════════════════════════════════════════════════════════
   // APPLIED JOBS LIST SCREEN
@@ -410,6 +411,17 @@
       };
       if (rescheduleReason != null) data['rescheduleReason'] = rescheduleReason;
       await FirebaseFirestore.instance.collection('employer_notifications').add(data);
+
+      // ✅ Trigger Push Notification
+      await FCMService().sendPushNotification(
+        recipientId: employerId,
+        title: title,
+        body: body,
+        data: {
+          'type': type,
+          'applicationId': widget.applicationId,
+        },
+      );
     }
 
 // ── Action: request reschedule (jobseeker initiates) ────────────────────
@@ -460,7 +472,7 @@
         await _notifyEmployer(
           employerId: employerId,
           type: 'reschedule_request',
-          title: 'Interview Reschedule Request',
+          title: '🔄 Interview Reschedule Request',
           body: 'A candidate has requested to reschedule the interview for $_title.',
           rescheduleReason: reason,
         );
@@ -563,7 +575,7 @@
         await _notifyEmployer(
           employerId: employerId,
           type:       'reschedule_accepted',
-          title:      'Reschedule Accepted',
+          title:      '✅ Reschedule Accepted',
           body:       '${widget.applicationData['candidateName'] ?? 'Candidate'} has accepted the new interview time.',
         );
 
@@ -616,7 +628,7 @@
         await _notifyEmployer(
           employerId:      employerId,
           type:            'reschedule_request',
-          title:           'New Time Declined',
+          title:           '❌ New Time Declined',
           body:            '${widget.applicationData['candidateName'] ?? 'Candidate'} declined the proposed time and submitted a new reschedule request.',
           rescheduleReason: reason,
         );
@@ -676,7 +688,7 @@
         await _notifyEmployer(
           employerId: employerId,
           type:       'interview_cancelled',
-          title:      'Application Withdrawn',
+          title:      '⚠️ Application Withdrawn',
           body:       '${widget.applicationData['candidateName'] ?? 'Candidate'} has withdrawn their application for $_title.',
         );
 

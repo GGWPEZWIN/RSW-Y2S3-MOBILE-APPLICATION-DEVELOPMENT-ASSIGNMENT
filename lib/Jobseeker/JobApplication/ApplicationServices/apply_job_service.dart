@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../../../services/fcm_service.dart'; // ✅ Add this
 
 class ApplyJobService {
   /// Call this when user taps "Apply".
@@ -30,6 +31,7 @@ class ApplyJobService {
       }
 
       final job = jobSnap.data()!;
+      final employerId = job['employerId'] as String? ?? '';
 
       // ── 2. Fetch user profile ───────────────────────────────────────────
       final userSnap = await FirebaseFirestore.instance
@@ -63,7 +65,7 @@ class ApplyJobService {
       }
 
       // ── 4. Save application ─────────────────────────────────────────────
-      await FirebaseFirestore.instance.collection('applications').add({
+      final applicationRef = await FirebaseFirestore.instance.collection('applications').add({
         // Who applied
         'userId':         user.uid,
         'candidateName':  candidateName,
@@ -91,12 +93,43 @@ class ApplyJobService {
         'appliedAt': FieldValue.serverTimestamp(),
       });
 
-      // ── 5. Increment applicants count as int ────────────────────────────
-      // home_page.dart handles displaying it safely via _parseApplicants().
+      // ── 5. Increment applicants count ────────────────────────────
       await FirebaseFirestore.instance
           .collection('jobs')
           .doc(jobId)
           .update({'applicants': FieldValue.increment(1)});
+
+      // ── 6. Notify Employer (In-app + Push) ───────────────────────
+      if (employerId.isNotEmpty) {
+        final title = '📝 New Application: ${job['title']}';
+        final body  = '$candidateName has applied for your job posting.';
+
+        // In-app
+        await FirebaseFirestore.instance.collection('employer_notifications').add({
+          'employerId':      employerId,
+          'applicationId':   applicationRef.id,
+          'jobId':           jobId,
+          'candidateUserId': user.uid,
+          'candidateName':   candidateName,
+          'title':           title,
+          'body':            body,
+          'type':            'new_application',
+          'isRead':          false,
+          'createdAt':       FieldValue.serverTimestamp(),
+        });
+
+        // Push
+        await FCMService().sendPushNotification(
+          recipientId: employerId,
+          title:       title,
+          body:        body,
+          data: {
+            'type':          'new_application',
+            'applicationId': applicationRef.id,
+            'jobId':         jobId,
+          },
+        );
+      }
 
       debugPrint(
           'ApplyJobService: application saved for $candidateName → ${job['title']}');

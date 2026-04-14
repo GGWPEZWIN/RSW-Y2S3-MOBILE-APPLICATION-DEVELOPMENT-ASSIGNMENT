@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/fcm_service.dart'; // ✅ Add this
 
 // ── Model ──────────────────────────────────────────────────────────────────
 class ApplicantModel {
   final String id;
+  final String userId;
   final String jobId;
   final String jobTitle;
   final String jobLevel;
@@ -24,6 +27,7 @@ class ApplicantModel {
 
   const ApplicantModel({
     required this.id,
+    required this.userId,
     required this.jobId,
     required this.jobTitle,
     required this.jobLevel,
@@ -45,6 +49,7 @@ class ApplicantModel {
   factory ApplicantModel.fromMap(String id, Map<String, dynamic> data) {
     return ApplicantModel(
       id:              id,
+      userId:          data['userId']         ?? '',
       jobId:           data['jobId']          ?? '',
       jobTitle:        data['jobTitle']        ?? 'Untitled',
       jobLevel:        data['jobLevel']        ?? '',
@@ -320,8 +325,53 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
     return m;
   }
 
-  Future<void> _updateStatus(String id, String status) async {
-    await FirebaseFirestore.instance.collection('applications').doc(id).update({'status': status});
+  Future<void> _updateStatus(ApplicantModel a, String status) async {
+    await FirebaseFirestore.instance.collection('applications').doc(a.id).update({'status': status});
+
+    // Notify Jobseeker
+    if (a.userId.isNotEmpty) {
+      String title = '';
+      String body  = '';
+      ApplicationStatus? fcmStatus;
+
+      if (status == 'shortlisted') {
+        fcmStatus = ApplicationStatus.shortlisted;
+      } else if (status == 'declined') {
+        fcmStatus = ApplicationStatus.rejected;
+      } else if (status == 'interview') {
+        fcmStatus = ApplicationStatus.interview;
+      }
+
+      if (fcmStatus != null) {
+        title = fcmStatus.notificationTitle(a.jobTitle);
+        body  = fcmStatus.notificationBody(a.candidateName, a.jobTitle);
+
+        // In-app
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(a.userId)
+            .collection('notifications')
+            .add({
+          'applicationId': a.id,
+          'title': title,
+          'body': body,
+          'type': fcmStatus.firestoreValue,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        // Push
+        await FCMService().sendPushNotification(
+          recipientId: a.userId,
+          title: title,
+          body: body,
+          data: {
+            'type': fcmStatus.firestoreValue,
+            'applicationId': a.id,
+          },
+        );
+      }
+    }
   }
 
   void _showStatusSheet(ApplicantModel a) {
@@ -332,7 +382,7 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
         applicant: a,
         onSelected: (status) async {
           Navigator.pop(context);
-          await _updateStatus(a.id, status);
+          await _updateStatus(a, status);
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('${a.candidateName} moved to ${status[0].toUpperCase()}${status.substring(1)}'),
             backgroundColor: _primaryBlue,
@@ -610,7 +660,7 @@ class _ApplicantCard extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 class ApplicantDetailScreen extends StatefulWidget {
   final ApplicantModel applicant;
-  final Future<void> Function(String id, String status) onStatusUpdate;
+  final Future<void> Function(ApplicantModel a, String status) onStatusUpdate;
 
   const ApplicantDetailScreen({super.key, required this.applicant, required this.onStatusUpdate});
 
@@ -671,7 +721,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
             return GestureDetector(
               onTap: () async {
                 Navigator.pop(context);
-                await widget.onStatusUpdate(widget.applicant.id, key);
+                await widget.onStatusUpdate(widget.applicant, key);
                 if (mounted) {
                   setState(() => _currentStatus = key);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(

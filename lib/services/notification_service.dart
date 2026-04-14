@@ -36,34 +36,37 @@ class NotificationService {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap — you can navigate here if needed
         debugPrint('Notification tapped: ${response.payload}');
       },
     );
 
-    // Request Android 13+ permission
+    // Create default channel for Android
     await _notifications
         .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+        ?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'default_channel',
+        'General Notifications',
+        description: 'Standard app notifications',
+        importance: Importance.max,
+      ),
+    );
 
     _isInitialized = true;
   }
 
-  // ─── Notification Channel Details ─────────────────────────────────────────
+  // ─── Notification Details ─────────────────────────────────────────
 
-  NotificationDetails get _interviewNotificationDetails =>
+  NotificationDetails get _defaultDetails =>
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'interview_channel',       // channel id
-          'Interview Notifications', // channel name
-          channelDescription: 'Notifications for scheduled interviews',
+          'default_channel',
+          'General Notifications',
           importance: Importance.max,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
           color: Color(0xFF425AE2),
-          enableVibration: true,
-          playSound: true,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
@@ -74,8 +77,24 @@ class NotificationService {
 
   // ─── Public API ────────────────────────────────────────────────────────────
 
+  /// Show an immediate notification banner on the current device.
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (!_isInitialized) await initialize();
+
+    await _notifications.show(
+      _generateId(),
+      title,
+      body,
+      _defaultDetails,
+      payload: payload,
+    );
+  }
+
   /// Show an immediate notification when an interview is scheduled.
-  /// Call this from the Employer side when they schedule an interview.
   Future<void> sendInterviewScheduledNotification({
     required String candidateName,
     required String jobTitle,
@@ -84,17 +103,12 @@ class NotificationService {
     required String location,
     String? meetingLink,
   }) async {
-    await initialize();
-
     final isOnline = meetingLink != null && meetingLink.isNotEmpty;
-    final locationText =
-    isOnline ? 'Online — $meetingLink' : 'Location: $location';
+    final locationText = isOnline ? 'Online — $meetingLink' : 'Location: $location';
 
-    await _notifications.show(
-      _generateId(),
-      '📅 Interview Scheduled — $jobTitle',
-      'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locationText',
-      _interviewNotificationDetails,
+    await showNotification(
+      title: '📅 Interview Scheduled — $jobTitle',
+      body: 'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locationText',
       payload: 'interview_scheduled',
     );
   }
@@ -106,42 +120,31 @@ class NotificationService {
     required DateTime interviewDateTime,
     int minutesBefore = 60,
   }) async {
-    await initialize();
+    if (!_isInitialized) await initialize();
 
-    final reminderTime = interviewDateTime.subtract(
-      Duration(minutes: minutesBefore),
-    );
+    final reminderTime = interviewDateTime.subtract(Duration(minutes: minutesBefore));
 
-    if (reminderTime.isBefore(DateTime.now())) {
-      debugPrint('Reminder time is in the past, skipping scheduled reminder.');
-      return;
-    }
+    if (reminderTime.isBefore(DateTime.now())) return;
 
     await _notifications.zonedSchedule(
       _generateId(),
       '⏰ Interview Reminder — $jobTitle',
       'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
       tz.TZDateTime.from(reminderTime, tz.local),
-      _interviewNotificationDetails,
+      _defaultDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'interview_reminder',
     );
   }
 
-  /// Cancel all pending notifications (e.g. if interview is cancelled).
   Future<void> cancelAllNotifications() async {
     await _notifications.cancelAll();
   }
 
-  /// Cancel a specific notification by id.
   Future<void> cancelNotification(int id) async {
     await _notifications.cancel(id);
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-
-  int _generateId() =>
-      DateTime.now().millisecondsSinceEpoch.remainder(100000);
+  int _generateId() => DateTime.now().millisecondsSinceEpoch.remainder(100000);
 }

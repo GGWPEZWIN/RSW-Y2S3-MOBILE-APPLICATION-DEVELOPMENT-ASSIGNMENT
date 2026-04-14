@@ -8,6 +8,7 @@ import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/resume_upload_widget.dart';
 import '../ApplicationServices/applicant_service.dart';
 import '../../Widgets/nav_bar_widget.dart';
+import '../../../services/fcm_service.dart'; // ✅ Add this
 
 class JobApplicationScreen extends StatefulWidget {
   final String jobId;
@@ -155,7 +156,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         return;
       }
 
-      // Write to employer_notifications ─────────────────────────────────────
+      final title = '📋 New Application — ${widget.jobTitle}';
+      final body  = '$seekerName has applied for ${widget.jobTitle}.';
+
+      // 1. In-app notification
       await db.collection('employer_notifications').add({
         'employerId':      employerId,
         'applicationId':   applicationDocId,   // real Firestore doc ID
@@ -163,14 +167,26 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         'candidateUserId': jobseeker?.uid ?? '',
         'candidateName':   seekerName,
         'jobTitle':        widget.jobTitle,
-        'title':  '📋 New Application — ${widget.jobTitle}',
-        'body':   '$seekerName has applied for ${widget.jobTitle}.',
-        'type':   'new_application',
-        'status': 'unprocessed',
-        'appliedAt': FieldValue.serverTimestamp(),
-        'isRead':    false,
-        'createdAt': FieldValue.serverTimestamp(),
+        'title':           title,
+        'body':            body,
+        'type':            'new_application',
+        'status':          'unprocessed',
+        'appliedAt':       FieldValue.serverTimestamp(),
+        'isRead':          false,
+        'createdAt':       FieldValue.serverTimestamp(),
       });
+
+      // 2. Push Notification
+      await FCMService().sendPushNotification(
+        recipientId: employerId,
+        title:       title,
+        body:        body,
+        data: {
+          'type':          'new_application',
+          'applicationId': applicationDocId,
+          'jobId':         widget.jobId,
+        },
+      );
 
       debugPrint('Employer notification sent to: $employerId');
     } catch (e) {

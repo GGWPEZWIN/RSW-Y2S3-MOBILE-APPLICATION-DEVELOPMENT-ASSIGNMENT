@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../services/fcm_service.dart'; // ✅ Import FCM service
 
 // ── Local notifier ────────────────────────────────────────────────────────────
 class _LocalNotifier {
@@ -204,6 +205,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         'notes':              _notesCtrl.text.trim(),
         'status':             targetStatus,
         'updatedAt':          FieldValue.serverTimestamp(),
+        // Add pendingAcceptance flag for reschedule proposals
         if (_isRescheduling) 'pendingAcceptance': true,
         // Remove these fields so the request is considered "resolved"
         'rescheduleReason':   FieldValue.delete(),
@@ -243,6 +245,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'Please check the app to confirm.';
 
       if (widget.candidateUserId.isNotEmpty) {
+        // 1. Write to user's in-app notifications
         await db
             .collection('users')
             .doc(widget.candidateUserId)
@@ -256,9 +259,22 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'isRead':             false,
           'createdAt':          FieldValue.serverTimestamp(),
         });
+
+        // 2. Queue a Push Notification for the candidate (different device)
+        await FCMService().sendPushNotification(
+          recipientId: widget.candidateUserId,
+          title: notifTitle,
+          body: notifBody,
+          data: {
+            'applicationId': widget.applicationId,
+            'jobId': widget.jobId,
+            'type': _isRescheduling ? 'reschedule_proposal' : 'interview',
+          },
+        );
       }
 
-      await _LocalNotifier.show(notifTitle, notifBody);
+      // Removed _LocalNotifier.show here because it shows on the EMPLOYER'S device.
+      // The push notification above handles notifying the jobseeker.
 
       if (!mounted) return;
       _snack(_isRescheduling ? 'Proposed new time to candidate!' : 'Interview saved!', const Color(0xFF22C55E));
@@ -328,6 +344,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
       // Notify candidate inbox
       if (widget.candidateUserId.isNotEmpty) {
+        // 1. In-app notification
         await db
             .collection('users')
             .doc(widget.candidateUserId)
@@ -341,9 +358,21 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'isRead':        false,
           'createdAt':     FieldValue.serverTimestamp(),
         });
+
+        // 2. Push notification for candidate
+        await FCMService().sendPushNotification(
+          recipientId: widget.candidateUserId,
+          title: notifTitle,
+          body: notifBody,
+          data: {
+            'applicationId': widget.applicationId,
+            'jobId': widget.jobId,
+            'type': 'interview_cancelled',
+          },
+        );
       }
 
-      await _LocalNotifier.show(notifTitle, notifBody);
+      // Removed _LocalNotifier.show here as it shows on the employer's device.
 
       if (!mounted) return;
       _snack('Interview cancelled. ${widget.candidateName} has been notified.',
@@ -754,8 +783,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           decoration: BoxDecoration(
             color: Colors.white, borderRadius: BorderRadius.circular(10),
             boxShadow: [BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6, offset: const Offset(0, 2))],
+                color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
