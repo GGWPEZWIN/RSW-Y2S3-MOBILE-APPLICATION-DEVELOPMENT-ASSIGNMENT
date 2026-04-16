@@ -1,7 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'notification_service.dart'; // ✅ Use the unified service
+import 'notification_service.dart';
 
 /// Background message handler — must be a top-level function
 @pragma('vm:entry-point')
@@ -15,35 +15,38 @@ class FCMService {
   FCMService._internal();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db        = FirebaseFirestore.instance;
 
-  // ─── Call once in main.dart ───────────────────────────────────────────────
+  // ─── Call once in main.dart after Firebase.initializeApp() ───────────────
 
   Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    // Request permission (iOS + Android 13+)
     await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+        alert: true, badge: true, sound: true);
 
-    // Initialize the unified NotificationService
+    // Initialize the unified NotificationService (creates channel etc.)
     await NotificationService().initialize();
 
-    // Show banner when app is OPEN (foreground)
+    // Foreground FCM messages: show via NotificationService
     FirebaseMessaging.onMessage.listen((message) {
-      _showForegroundNotification(message);
+      final n = message.notification;
+      if (n == null) return;
+      NotificationService().showNotification(
+        title:   n.title ?? '',
+        body:    n.body  ?? '',
+        payload: message.data.toString(),
+      );
     });
 
-    // Handle notification tap when app was in background
+    // Tap when app was backgrounded
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       debugPrint('Notification tapped: ${message.data}');
     });
   }
 
-  // ─── SAVE TOKEN after login ──────────────────────────────────────────────
+  // ─── Save FCM token for the logged-in user ────────────────────────────────
+  // Call this right after login for BOTH employer and jobseeker roles.
 
   Future<void> saveToken(String userId) async {
     try {
@@ -51,13 +54,9 @@ class FCMService {
       if (token == null) return;
 
       await _db.collection('users').doc(userId).set(
-        {
-          'fcmToken': token,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
+        {'fcmToken': token, 'updatedAt': FieldValue.serverTimestamp()},
         SetOptions(merge: true),
       );
-
       debugPrint('FCM token saved for $userId');
 
       _messaging.onTokenRefresh.listen((newToken) {
@@ -71,7 +70,16 @@ class FCMService {
     }
   }
 
-  // ─── Trigger Cloud Function via doc write (Push Notification) ───────────
+  // Keep old name as alias so existing callers don't break
+  Future<void> saveCandidateToken(String userId) => saveToken(userId);
+
+  // ─── Send push to ANY user (employer OR jobseeker) ────────────────────────
+  //
+  // Writes a doc to push_notifications_queue.
+  // NotificationService.startListeningToFirestore() on the RECIPIENT's device
+  // picks it up instantly and shows a local banner.
+  // A Cloud Function can also consume this queue to send true FCM pushes
+  // when the app is fully closed.
 
   Future<void> sendPushNotification({
     required String recipientId,
@@ -79,28 +87,20 @@ class FCMService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
-    await _db.collection('push_notifications_queue').add({
-      'recipientId': recipientId,
-      'title': title,
-      'body': body,
-      'data': data ?? {},
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  // ─── Show banner while app is open ───────────────────────────────────────
-
-  void _showForegroundNotification(RemoteMessage message) {
-    final n = message.notification;
-    if (n == null) return;
-
-    // Use the unified NotificationService to show the popup
-    NotificationService().showNotification(
-      title: n.title ?? '',
-      body: n.body ?? '',
-      payload: message.data.toString(),
-    );
+    if (recipientId.isEmpty) return;
+    try {
+      await _db.collection('push_notifications_queue').add({
+        'recipientId': recipientId,
+        'title':       title,
+        'body':        body,
+        'data':        data ?? {},
+        'status':      'pending',
+        'createdAt':   FieldValue.serverTimestamp(),
+      });
+      debugPrint('Push queued → $recipientId: $title');
+    } catch (e) {
+      debugPrint('sendPushNotification error: $e');
+    }
   }
 }
 
@@ -142,7 +142,7 @@ extension ApplicationStatusX on ApplicationStatus {
       case ApplicationStatus.shortlisted:
         return 'Great news $name! You\'ve been shortlisted for $jobTitle.';
       case ApplicationStatus.interview:
-        return 'Hi $name, the employer wants to interview you for $jobTitle. Check details in the app.';
+        return 'Hi $name! The employer wants to interview you for $jobTitle. Check the app for details.';
     }
   }
 }

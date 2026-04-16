@@ -1,3 +1,5 @@
+import 'package:assignment/services/fcm_service.dart';
+import 'package:assignment/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -59,7 +61,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
       final data = userDoc.data();
       final role = data?['role'] as String? ?? 'jobseeker';
-
+      await FCMService().saveToken(user.uid);
+      NotificationService().startListeningToFirestore(user.uid);
       if (!mounted) return;
 
       // ✅ 4. Route based on role
