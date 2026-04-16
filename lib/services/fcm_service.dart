@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'notification_service.dart';
 
-/// Background message handler — must be a top-level function
+/// Background handler — must be top-level
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('Background FCM: ${message.notification?.title}');
@@ -17,7 +17,7 @@ class FCMService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db        = FirebaseFirestore.instance;
 
-  // ─── Call once in main.dart after Firebase.initializeApp() ───────────────
+  // ─── Call once in main.dart ───────────────────────────────────────────────
 
   Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -25,10 +25,9 @@ class FCMService {
     await _messaging.requestPermission(
         alert: true, badge: true, sound: true);
 
-    // Initialize the unified NotificationService (creates channel etc.)
     await NotificationService().initialize();
 
-    // Foreground FCM messages: show via NotificationService
+    // Show banner for true FCM messages while app is open
     FirebaseMessaging.onMessage.listen((message) {
       final n = message.notification;
       if (n == null) return;
@@ -39,47 +38,39 @@ class FCMService {
       );
     });
 
-    // Tap when app was backgrounded
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       debugPrint('Notification tapped: ${message.data}');
     });
   }
 
-  // ─── Save FCM token for the logged-in user ────────────────────────────────
-  // Call this right after login for BOTH employer and jobseeker roles.
+  // ─── Save FCM token — call after login for BOTH roles ────────────────────
 
   Future<void> saveToken(String userId) async {
     try {
       final token = await _messaging.getToken();
       if (token == null) return;
-
       await _db.collection('users').doc(userId).set(
         {'fcmToken': token, 'updatedAt': FieldValue.serverTimestamp()},
         SetOptions(merge: true),
       );
       debugPrint('FCM token saved for $userId');
-
-      _messaging.onTokenRefresh.listen((newToken) {
-        _db.collection('users').doc(userId).update({
-          'fcmToken': newToken,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      _messaging.onTokenRefresh.listen((t) {
+        _db.collection('users').doc(userId)
+            .update({'fcmToken': t, 'updatedAt': FieldValue.serverTimestamp()});
       });
     } catch (e) {
       debugPrint('saveToken error: $e');
     }
   }
 
-  // Keep old name as alias so existing callers don't break
+  // Alias so old callers compile
   Future<void> saveCandidateToken(String userId) => saveToken(userId);
 
-  // ─── Send push to ANY user (employer OR jobseeker) ────────────────────────
+  // ─── Queue a push notification for another user ───────────────────────────
   //
-  // Writes a doc to push_notifications_queue.
+  // Writes a 'pending' doc to push_notifications_queue.
   // NotificationService.startListeningToFirestore() on the RECIPIENT's device
-  // picks it up instantly and shows a local banner.
-  // A Cloud Function can also consume this queue to send true FCM pushes
-  // when the app is fully closed.
+  // picks this up instantly and shows a local banner.
 
   Future<void> sendPushNotification({
     required String recipientId,

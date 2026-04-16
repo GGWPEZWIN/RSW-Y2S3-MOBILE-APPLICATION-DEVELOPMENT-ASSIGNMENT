@@ -1,11 +1,11 @@
-import 'package:assignment/services/fcm_service.dart';
-import 'package:assignment/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_signup.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
 import 'Employer/MainScreen/employer_dashboard.dart';
+import 'services/fcm_service.dart';          // ✅ Add
+import 'services/notification_service.dart'; // ✅ Add
 
 class EmailLoginPage extends StatefulWidget {
   const EmailLoginPage({super.key});
@@ -37,7 +37,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Firebase Auth sign in
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email:    _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -46,14 +45,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       final user = credential.user;
       if (user == null) throw Exception('Login failed');
 
-      // 2. Check email verified
       if (!user.emailVerified) {
         await FirebaseAuth.instance.signOut();
         _showSnackBar('Please verify your email first. Check your inbox.', isError: true);
         return;
       }
 
-      // ✅ 3. Read role from Firestore
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -61,11 +58,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
       final data = userDoc.data();
       final role = data?['role'] as String? ?? 'jobseeker';
+
+      // ✅ Save FCM token + start cross-device push listener
       await FCMService().saveToken(user.uid);
       NotificationService().startListeningToFirestore(user.uid);
+
       if (!mounted) return;
 
-      // ✅ 4. Route based on role
       if (role == 'employer') {
         Navigator.pushAndRemoveUntil(
           context,
@@ -95,7 +94,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     }
   }
 
-  // ── Forgot Password ───────────────────────────────────────────────────────
   void _showForgotPassword() {
     final emailCtrl = TextEditingController(text: _emailController.text);
     bool isSending  = false;
@@ -114,15 +112,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              Center(child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ),
+              )),
               const SizedBox(height: 20),
               const Text('Reset Password',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -147,27 +143,21 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                   focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                          color: _primaryBlue, width: 1.5)),
+                      borderSide: const BorderSide(color: _primaryBlue, width: 1.5)),
                 ),
               ),
               const SizedBox(height: 20),
               SizedBox(
-                width: double.infinity,
-                height: 52,
+                width: double.infinity, height: 52,
                 child: ElevatedButton(
-                  onPressed: isSending
-                      ? null
-                      : () async {
+                  onPressed: isSending ? null : () async {
                     final email = emailCtrl.text.trim();
                     if (email.isEmpty) return;
                     setSheet(() => isSending = true);
                     try {
-                      await FirebaseAuth.instance
-                          .sendPasswordResetEmail(email: email);
+                      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                       if (ctx.mounted) Navigator.pop(ctx);
-                      _showSnackBar('Reset link sent! Check your inbox 📧',
-                          isError: false);
+                      _showSnackBar('Reset link sent! Check your inbox 📧', isError: false);
                     } on FirebaseAuthException catch (e) {
                       _showSnackBar(
                         e.code == 'user-not-found'
@@ -181,20 +171,14 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primaryBlue,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                   child: isSending
-                      ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Text('Send Reset Link',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white)),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
               ),
             ],
@@ -236,17 +220,14 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 70, height: 70,
-                    decoration: BoxDecoration(
-                      color: _primaryBlue,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(Icons.email_outlined,
-                        color: Colors.white, size: 36),
+                Center(child: Container(
+                  width: 70, height: 70,
+                  decoration: BoxDecoration(
+                    color: _primaryBlue,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                ),
+                  child: const Icon(Icons.email_outlined, color: Colors.white, size: 36),
+                )),
                 const SizedBox(height: 24),
                 const Text('Welcome back',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -257,36 +238,30 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     textAlign: TextAlign.center),
                 const SizedBox(height: 32),
 
-                // Email
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _inputDeco(
-                      label: 'Email',
-                      hint: 'you@example.com',
+                      label: 'Email', hint: 'you@example.com',
                       icon: Icons.email_outlined),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Email is required';
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v))
                       return 'Enter a valid email address';
-                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Password
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: _inputDeco(
-                    label: 'Password',
-                    hint: 'Enter your password',
+                    label: 'Password', hint: 'Enter your password',
                     icon: Icons.lock_outline,
                     suffix: IconButton(
                       icon: Icon(_obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
+                          ? Icons.visibility_off : Icons.visibility),
                       onPressed: () =>
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
@@ -296,7 +271,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Forgot password
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -306,15 +280,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                     child: const Text('Forgot Password?',
-                        style: TextStyle(
-                            color: _primaryBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
+                        style: TextStyle(color: _primaryBlue,
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                   ),
                 ),
                 const SizedBox(height: 28),
 
-                // Login button
                 SizedBox(
                   height: 54,
                   child: ElevatedButton(
@@ -326,15 +297,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       elevation: 0,
                     ),
                     child: _isLoading
-                        ? const SizedBox(
-                        width: 24, height: 24,
+                        ? const SizedBox(width: 24, height: 24,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
                         : const Text('Log In',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
+                        style: TextStyle(fontSize: 16,
+                            fontWeight: FontWeight.bold, color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -346,12 +314,10 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     GestureDetector(
                       onTap: () => Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const EmailSignUpScreen()),
+                        MaterialPageRoute(builder: (_) => const EmailSignUpScreen()),
                       ),
                       child: const Text('Sign Up',
-                          style: TextStyle(
-                              color: _primaryBlue,
+                          style: TextStyle(color: _primaryBlue,
                               fontWeight: FontWeight.bold)),
                     ),
                   ],

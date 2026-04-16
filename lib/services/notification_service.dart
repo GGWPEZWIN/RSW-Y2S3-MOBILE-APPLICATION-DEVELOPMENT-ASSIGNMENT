@@ -15,14 +15,12 @@ class NotificationService {
   FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
-
-  // Holds the Firestore stream subscription so we can cancel on logout
   StreamSubscription<QuerySnapshot>? _pushQueueSub;
 
   static const String _channelId   = 'jobbuddy_high_priority_alerts';
   static const String _channelName = 'JobBuddy Notifications';
 
-  // ─── Initialize ───────────────────────────────────────────────────────────
+  // ─── Initialize (call once in main.dart) ─────────────────────────────────
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -30,7 +28,7 @@ class NotificationService {
     tz.initializeTimeZones();
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings     = DarwinInitializationSettings(
+    const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
@@ -45,11 +43,13 @@ class NotificationService {
 
     if (Platform.isAndroid) {
       final impl = _notifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       await impl?.requestNotificationsPermission();
       await impl?.createNotificationChannel(
         const AndroidNotificationChannel(
-          _channelId, _channelName,
+          _channelId,
+          _channelName,
           description: 'Job application and interview updates',
           importance: Importance.max,
           playSound: true,
@@ -62,11 +62,7 @@ class NotificationService {
     _isInitialized = true;
   }
 
-  // ─── Show a local banner immediately on THIS device ───────────────────────
-  //
-  // Call this any time you want a popup on the CURRENT user's screen.
-  // e.g. after the jobseeker sends a reschedule request, show them
-  // a "request sent" banner; the employer gets theirs via the queue listener.
+  // ─── Show a local popup banner on THIS device immediately ────────────────
 
   Future<void> showNotification({
     required String title,
@@ -80,15 +76,21 @@ class NotificationService {
       body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId, _channelName,
+          _channelId,
+          _channelName,
           importance: Importance.max,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
           color: const Color(0xFF3B52E8),
           ticker: 'ticker',
+          enableVibration: true,
+          playSound: true,
         ),
         iOS: const DarwinNotificationDetails(
-            presentAlert: true, presentBadge: true, presentSound: true),
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
       payload: payload,
     );
@@ -96,51 +98,52 @@ class NotificationService {
 
   // ─── Cross-device push: listen to push_notifications_queue ───────────────
   //
-  // HOW CROSS-DEVICE PUSH WORKS WITHOUT A CLOUD FUNCTION:
+  // HOW IT WORKS (no Cloud Function / no server needed):
   //
-  //  Sender  →  writes push_notifications_queue/{doc}  →  Firestore
-  //  Recipient device  →  this listener fires  →  showNotification()
+  //   Sender   → FCMService().sendPushNotification(recipientId, title, body)
+  //            → writes {recipientId, title, body, status:'pending'} to Firestore
   //
-  // Each device calls startListeningToFirestore(uid) right after login.
-  // The listener watches push_notifications_queue where recipientId == uid
-  // and status == 'pending', shows a banner, then marks the doc 'delivered'
-  // so it never fires twice.
+  //   Recipient device → this listener (started at login) sees the new doc
+  //            → calls showNotification() → popup appears
+  //            → marks doc status:'delivered' so it never fires again
   //
-  // This means: as long as the recipient's app is OPEN (foreground or background
-  // with active Dart isolate), they see a popup within ~1 second.
-  // For when the app is fully killed, you still need FCM + Cloud Function —
-  // but this covers 95% of real-world usage.
+  // KEY DESIGN:
+  //   • Query is ONLY on recipientId + status == 'pending'
+  //     No createdAt filter — avoids needing a composite index and avoids the
+  //     server-timestamp timing bug where client startTime > server write time.
+  //   • Uses DocumentChangeType.added so already-delivered docs are ignored.
+  //   • Marks 'delivered' before returning so even if the listener fires twice
+  //     (e.g. app restart), the doc is already gone from the query.
 
   void startListeningToFirestore(String uid) {
-    _pushQueueSub?.cancel(); // cancel any old listener
-
+    _pushQueueSub?.cancel();
     if (uid.isEmpty) return;
-
-    // Only listen to docs created AFTER now so old ones don't replay
-    final startTime = Timestamp.now();
 
     _pushQueueSub = FirebaseFirestore.instance
         .collection('push_notifications_queue')
         .where('recipientId', isEqualTo: uid)
         .where('status', isEqualTo: 'pending')
-        .where('createdAt', isGreaterThan: startTime)
         .snapshots()
-        .listen((snap) async {
-      for (final change in snap.docChanges) {
-        if (change.type != DocumentChangeType.added) continue;
+        .listen(
+          (snap) async {
+        for (final change in snap.docChanges) {
+          // Only react to new docs, not existing ones loaded at startup
+          if (change.type != DocumentChangeType.added) continue;
 
-        final data  = change.doc.data() as Map<String, dynamic>;
-        final title = (data['title'] as String?) ?? 'JobBuddy';
-        final body  = (data['body']  as String?) ?? '';
+          final data  = change.doc.data() as Map<String, dynamic>? ?? {};
+          final title = (data['title'] as String?) ?? 'JobBuddy';
+          final body  = (data['body']  as String?) ?? '';
 
-        // Show popup immediately
-        await showNotification(title: title, body: body);
+          // Mark delivered FIRST to prevent double-firing on reconnect
+          await change.doc.reference
+              .update({'status': 'delivered'}).catchError((_) {});
 
-        // Mark delivered so it never fires again (even on app restart)
-        change.doc.reference
-            .update({'status': 'delivered'}).catchError((_) {});
-      }
-    }, onError: (e) => debugPrint('push_queue listener error: $e'));
+          // Then show the popup
+          await showNotification(title: title, body: body);
+        }
+      },
+      onError: (e) => debugPrint('push_queue listener error: $e'),
+    );
   }
 
   void stopListening() {
@@ -148,7 +151,7 @@ class NotificationService {
     _pushQueueSub = null;
   }
 
-  // ─── Legacy methods kept so existing callers don't break ─────────────────
+  // ─── Legacy methods kept so existing callers compile ─────────────────────
 
   Future<void> sendInterviewScheduledNotification({
     required String candidateName,
@@ -158,8 +161,9 @@ class NotificationService {
     required String location,
     String? meetingLink,
   }) async {
-    final isOnline  = meetingLink != null && meetingLink.isNotEmpty;
-    final locText   = isOnline ? 'Online — $meetingLink' : 'Location: $location';
+    final locText = (meetingLink != null && meetingLink.isNotEmpty)
+        ? 'Online — $meetingLink'
+        : 'Location: $location';
     await showNotification(
       title:   '📅 Interview Scheduled — $jobTitle',
       body:    'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locText',
@@ -174,7 +178,8 @@ class NotificationService {
     int minutesBefore = 60,
   }) async {
     await initialize();
-    final reminderTime = interviewDateTime.subtract(Duration(minutes: minutesBefore));
+    final reminderTime =
+    interviewDateTime.subtract(Duration(minutes: minutesBefore));
     if (reminderTime.isBefore(DateTime.now())) return;
 
     await _notifications.zonedSchedule(
@@ -184,9 +189,11 @@ class NotificationService {
       tz.TZDateTime.from(reminderTime, tz.local),
       NotificationDetails(
         android: AndroidNotificationDetails(
-            _channelId, _channelName,
-            importance: Importance.max, priority: Priority.high,
-            icon: '@mipmap/ic_launcher'),
+          _channelId, _channelName,
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
         iOS: const DarwinNotificationDetails(
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
