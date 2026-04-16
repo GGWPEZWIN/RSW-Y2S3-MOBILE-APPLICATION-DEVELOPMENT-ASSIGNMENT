@@ -35,7 +35,11 @@ class NotificationService {
     );
 
     await _notifications.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      // Use 'settings:' instead of 'initializationSettings:'
+      settings: const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
       onDidReceiveNotificationResponse: (NotificationResponse r) {
         debugPrint('Notification tapped: ${r.payload}');
       },
@@ -71,10 +75,10 @@ class NotificationService {
   }) async {
     await initialize();
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title,
-      body,
-      NotificationDetails(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -183,13 +187,14 @@ class NotificationService {
     if (reminderTime.isBefore(DateTime.now())) return;
 
     await _notifications.zonedSchedule(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      '⏰ Interview Reminder — $jobTitle',
-      'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
-      tz.TZDateTime.from(reminderTime, tz.local),
-      NotificationDetails(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: '⏰ Interview Reminder — $jobTitle',
+      body: 'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
+      scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId, _channelName,
+          _channelId,
+          _channelName,
           importance: Importance.max,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
@@ -198,12 +203,10 @@ class NotificationService {
             presentAlert: true, presentBadge: true, presentSound: true),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'interview_reminder',
     );
   }
 
   Future<void> cancelAllNotifications() => _notifications.cancelAll();
-  Future<void> cancelNotification(int id) => _notifications.cancel(id);
+  Future<void> cancelNotification(int id) => _notifications.cancel(id: id);
 }

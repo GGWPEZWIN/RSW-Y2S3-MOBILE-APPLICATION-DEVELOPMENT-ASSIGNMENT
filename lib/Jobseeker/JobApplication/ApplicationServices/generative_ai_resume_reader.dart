@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ResumeParserPage extends StatefulWidget {
+  const ResumeParserPage({super.key});
+
   @override
   _ResumeParserPageState createState() => _ResumeParserPageState();
 }

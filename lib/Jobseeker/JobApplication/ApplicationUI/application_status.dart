@@ -1,32 +1,65 @@
+import 'package:assignment/Jobseeker/JobApplication/ApplicationUI/saved_job_list.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+import '../../MainScreen/jobseeker_profile.dart';
+import '../../Widgets/nav_bar_widget.dart';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ApplicationStatusScreen extends StatefulWidget {
+  final String applicationId;
+  final Map<String, dynamic> applicationData;
+
+  const ApplicationStatusScreen({
+    super.key,
+    required this.applicationId,
+    required this.applicationData,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'JobBuddy',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-        useMaterial3: true,
-        fontFamily: 'SF Pro Display',
-      ),
-      home: const ApplicationStatusScreen(),
-    );
-  }
+  State<ApplicationStatusScreen> createState() => _ApplicationStatusScreenState();
 }
 
 // ─────────────────────────────────────────────
 // APPLICATION STATUS SCREEN
 // ─────────────────────────────────────────────
-class ApplicationStatusScreen extends StatelessWidget {
-  const ApplicationStatusScreen({super.key});
+class _ApplicationStatusScreenState extends State<ApplicationStatusScreen> {
+
+  bool _isBusy = false;
+
+  // Function to handle withdrawing the application
+  Future<void> _handleWithdraw() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Withdraw Application?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Withdraw', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isBusy = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('applications')
+          .doc(widget.applicationId)
+          .update({'status': 'withdrawn', 'updatedAt': FieldValue.serverTimestamp()});
+
+      if (mounted) Navigator.pop(context); // Go back to the list after withdrawing
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +163,6 @@ class ApplicationStatusScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: _BottomNav(currentIndex: 2),
     );
   }
 }
@@ -219,7 +251,21 @@ class InterviewStatusScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: _BottomNav(currentIndex: 2),
+      bottomNavigationBar: NavBarWidget(
+        currentIndex: 2,
+        onTabSelected: (i) {
+          if (i == 2) {
+            return;
+          } else if (i == 0) {
+            Navigator.pop(context);
+          } else if (i == 1) {
+            Navigator.pushReplacement(context,
+                MaterialPageRoute(builder: (_) => const SavedJobsScreen()));
+          } else if (i == 3) {Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));
+          }
+        },
+      ),
     );
   }
 }
@@ -669,33 +715,6 @@ class _InfoField extends StatelessWidget {
             style: const TextStyle(fontSize: 15, color: Colors.black87),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  final int currentIndex;
-
-  const _BottomNav({required this.currentIndex});
-
-  @override
-  Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: const Color(0xFF2563EB),
-      unselectedItemColor: Colors.grey,
-      showSelectedLabels: true,
-      showUnselectedLabels: true,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.bookmark_border), label: 'Saved'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.work_outline), label: 'Applied'),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline), label: 'Profile'),
       ],
     );
   }

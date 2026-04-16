@@ -49,7 +49,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   int    _currentIndex   = 2;
 
   // TODO: Replace with actual user skills from profile
-  final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
+  final List<String> _skills = [];
+  bool _isExtractingSkills = false;
 
   @override
   void dispose() {
@@ -123,6 +124,30 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     if (success) {
       Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _processResume(String path) async {
+    setState(() => _isExtractingSkills = true);
+    try {
+      // We only need this ONE call now. It does OCR and Skill picking in one go.
+      final extractedSkills = await ApplicantService.extractSkillsWithAi(path);
+
+      setState(() {
+        _skills.clear();
+        _skills.addAll(extractedSkills);
+      });
+    } catch (e) {
+      debugPrint("Skill extraction failed: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Could not extract skills from resume.")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExtractingSkills = false);
+      }
     }
   }
 
@@ -251,6 +276,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                           _resumePath     = path;
                           _resumeFileName = name;
                         });
+                        _processResume(path);
                       },
                     ),
                     const SizedBox(height: 20),
@@ -415,10 +441,25 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       children: [
         _buildSectionLabel('Profile Skills', trailing: _buildAiVerifiedBadge()),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: _skills.map((s) => _buildSkillChip(s)).toList(),
-        ),
+
+        // ADD THIS LOADING CHECK:
+        if (_isExtractingSkills)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(10.0),
+              child: CircularProgressIndicator(strokeWidth: 2, color: kAiGreen),
+            ),
+          )
+        else if (_skills.isEmpty)
+          const Text(
+            "No skills extracted. Try uploading a different resume image.",
+            style: TextStyle(fontSize: 12, color: kTextSecondary),
+          )
+        else
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _skills.map((s) => _buildSkillChip(s)).toList(),
+          ),
       ],
     );
   }

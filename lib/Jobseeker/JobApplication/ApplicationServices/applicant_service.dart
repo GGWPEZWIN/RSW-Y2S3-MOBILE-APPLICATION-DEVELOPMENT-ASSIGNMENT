@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -121,6 +124,72 @@ class ApplicantService {
     } catch (e) {
       debugPrint("AI Draft Error: $e");
       return "Error generating draft. Please write your cover letter manually.";
+    }
+  }
+
+  //static Future<List<String>> extractSkillsWithAi(String filePath) async {
+  //  if (filePath.isEmpty) return [];
+
+  //  try {
+  //    final model = GenerativeModel(model: _AImodel, apiKey: _apiKey);
+
+  //    // Read the resume file as bytes
+  //    final bytes = await File(filePath).readAsBytes();
+
+  //    // We send the image + a specific prompt to Gemini
+  //    final prompt = TextPart(
+  //        "List the top 5-8 technical skills from this resume image as a comma-separated list. "
+  //            "Return ONLY the skills, nothing else. Example: Flutter, Dart, Firebase, SQL"
+  //    );
+  //    final imagePart = DataPart('image/png', bytes); // Supports png/jpeg
+
+  //    final response = await model.generateContent([
+  //      Content.multi([prompt, imagePart])
+  //    ]);
+
+  //    final text = response.text ?? "";
+
+  //    return text
+  //        .split(',')
+  //        .map((s) => s.trim())
+  //        .where((s) => s.isNotEmpty)
+  //        .toList();
+  //  } catch (e) {
+  //    debugPrint("Skill Extraction Error: $e");
+  //    return [];
+  //  }
+  //}
+
+  static Future<List<String>> extractSkillsWithAi(String pathOrBase64) async {
+    if (pathOrBase64.isEmpty) return [];
+
+    try {
+      final model = GenerativeModel(model: _AImodel, apiKey: _apiKey);
+      Uint8List bytes;
+
+      // Check if the string is a Base64 string (starts with /9j/ or similar)
+      if (pathOrBase64.startsWith('/9j/') || pathOrBase64.length > 500) {
+        bytes = base64Decode(pathOrBase64);
+      } else {
+        // It's a normal file path
+        bytes = await File(pathOrBase64).readAsBytes();
+      }
+
+      final prompt = TextPart(
+          "List the top 6 technical skills from this resume image as a comma-separated list. "
+              "Return ONLY the skills. Example: Flutter, Firebase, Dart, SQL"
+      );
+      final imagePart = DataPart('image/jpeg', bytes);
+
+      final response = await model.generateContent([
+        Content.multi([prompt, imagePart])
+      ]);
+
+      final text = response.text ?? "";
+      return text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    } catch (e) {
+      debugPrint("Final Extraction Error: $e");
+      return [];
     }
   }
 }

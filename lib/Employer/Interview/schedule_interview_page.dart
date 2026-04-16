@@ -12,15 +12,20 @@ class _LocalNotifier {
 
   static Future<void> _init() async {
     if (_ready) return;
+
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios     = DarwinInitializationSettings();
+
     await _plugin.initialize(
-        const InitializationSettings(android: android, iOS: ios));
+      settings: const InitializationSettings(android: android, iOS: ios),
+    );
+
     await _plugin
         .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(const AndroidNotificationChannel(
-      'interview_channel', 'Interview Notifications',
+      'interview_channel',
+      'Interview Notifications',
       description: 'Interview schedule updates',
       importance: Importance.max,
     ));
@@ -30,16 +35,23 @@ class _LocalNotifier {
   static Future<void> show(String title, String body) async {
     await _init();
     await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title, body,
-      const NotificationDetails(
+      // Add the names: id, title, and body
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          'interview_channel', 'Interview Notifications',
-          importance: Importance.max, priority: Priority.high,
-          color: Color(0xFF3B4FD8), icon: '@mipmap/ic_launcher',
+          'interview_channel',
+          'Interview Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          color: Color(0xFF3B4FD8),
+          icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(
-            presentAlert: true, presentBadge: true, presentSound: true),
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true),
       ),
     );
   }
