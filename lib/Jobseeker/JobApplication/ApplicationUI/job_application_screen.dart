@@ -4,11 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
 import '../../../Employer/models/job_model.dart';
-import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/resume_upload_widget.dart';
-import '../ApplicationServices/applicant_service.dart';
-import '../../Widgets/nav_bar_widget.dart';
-import '../../../services/fcm_service.dart'; // ✅ Add this
+import '../../../services/fcm_service.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final String jobId;
@@ -48,6 +45,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   String _resumePath     = '';
   String _resumeFileName = '';
   bool   _isSubmitting   = false;
+  bool   _isDrafting     = false;
   int    _currentIndex   = 2;
 
   // TODO: Replace with actual user skills from profile
@@ -128,6 +126,34 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
+  // AI cover letter draft
+  Future<void> _handleAiDraft() async {
+    if (_isDrafting) return;
+
+    setState(() => _isDrafting = true);
+
+    try {
+      final applicant = _buildApplicant();
+      final draft = await ApplicantService.generateAiDraft(applicant);
+
+      // CRITICAL: Check if the user is still on this screen
+      if (!mounted) return;
+
+      setState(() {
+        _coverLetterController.text = draft;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to generate draft: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDrafting = false);
+      }
+    }
+  }
+
   // ── Employer notification ──────────────────────────────────────────────────
 
   Future<void> _notifyEmployer(String applicationDocId) async {
@@ -195,10 +221,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
-  void _handleAiDraft() {
-    final applicant = _buildApplicant();
-    _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
-  }
+  //void _handleAiDraft() {
+  //  final applicant = _buildApplicant();
+  //  _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
+  //}
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -241,26 +267,26 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 ),
               ),
             ),
-            NavBarWidget(
-              currentIndex: _currentIndex,
-              onTabSelected: (index) {
-                if (index == _currentIndex) return;
-                setState(() => _currentIndex = index);
-                if (index == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                } else if (index == 1) {
-                  // TODO: Navigate to Saved Jobs screen
-                } else if (index == 3) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ProfilePage(
-                          user: FirebaseAuth.instance.currentUser),
-                    ),
-                  );
-                }
-              },
-            ),
+            //NavBarWidget(
+            //  currentIndex: _currentIndex,
+            //  onTabSelected: (index) {
+            //    if (index == _currentIndex) return;
+            //    setState(() => _currentIndex = index);
+            //    if (index == 0) {
+            //      Navigator.of(context).popUntil((route) => route.isFirst);
+            //    } else if (index == 1) {
+            //      // TODO: Navigate to Saved Jobs screen
+            //    } else if (index == 3) {
+            //      Navigator.pushReplacement(
+            //        context,
+            //        MaterialPageRoute(
+            //          builder: (_) => ProfilePage(
+            //              user: FirebaseAuth.instance.currentUser),
+            //        ),
+            //      );
+            //    }
+            //  },
+            //),
           ],
         ),
       ),
@@ -456,12 +482,18 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Widget _buildAiDraftBadge() {
     return GestureDetector(
-      onTap: _handleAiDraft,
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.auto_awesome_rounded, size: 14, color: kAiPurple),
-        SizedBox(width: 4),
-        Text('AI DRAFT',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+      onTap: _isDrafting ? null : _handleAiDraft,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (_isDrafting)
+          const SizedBox(
+            width: 14, height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: kAiPurple),
+          )
+        else
+          const Icon(Icons.auto_awesome_rounded, size: 14, color: kAiPurple),
+        const SizedBox(width: 4),
+        Text(_isDrafting ? 'GENERATING...' : 'AI DRAFT',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                 color: kAiPurple, letterSpacing: 0.3)),
       ]),
     );
