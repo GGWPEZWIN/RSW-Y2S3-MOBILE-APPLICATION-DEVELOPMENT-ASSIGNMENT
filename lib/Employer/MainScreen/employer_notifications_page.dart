@@ -18,12 +18,13 @@ class EmployerNotificationsPage extends StatelessWidget {
 
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  // ── Colour + icon per notification type ───────────────────────────────────
+  // ── Colour + icon per type ────────────────────────────────────────────────
   Color _typeColor(String type) {
     switch (type) {
       case 'new_application':     return kBlue;
       case 'interview_scheduled': return kGreen;
       case 'reschedule_request':  return kOrange;
+      case 'reschedule_accepted': return kGreen;
       case 'interview_cancelled': return kRed;
       default:                    return kPurple;
     }
@@ -34,13 +35,14 @@ class EmployerNotificationsPage extends StatelessWidget {
       case 'new_application':     return Icons.assignment_ind_rounded;
       case 'interview_scheduled': return Icons.event_available_rounded;
       case 'reschedule_request':  return Icons.schedule_rounded;
+      case 'reschedule_accepted': return Icons.check_circle_outline_rounded;
       case 'interview_cancelled': return Icons.event_busy_rounded;
       default:                    return Icons.notifications_rounded;
     }
   }
 
   Future<void> _markAllRead() async {
-    final batch = FirebaseFirestore.instance.batch();
+    final batch  = FirebaseFirestore.instance.batch();
     final unread = await FirebaseFirestore.instance
         .collection('employer_notifications')
         .where('employerId', isEqualTo: _employerId)
@@ -52,74 +54,72 @@ class EmployerNotificationsPage extends StatelessWidget {
     await batch.commit();
   }
 
-  // ── Tap handler — routes to the right screen per type ─────────────────────
-  Future<void> _handleTap(BuildContext context, String notifId, Map<String, dynamic> data) async {
-    // 1. Mark as read immediately
-    FirebaseFirestore.instance
+  // ── Tap handler ───────────────────────────────────────────────────────────
+  Future<void> _handleTap(
+      BuildContext context, String notifId, Map<String, dynamic> data) async {
+
+    // Mark read
+    await FirebaseFirestore.instance
         .collection('employer_notifications')
         .doc(notifId)
         .update({'isRead': true});
 
-    final type = data['type'] as String? ?? '';
-    final applicationId = data['applicationId'] as String? ?? '';
-    final jobId = data['jobId'] as String? ?? '';
-    final candidateUserId = data['candidateUserId'] as String? ?? '';
+    final type            = (data['type']            as String?) ?? '';
+    final applicationId   = (data['applicationId']   as String?) ?? '';
+    final jobId           = (data['jobId']            as String?) ?? '';
+    final jobTitle        = (data['jobTitle']         as String?) ?? 'Job';
+    final candidateUserId = (data['candidateUserId']  as String?) ?? '';
+    final candidateName   = (data['candidateName']    as String?) ?? 'Candidate';
+    final rescheduleReason = data['rescheduleReason'] as String?;
 
-    // Show a loading indicator if fetching extra data
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: kBlue)),
-    );
+    // ── new_application → open applicants list ────────────────────────────
+    if (type == 'new_application') {
+      if (!context.mounted) return;
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ApplicantsByJobScreen(jobId: jobId, jobTitle: jobTitle),
+      ));
+      return;
+    }
 
-    try {
-      // 2. Fetch Job and User details in parallel to ensure ScheduleInterviewPage has data
+    // ── interview types → open ScheduleInterviewPage ──────────────────────
+    if (type == 'reschedule_request' ||
+        type == 'reschedule_accepted' ||
+        type == 'interview_scheduled' ||
+        type == 'interview_cancelled') {
+      if (applicationId.isEmpty) return;
+
+      // Fetch interview doc + candidate email in parallel
       final results = await Future.wait([
-        FirebaseFirestore.instance.collection('jobs').doc(jobId).get(),
-        FirebaseFirestore.instance.collection('users').doc(candidateUserId).get(),
-        FirebaseFirestore.instance.collection('interviews').doc(applicationId).get(),
+        FirebaseFirestore.instance
+            .collection('interviews').doc(applicationId).get(),
+        FirebaseFirestore.instance
+            .collection('users').doc(candidateUserId).get(),
       ]);
 
+      final interviewDoc = results[0];
+      final userDoc      = results[1];
+
+      final existing = interviewDoc.exists
+          ? interviewDoc.data() as Map<String, dynamic>
+          : null;
+      final email = ((userDoc.data() as Map<String, dynamic>?)
+      ?['email'] as String?) ?? '';
+
       if (!context.mounted) return;
-      Navigator.pop(context); // Remove loading indicator
 
-      final jobDoc = results[0];
-      final userDoc = results[1];
-      final interviewDoc = results[2];
-
-      final jobTitle = (jobDoc.data() as Map?)?['title'] ?? 'Job';
-      final candidateName = (userDoc.data() as Map?)?['name'] ?? 'Candidate';
-      final candidateEmail = (userDoc.data() as Map?)?['email'] ?? '';
-      final existingInterview = interviewDoc.exists ? interviewDoc.data() as Map<String, dynamic> : null;
-
-      if (type == 'new_application') {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ApplicantsByJobScreen(jobId: jobId, jobTitle: jobTitle),
-          ),
-        );
-      } else if (type == 'reschedule_request' || type == 'interview_scheduled') {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ScheduleInterviewPage(
-              applicationId: applicationId,
-              candidateUserId: candidateUserId,
-              jobId: jobId,
-              jobTitle: jobTitle,
-              candidateName: candidateName,
-              candidateEmail: candidateEmail,
-              existingInterview: existingInterview,
-              // Pass the reason from the notification data
-              rescheduleReason: data['rescheduleReason'],
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) Navigator.pop(context);
-      debugPrint("Error handling notification tap: $e");
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ScheduleInterviewPage(
+          applicationId:    applicationId,
+          candidateUserId:  candidateUserId,
+          jobId:            jobId,
+          jobTitle:         jobTitle,
+          candidateName:    candidateName,
+          candidateEmail:   email,
+          existingInterview: existing,
+          // Only pass reason when employer needs to respond to a request
+          rescheduleReason: type == 'reschedule_request' ? rescheduleReason : null,
+        ),
+      ));
     }
   }
 
@@ -131,11 +131,9 @@ class EmployerNotificationsPage extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
-        title: const Text(
-          'Notifications',
-          style: TextStyle(
-              fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18),
-        ),
+        title: const Text('Notifications',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
         actions: [
           TextButton(
             onPressed: _markAllRead,
@@ -152,28 +150,24 @@ class EmployerNotificationsPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: kBlue));
+            return const Center(child: CircularProgressIndicator(color: kBlue));
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return _emptyState();
           }
-
-          final docs = snap.data!.docs;
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (context, i) {
-              final doc  = docs[i];
+            itemCount: snap.data!.docs.length,
+            itemBuilder: (_, i) {
+              final doc  = snap.data!.docs[i];
               final data = doc.data() as Map<String, dynamic>;
-              final type = data['type'] as String? ?? '';
+              final type = (data['type'] as String?) ?? '';
               return _EmployerNotifCard(
-                notifId:  doc.id,
-                data:     data,
-                color:    _typeColor(type),
-                icon:     _typeIcon(type),
-                onTap:    () => _handleTap(context, doc.id, data),
+                notifId: doc.id,
+                data:    data,
+                color:   _typeColor(type),
+                icon:    _typeIcon(type),
+                onTap:   () => _handleTap(context, doc.id, data),
               );
             },
           );
@@ -182,29 +176,23 @@ class EmployerNotificationsPage extends StatelessWidget {
     );
   }
 
-  Widget _emptyState() {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color: kBlue.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(Icons.notifications_none_rounded,
-              size: 44, color: kBlue),
-        ),
-        const SizedBox(height: 16),
-        const Text('No notifications yet',
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
-        const SizedBox(height: 6),
-        const Text('New applications and interview updates\nwill appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: kSubtext)),
-      ]),
-    );
-  }
+  Widget _emptyState() => Center(
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Container(
+        width: 80, height: 80,
+        decoration: BoxDecoration(
+            color: kBlue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+        child: const Icon(Icons.notifications_none_rounded, size: 44, color: kBlue),
+      ),
+      const SizedBox(height: 16),
+      const Text('No notifications yet',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
+      const SizedBox(height: 6),
+      const Text('New applications and interview updates\nwill appear here.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: kSubtext)),
+    ]),
+  );
 }
 
 // ── Notification Card ─────────────────────────────────────────────────────────
@@ -229,25 +217,34 @@ class _EmployerNotifCard extends StatelessWidget {
   String _timeAgo(Timestamp? ts) {
     if (ts == null) return '';
     final diff = DateTime.now().difference(ts.toDate());
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inDays >= 7)   return '${(diff.inDays / 7).floor()}w ago';
+    if (diff.inDays > 0)    return '${diff.inDays}d ago';
+    if (diff.inHours > 0)   return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
   }
 
   @override
   Widget build(BuildContext context) {
-    final type    = data['type']            as String? ?? '';
-    final title   = data['title']           as String? ?? '';
-    final body    = data['body']            as String? ?? '';
-    final isRead  = data['isRead']          as bool?   ?? false;
-    final reason  = data['rescheduleReason'] as String?;
-    final appliedAt = data['appliedAt']     as Timestamp?;
-    final createdAt = data['createdAt']     as Timestamp?;
-    final ts      = appliedAt ?? createdAt;
+    final type      = (data['type']             as String?) ?? '';
+    final title     = (data['title']            as String?) ?? '';
+    final body      = (data['body']             as String?) ?? '';
+    final isRead    = (data['isRead']            as bool?)  ?? false;
+    final reason    = data['rescheduleReason']  as String?;
+    final createdAt = data['createdAt']         as Timestamp?;
+    final appliedAt = data['appliedAt']         as Timestamp?;
+    final ts        = appliedAt ?? createdAt;
 
-    final isReschedule     = type == 'reschedule_request';
+    final isRescheduleRequest = type == 'reschedule_request';
+    final isRescheduleAccepted = type == 'reschedule_accepted';
     final isNewApplication = type == 'new_application';
+
+    // Action label per type
+    String actionLabel;
+    if (isNewApplication)       actionLabel = 'View Applicant';
+    else if (isRescheduleRequest) actionLabel = 'Review & Reschedule';
+    else if (isRescheduleAccepted) actionLabel = 'View Interview';
+    else                        actionLabel = 'View';
 
     return GestureDetector(
       onTap: onTap,
@@ -266,113 +263,84 @@ class _EmployerNotifCard extends StatelessWidget {
               blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
           // Icon circle
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
+                color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 14),
 
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title + unread dot
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+            // Title + unread dot
+            Row(children: [
+              Expanded(child: Text(title, style: TextStyle(
+                fontSize: 14,
+                fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
+                color: kText,
+              ))),
+              if (!isRead) Container(
+                  width: 8, height: 8,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            ]),
+            const SizedBox(height: 5),
+
+            Text(body, style: const TextStyle(fontSize: 13, color: kSubtext, height: 1.4)),
+
+            // Applied time for new applications
+            if (isNewApplication && ts != null) ...[
+              const SizedBox(height: 6),
               Row(children: [
-                Expanded(
-                  child: Text(title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
-                        color: kText,
-                      )),
-                ),
-                if (!isRead)
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(
-                        color: color, shape: BoxShape.circle),
-                  ),
-              ]),
-              const SizedBox(height: 5),
-
-              Text(body,
-                  style: const TextStyle(
-                      fontSize: 13, color: kSubtext, height: 1.4)),
-
-              // Applied time for new applications
-              if (isNewApplication && ts != null) ...[
-                const SizedBox(height: 6),
-                Row(children: [
-                  const Icon(Icons.access_time_rounded,
-                      size: 13, color: kSubtext),
-                  const SizedBox(width: 4),
-                  Text('Applied ${_timeAgo(ts)}',
-                      style: const TextStyle(
-                          fontSize: 12, color: kSubtext)),
-                ]),
-              ],
-
-              // Reschedule reason box
-              if (isReschedule && reason != null && reason.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: kOrange.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: kOrange.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.chat_bubble_outline_rounded,
-                          size: 14, color: kOrange),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text('"$reason"',
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: kOrange,
-                                fontStyle: FontStyle.italic,
-                                height: 1.4)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 10),
-
-              // Bottom row: time + action hint
-              Row(children: [
-                Text(_timeAgo(ts),
-                    style: const TextStyle(fontSize: 11, color: kSubtext)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: color.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    isNewApplication  ? 'View Applicant'
-                        : isReschedule ? 'Review & Edit'
-                        : 'View',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: color,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
+                const Icon(Icons.access_time_rounded, size: 13, color: kSubtext),
+                const SizedBox(width: 4),
+                Text('Applied ${_timeAgo(ts)}',
+                    style: const TextStyle(fontSize: 12, color: kSubtext)),
               ]),
             ],
-          )),
+
+            // Reschedule reason box (only for reschedule_request)
+            if (isRescheduleRequest && reason != null && reason.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kOrange.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: kOrange.withOpacity(0.3)),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.chat_bubble_outline_rounded,
+                      size: 14, color: kOrange),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text('"$reason"', style: const TextStyle(
+                      fontSize: 12, color: kOrange,
+                      fontStyle: FontStyle.italic, height: 1.4))),
+                ]),
+              ),
+            ],
+
+            const SizedBox(height: 10),
+
+            // Footer: time + action badge
+            Row(children: [
+              Text(_timeAgo(ts),
+                  style: const TextStyle(fontSize: 11, color: kSubtext)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withOpacity(0.3)),
+                ),
+                child: Text(actionLabel, style: TextStyle(
+                    fontSize: 11, color: color, fontWeight: FontWeight.bold)),
+              ),
+            ]),
+          ])),
         ]),
       ),
     );

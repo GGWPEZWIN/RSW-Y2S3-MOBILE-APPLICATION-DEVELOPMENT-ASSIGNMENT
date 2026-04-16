@@ -1,3 +1,5 @@
+import 'package:assignment/services/fcm_service.dart';
+import 'package:assignment/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -60,14 +62,14 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
           .doc(user.uid)
           .get();
 
-      // ✅ 3. Check if account exists in Firestore at all
+      //  Check if account exists in Firestore at all
       if (!userDoc.exists) {
         await FirebaseAuth.instance.signOut();
         _snack('No employer account found. Please register first.', error: true);
         return;
       }
 
-      // ✅ 4. Check role
+      //  Check role
       final role = userDoc.data()?['role'] as String? ?? '';
 
       if (role != 'employer') {
@@ -76,7 +78,13 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
         return;
       }
 
-      // ✅ 5. All good — navigate to employer dashboard
+      // 2. Save FCM token (works for both employer and jobseeker)
+      await FCMService().saveToken(user.uid);
+
+      // 3. Start the cross-device push listener for THIS user.
+      NotificationService().startListeningToFirestore(user.uid);
+
+      // navigate to employer dashboard
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,

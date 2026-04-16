@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../login.dart';
 import '../../edit_profile.dart';
+import '../../services/notification_service.dart';
 
 class EmployerProfileScreen extends StatelessWidget {
   const EmployerProfileScreen({super.key});
@@ -220,9 +221,10 @@ class EmployerProfileScreen extends StatelessWidget {
                   ),
                 );
               }
-
+              
               // Sign out from Firebase
               await FirebaseAuth.instance.signOut();
+              NotificationService().stopListening();
 
               // Navigate to login screen and remove all previous routes
               if (context.mounted) {

@@ -25,7 +25,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
   static const Color _bg          = Color(0xFFF5F6FA);
 
   final RegExp _passwordRegex = RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,15}$');
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&-/]{8,15}$');
 
   @override
   void dispose() {
