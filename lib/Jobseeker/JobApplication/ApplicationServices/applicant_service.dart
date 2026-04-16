@@ -2,8 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ApplicantService {
+
+  static const String _AImodel = 'gemini-3-flash-preview';
+  static const String _apiKey = 'AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0';
+
   static Applicant buildApplicant({
     required String resumePath,
     required String portfolioUrl,
@@ -85,10 +90,37 @@ class ApplicantService {
     debugPrint('toMap() => ${applicant.toMap()}');
   }
 
-  static String generateAiDraft(Applicant applicant) {
-    return 'I am excited to apply for the ${applicant.jobTitle} role at '
-        '${applicant.company}. With my expertise in '
-        '${applicant.skills.join(', ')}, I am confident I can deliver '
-        'exceptional results that align with your product vision.';
+  static Future<String> generateAiDraft(Applicant applicant) async {
+    try {
+      // Initialize the model (using Flash for speed)
+      final model = GenerativeModel(
+        model: _AImodel,
+        apiKey: _apiKey,
+      );
+
+      // We create a "Prompt" that gives the AI instructions and data
+      final prompt = """
+        Write a professional and concise cover letter (min 100 words, max 150 words).
+        
+        Job: ${applicant.jobTitle} at ${applicant.company}
+        Candidate Skills: ${applicant.skills.join(', ')}
+        
+        Requirements:
+        1. Be professional and enthusiastic.
+        2. Specifically mention how the skills align with the role.
+        3. Do NOT include placeholders like [Your Name].
+        4. End with a professional closing.
+      """;
+
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      // Return the generated text or a fallback if it fails
+      return response.text ?? "I'm excited to apply for this role and bring my skills to your team.";
+
+    } catch (e) {
+      debugPrint("AI Draft Error: $e");
+      return "Error generating draft. Please write your cover letter manually.";
+    }
   }
 }

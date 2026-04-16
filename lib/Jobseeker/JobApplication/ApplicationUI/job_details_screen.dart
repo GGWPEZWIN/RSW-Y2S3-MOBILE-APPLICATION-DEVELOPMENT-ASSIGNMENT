@@ -1,3 +1,4 @@
+import 'package:assignment/Jobseeker/JobApplication/ApplicationUI/saved_job_list.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +7,7 @@ import '../../../Employer/JobListing/ApplicationUI/create_job_screen.dart';
 import '../../JobApplication/ApplicationServices/apply_job_service.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
+import 'applied_job_list.dart';
 import 'job_application_screen.dart';
 
 class JobDetailsPage extends StatefulWidget {
@@ -24,6 +26,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   bool _isLoading    = true;
   bool _hasApplied   = false;
   bool _isApplying   = false;
+  bool _isSaving = false;
   String? _userCompanyId;
   int _applicantCount = 0;
 
@@ -59,10 +62,18 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     final results = await Future.wait([
       FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
       ApplyJobService.hasApplied(widget.job.id!),
+      // Check if already saved
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('savedJobs')
+          .doc(widget.job.id)
+          .get(),
     ]);
 
     final userDoc    = results[0] as DocumentSnapshot;
     final hasApplied = results[1] as bool;
+    final savedDoc   = results[2] as DocumentSnapshot; // Check existence
     final companyId  = (userDoc.data() as Map<String, dynamic>?)?['companyId'];
 
     if (mounted) {
@@ -70,38 +81,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
         _isEmployer   = companyId != null;
         _userCompanyId = companyId as String?;
         _hasApplied   = hasApplied;
+        _isSaved      = savedDoc.exists; // Sync the UI icon
         _isLoading    = false;
       });
     }
   }
 
-  //Future<void> _handleApply() async {
-  //  if (_hasApplied || _isApplying) return;
-  //  setState(() => _isApplying = true);
-  //  final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
-  //  if (!mounted) return;
-  //  setState(() {
-  //    _isApplying = false;
-  //    if (success) {
-  //      _hasApplied = true;
-  //      _applicantCount++;
-  //    }
-  //  });
-  //  ScaffoldMessenger.of(context).showSnackBar(
-  //    SnackBar(
-  //      content: Text(
-  //        success
-  //            ? 'Application submitted! The employer will review it soon.'
-  //            : 'You have already applied for this job.',
-  //      ),
-  //      backgroundColor: success ? _green : Colors.orange,
-  //      duration: const Duration(seconds: 3),
-  //    ),
-  //  );
-  //}
-
   Future<void> _handleApply() async {
     if (_hasApplied) return;
+
+    setState(() => _isApplying = true); // Start loading
 
     final updatedJob = widget.job.copyWith(
       educationLevel: _fetchedEducation,
@@ -129,11 +118,70 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Application submitted! The employer will review it soon.'),
-          backgroundColor: _green, // Using your green constant
+          content: Text('Application submitted!'),
+          backgroundColor: _green,
           duration: Duration(seconds: 3),
         ),
       );
+    }
+
+    // Stop loading
+    if (mounted) setState(() => _isApplying = false);
+  }
+
+  Future<void> _toggleSave() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Start loading
+    setState(() => _isSaving = true);
+
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('savedJobs')
+          .doc(widget.job.id);
+
+      if (_isSaved) {
+        await docRef.delete();
+        if (mounted) setState(() => _isSaved = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job removed from saved')),
+        );
+      } else {
+        final jobSnap = await FirebaseFirestore.instance.collection('jobs').doc(widget.job.id).get();
+        final fullData = jobSnap.data() as Map<String, dynamic>? ?? {};
+
+        await docRef.set({
+          'jobId': widget.job.id,
+          'jobTitle': widget.job.title,
+          'company': widget.job.company,
+          'location': widget.job.location,
+          'workType': widget.job.workType,
+          'workplace': widget.job.workplace,
+          'salary': widget.job.salary,
+          'description': fullData['description'] ?? '',
+          'requirements': fullData['requirements'] ?? '',
+          'benefits': fullData['benefits'] ?? '',
+          'educationLevel': _fetchedEducation,
+          'experienceLevel': _fetchedExperience,
+          'savedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (mounted) setState(() => _isSaved = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Job saved! Practice interviews in Saved Jobs.'),
+            backgroundColor: _blue,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error saving job: $e");
+    } finally {
+      // Stop loading regardless of success or failure
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -397,7 +445,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   // Save button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => setState(() => _isSaved = !_isSaved),
+                      onPressed: () => _toggleSave(),
                       icon: Icon(
                         _isSaved ? Icons.bookmark : Icons.bookmark_border,
                         size: 18,
@@ -509,12 +557,18 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
           // Navigation Logic:
           if (index == 0) {
-            Navigator.pop(context);
+            Navigator.of(context).popUntil((route) => route.isFirst);
           } else if(index == 1) {
-            // TODO: saved route
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
+            );
           }
           else if(index == 2) {
-            // TODO: Applied route
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
+            );
           }
           if (index == 3) {
             Navigator.push(

@@ -22,7 +22,6 @@ class _JobseekerNotificationsPageState
   static const Color kTextPrimary   = Color(0xFF0F1624);
   static const Color kTextSecondary = Color(0xFF6B7280);
   static const Color kBorder        = Color(0xFFE2E8F0);
-
   static const Color kAccepted    = Color(0xFF22C55E);
   static const Color kRejected    = Color(0xFFEF4444);
   static const Color kShortlisted = Color(0xFFF59E0B);

@@ -73,7 +73,19 @@ class _HomePageState extends State<HomePage> {
   // Saves ALL job fields needed by SavedJobsScreen + InterviewPractice
   Future<void> _toggleSave(Job job, Map<String, dynamic> fullData) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+
+    print("DEBUG: Saving job for user: ${user?.uid}"); // Check if this matches Firestore
+    print("DEBUG: Job ID being saved: ${job.id}");
+
+    if (user == null) {
+      print("DEBUG: No user logged in!");
+      return;
+    }
+
+    if (job.id == null || job.id!.isEmpty) {
+      print('job.id is null or empty — cannot save');
+      return;
+    }
 
     final ref = FirebaseFirestore.instance
         .collection('users')
@@ -102,7 +114,6 @@ class _HomePageState extends State<HomePage> {
         'workType':  job.workType,
         'workplace': job.workplace,
         'salary':    job.salary,
-        // ✅ Rich fields for interview question generation
         'description':     fullData['description']     ?? '',
         'requirements':    fullData['requirements']    ?? '',
         'benefits':        fullData['benefits']        ?? '',
@@ -781,6 +792,7 @@ class _HomePageState extends State<HomePage> {
                         builder: (_) => JobDetailsPage(job: job)),
                   );
                   _loadAppliedJobs();
+                  _loadSavedJobs();
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
