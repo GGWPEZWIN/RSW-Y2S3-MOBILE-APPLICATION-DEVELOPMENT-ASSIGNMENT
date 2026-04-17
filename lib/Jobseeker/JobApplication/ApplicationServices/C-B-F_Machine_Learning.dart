@@ -68,7 +68,7 @@ class RecommendationService {
 
   RecommendationService(String apiKey)
       : _embeddingModel = GenerativeModel(
-    model: 'text-embedding-004', // this turns resume/job text into math (vectors).
+    model: 'gemini-embedding-2-preview', // this turns resume/job text into math (vectors).
     apiKey: apiKey,
   );
 
@@ -120,6 +120,9 @@ class RecommendationService {
     final profileText = _prepareProfile(userData, resumeText);
     final userEmbedding = await _embeddingModel.embedContent(Content.text(profileText));
     final userVector = userEmbedding.embedding.values;
+
+    print("DEBUG: User Profile Text: $profileText");
+    print("DEBUG: Number of jobs found: ${allJobs.length}");
 
     // C. Step 3: Generate Job Vectors using your new Firebase fields
     List<Map<String, dynamic>> processedJobs = [];

@@ -26,7 +26,6 @@ class _HomePageState extends State<HomePage> {
   Set<String> _savedJobs   = {};
 
   // ── Content-based filtering ML ───────────────────────────────────────────
-  // TODO: Replace with your actual Gemini API key or load from secure config
   final RecommendationService _recommendationService =
   RecommendationService('AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0');
   List<JobRecommendation>? _aiRecommendations;
