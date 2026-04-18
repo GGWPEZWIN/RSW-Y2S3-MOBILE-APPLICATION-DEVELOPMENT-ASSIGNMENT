@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,8 +6,6 @@ import '../../Widgets/nav_bar_widget.dart';
 import '../../InterviewPractice/interview_practice_screen.dart';
 import 'application_status.dart';
 import 'saved_job_list.dart';
-import 'application_status.dart';
-import '../../../services/fcm_service.dart';
 
 class AppliedJobsScreen extends StatefulWidget {
   const AppliedJobsScreen({Key? key}) : super(key: key);
@@ -19,10 +16,16 @@ class AppliedJobsScreen extends StatefulWidget {
 
 class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
   bool _showWithdrawn = false;
+  String _searchQuery = '';
+  String _selectedStatusFilter = 'All';
+
+  // UPDATED: Added 'Newest' as the default time-based sort
+  String _sortBy = 'Newest';
 
   static const Color _cardColor     = Color(0xFF2D3A8C);
   static const Color _cardColorDeep = Color(0xFF1E2A6E);
   static const Color _bg            = Color(0xFFF4F5FA);
+  static const Color _blue          = Color(0xFF3B52E8);
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
@@ -30,8 +33,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
       case 'interview':    return const Color(0xFF8B5CF6);
       case 'unprocessed':  return const Color(0xFFF59E0B);
       case 'under review': return const Color(0xFF60A5FA);
-      case 'reschedule_pending': return Colors.orange;
-      case 'reschedule_proposed': return Colors.purple;
       case 'declined':
       case 'rejected':     return const Color(0xFFEF4444);
       case 'withdrawn':    return const Color(0xFF94A3B8);
@@ -46,8 +47,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
       case 'shortlisted':  return 'SHORTLISTED';
       case 'interview':    return 'INTERVIEW SCHEDULED';
       case 'under review': return 'UNDER REVIEW';
-      case 'reschedule_pending': return 'RESCHEDULE PENDING';
-      case 'reschedule_proposed': return 'RESCHEDULE PROPOSED';
       case 'declined':
       case 'rejected':     return 'DECLINED';
       case 'withdrawn':    return 'WITHDRAWN';
@@ -97,7 +96,7 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
-                    color: const Color(0xFF3B52E8), borderRadius: BorderRadius.circular(20)),
+                    color: _blue, borderRadius: BorderRadius.circular(20)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: const [
                   Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 15),
                   SizedBox(width: 5),
@@ -111,7 +110,7 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
       body: Column(children: [
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Container(
             height: 44,
             decoration: BoxDecoration(
@@ -122,6 +121,10 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
             ]),
           ),
         ),
+
+        // Search, Sort, and Status Filter Bar
+        _buildAdvancedFilters(),
+
         Expanded(
           child: user == null
               ? const Center(child: Text('Please log in.'))
@@ -133,25 +136,64 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 .snapshots(),
             builder: (ctx, snap) {
               if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-              final docs = snap.data!.docs.where((d) {
+
+              List<QueryDocumentSnapshot> docs = snap.data!.docs;
+
+              // 1. Tab Filter
+              docs = docs.where((d) {
                 final s = ((d.data() as Map)['status'] ?? '').toString();
                 return _showWithdrawn ? _isWithdrawn(s) : !_isWithdrawn(s);
               }).toList();
 
+              // 2. Search Filter
+              if (_searchQuery.isNotEmpty) {
+                docs = docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  final title = (data['jobTitle'] ?? '').toString().toLowerCase();
+                  final company = (data['company'] ?? '').toString().toLowerCase();
+                  return title.contains(_searchQuery) || company.contains(_searchQuery);
+                }).toList();
+              }
+
+              // 3. Status Filter
+              if (_selectedStatusFilter != 'All') {
+                docs = docs.where((d) {
+                  final s = ((d.data() as Map)['status'] ?? '').toString().toLowerCase();
+                  return s == _selectedStatusFilter.toLowerCase();
+                }).toList();
+              }
+
+              // 4. UPDATED: Sorting Algorithm (Time vs Status)
+              docs.sort((a, b) {
+                final dataA = a.data() as Map<String, dynamic>;
+                final dataB = b.data() as Map<String, dynamic>;
+
+                if (_sortBy == 'Newest') {
+                  // Primary Sort: appliedAt (Time)
+                  final timeA = dataA['appliedAt'] as Timestamp? ?? Timestamp.now();
+                  final timeB = dataB['appliedAt'] as Timestamp? ?? Timestamp.now();
+                  return timeB.compareTo(timeA);
+                } else {
+                  // Primary Sort: status (Alphabetical)
+                  final statusA = (dataA['status'] ?? '').toString();
+                  final statusB = (dataB['status'] ?? '').toString();
+                  return statusA.compareTo(statusB);
+                }
+              });
+
               if (docs.isEmpty) {
                 return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.work_off_outlined, size: 56, color: Colors.grey[400]),
+                  Icon(Icons.search_off_rounded, size: 56, color: Colors.grey[400]),
                   const SizedBox(height: 12),
-                  Text(
-                    _showWithdrawn ? 'No withdrawn applications.' : 'No applications yet.\nStart applying!',
+                  const Text('No matching applications.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
                   ),
                 ]));
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 itemCount: docs.length,
                 itemBuilder: (_, i) {
                   final d    = docs[i].data() as Map<String, dynamic>;
@@ -168,24 +210,91 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
       bottomNavigationBar: NavBarWidget(
         currentIndex: 2,
         onTabSelected: (i) {
-          if (i == 2) {
-            return;
-          } else if (i == 0) {
-            Navigator.pop(context);
-          } else if (i == 1) {
-            Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const SavedJobsScreen()));
-          } else if (i == 3) {Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));
-          }
+          if (i == 2) return;
+          if (i == 0) Navigator.pop(context);
+          else if (i == 1) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SavedJobsScreen()));
+          else if (i == 3) Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));
         },
+      ),
+    );
+  }
+
+  Widget _buildAdvancedFilters() {
+    final List<String> statusFilters = ['All', 'Unprocessed', 'Under Review', 'Shortlisted', 'Interview', 'Rejected'];
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: "Search company...",
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      filled: true,
+                      fillColor: _bg,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // UPDATED: Time/Status Sorting Dropdown
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12)),
+                  child: DropdownButton<String>(
+                    value: _sortBy,
+                    underline: const SizedBox(),
+                    icon: const Icon(Icons.sort, size: 18, color: _blue),
+                    style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+                    items: ['Newest', 'Status'].map((String val) {
+                      return DropdownMenuItem<String>(value: val, child: Text(val));
+                    }).toList(),
+                    onChanged: (val) => setState(() => _sortBy = val!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: statusFilters.map((status) {
+                final isSelected = _selectedStatusFilter == status;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    label: Text(status, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.black87)),
+                    selected: isSelected,
+                    selectedColor: _blue,
+                    backgroundColor: _bg,
+                    onSelected: (bool selected) {
+                      setState(() => _selectedStatusFilter = status);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _tabBtn(String label, bool active) => Expanded(
     child: GestureDetector(
-      onTap: () => setState(() => _showWithdrawn = label == 'Withdrawn'),
+      onTap: () => setState(() {
+        _showWithdrawn = (label == 'Withdrawn');
+        _selectedStatusFilter = 'All';
+      }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.all(4),
