@@ -377,25 +377,39 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
   void _showStatusSheet(ApplicantModel a) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _StatusSheet(
         applicant: a,
         onSelected: (status) async {
           Navigator.pop(context);
           await _updateStatus(a, status);
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${a.candidateName} moved to ${status[0].toUpperCase()}${status.substring(1)}'),
-            backgroundColor: _primaryBlue,
-            duration: const Duration(seconds: 2),
-          ));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+               content: Text('${a.candidateName} moved to ${status[0].toUpperCase()}${status.substring(1)}'),
+               backgroundColor: _primaryBlue,
+               duration: const Duration(seconds: 2),
+            ));
+          }
         },
       ),
     );
   }
 
   void _openApplicantDetail(ApplicantModel a) {
-    Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ApplicantDetailScreen(applicant: a, onStatusUpdate: _updateStatus)));
+
+    //if (a.status == 'unprocessed') {
+    //  _updateStatus(a, 'under review');
+    //}
+
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => ApplicantDetailScreen(
+                applicant: a, onStatusUpdate: _updateStatus
+            ),
+        ),
+    );
   }
 
   @override
@@ -473,6 +487,7 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
   Widget _buildFilterChips(Map<String, int> counts) {
     final filters = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'count': counts['unprocessed'] ?? 0},
+      {'key': 'under review', 'label': 'Under Review', 'count': counts['under review'] ?? 0},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'count': counts['shortlisted']  ?? 0},
       {'key': 'interview',    'label': 'Interview',    'count': counts['interview']    ?? 0},
       {'key': 'declined',     'label': 'Declined',     'count': counts['declined']     ?? 0},
@@ -678,12 +693,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   static const Map<String, Color> _statusColor = {
     'unprocessed': Color(0xFFEF6C00),
+    'under review': Color(0xFF9C27B0),
     'shortlisted': Color(0xFF1565C0),
     'interview':   Color(0xFF2E7D32),
     'declined':    Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
     'unprocessed': Color(0xFFFFF3E0),
+    'under review': Color(0xFFF3E5F5),
     'shortlisted': Color(0xFFE3F2FD),
     'interview':   Color(0xFFE8F5E9),
     'declined':    Color(0xFFFFEBEE),
@@ -698,6 +715,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   void _showStatusPicker() {
     final statuses = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'icon': Icons.hourglass_empty_rounded, 'desc': 'Move back to unprocessed queue'},
+      {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
@@ -1016,12 +1034,14 @@ class _StatusSheet extends StatelessWidget {
 
   static const Map<String, Color> _statusColor = {
     'unprocessed': Color(0xFFEF6C00),
+    'under review': Color(0xFF9C27B0),
     'shortlisted': Color(0xFF1565C0),
     'interview':   Color(0xFF2E7D32),
     'declined':    Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
     'unprocessed': Color(0xFFFFF3E0),
+    'under review': Color(0xFFF3E5F5),
     'shortlisted': Color(0xFFE3F2FD),
     'interview':   Color(0xFFE8F5E9),
     'declined':    Color(0xFFFFEBEE),
@@ -1033,12 +1053,13 @@ class _StatusSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final statuses = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'icon': Icons.hourglass_empty_rounded, 'desc': 'Move back to unprocessed queue'},
+      {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
     ];
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Center(child: Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),

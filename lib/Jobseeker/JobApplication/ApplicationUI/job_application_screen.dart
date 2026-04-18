@@ -46,7 +46,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   String _resumeFileName = '';
   bool   _isSubmitting   = false;
   bool   _isDrafting     = false;
-  int    _currentIndex   = 2;
+  //int    _currentIndex   = 2;
+  String? _portfolioError;
 
   // TODO: Replace with actual user skills from profile
   final List<String> _skills = [];
@@ -81,6 +82,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
+    final url = _portfolioController.text.trim();
+
+    if (url.isNotEmpty && !Uri.tryParse(url)!.hasAbsolutePath) {
+      setState(() => _portfolioError = 'Please enter a valid URL');
+      return;
+    }
 
     if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -407,6 +414,34 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  //Widget _buildPortfolioSection() {
+  //  return Column(
+  //    crossAxisAlignment: CrossAxisAlignment.start,
+  //    children: [
+  //      _buildSectionLabel('Portfolio URL'),
+  //      const SizedBox(height: 8),
+  //      Container(
+  //        decoration: BoxDecoration(
+  //          color: Colors.white,
+  //          borderRadius: BorderRadius.circular(12),
+  //          border: Border.all(color: kBorder),
+  //        ),
+  //        child: TextField(
+  //          controller: _portfolioController,
+  //          style: const TextStyle(fontSize: 14, color: kTextPrimary),
+  //          decoration: const InputDecoration(
+  //            hintText: 'https://portfolio.com',
+  //            hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
+  //            prefixIcon: Icon(Icons.link_rounded, color: kTextPlaceholder, size: 20),
+  //            border: InputBorder.none,
+  //            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+  //          ),
+  //        ),
+  //      ),
+  //    ],
+  //  );
+  //}
+
   Widget _buildPortfolioSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,11 +452,21 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kBorder),
+            // Toggle border color based on error state
+            border: Border.all(
+              color: _portfolioError == null ? kBorder : Colors.redAccent,
+              width: _portfolioError == null ? 1 : 1.5,
+            ),
           ),
           child: TextField(
             controller: _portfolioController,
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
+            onChanged: (value) {
+              // Clear error the moment the user starts typing
+              if (_portfolioError != null) {
+                setState(() => _portfolioError = null);
+              }
+            },
             decoration: const InputDecoration(
               hintText: 'https://portfolio.com',
               hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
@@ -431,6 +476,15 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             ),
           ),
         ),
+        // Display the error message text
+        if (_portfolioError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              _portfolioError!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ),
       ],
     );
   }
