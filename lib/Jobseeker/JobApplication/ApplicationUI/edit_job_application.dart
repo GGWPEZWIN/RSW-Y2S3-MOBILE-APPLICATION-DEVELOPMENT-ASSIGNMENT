@@ -1,24 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+class UpdateApplicationScreen extends StatefulWidget {
+  final String applicationId;
+  final Map<String, dynamic> applicationData;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ENTRY POINT  (remove if embedding into an existing app)
-// ─────────────────────────────────────────────────────────────────────────────
-void main() => runApp(const _App());
+  const UpdateApplicationScreen({
+    super.key,
+    required this.applicationId,
+    required this.applicationData,
+  });
 
-class _App extends StatelessWidget {
-  const _App();
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(useMaterial3: true),
-    home: const UpdateApplicationScreen(),
-  );
+  State<UpdateApplicationScreen> createState() => _UpdateApplicationScreenState();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DESIGN TOKENS
-// ─────────────────────────────────────────────────────────────────────────────
 class _C {
   static const primary      = Color(0xFF2D3FE0);
   static const primaryLight = Color(0xFFEEF0FC);
@@ -32,35 +27,111 @@ class _C {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-class UpdateApplicationScreen extends StatefulWidget {
-  const UpdateApplicationScreen({super.key});
-  @override
-  State<UpdateApplicationScreen> createState() =>
-      _UpdateApplicationScreenState();
-}
-
 class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
-  bool _includeResume = true;
-  final _portfolioCtrl =
-  TextEditingController(text: 'https://johndoe.design/portfolio');
-  final _coverCtrl = TextEditingController(
-    text: "I'm excited to apply for the Senior Product Designer role at TechFlow. "
-        "With over 6 years of experience in creating user-centric digital products, "
-        "I believe my skills in rapid prototyping and strategic design would be a "
-        "great asset to your team.",
-  );
-  final List<String> _skills = [
-    'UI Design',
-    'Prototyping',
-    'Figma',
-    'User Research'
-  ];
+  bool _isBusy = false;
+  late bool _includeResume;
+  late TextEditingController _portfolioCtrl;
+  late TextEditingController _coverCtrl;
+  final List<String> _skills = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.applicationData;
+
+    // Initialize state with real Firestore data
+    _includeResume = d['includeResume'] ?? true;
+    _portfolioCtrl = TextEditingController(text: d['portfolioUrl'] ?? '');
+    _coverCtrl = TextEditingController(text: d['coverLetter'] ?? '');
+
+    if (d['skills'] != null) {
+      _skills.addAll(List<String>.from(d['skills']));
+    }
+  }
 
   @override
   void dispose() {
     _portfolioCtrl.dispose();
     _coverCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Database Logic ────────────────────────────────────────────────────────
+  Future<void> _handleSave() async {
+    final portfolioText = _portfolioCtrl.text.trim();
+    final coverLetterText = _coverCtrl.text.trim();
+    final wordCount = coverLetterText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+    final updatedData = Map<String, dynamic>.from(widget.applicationData);
+    updatedData['portfolioUrl'] = portfolioText;
+    updatedData['coverLetter'] = coverLetterText;
+    updatedData['skills'] = _skills;
+    updatedData['includeResume'] = _includeResume;
+
+    // 1. Check if empty
+    if (portfolioText.isEmpty) {
+      _showErrorSnackBar('Please provide a portfolio link.');
+      return;
+    }
+
+    final urlRegExp = RegExp(
+      r'^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$',
+    );
+
+    if (!urlRegExp.hasMatch(portfolioText)) {
+      _showErrorSnackBar('Please enter a valid URL (e.g., https://behance.net/lee).');
+      return;
+    }
+
+    // 3. Cover Letter Length Check
+    if (_coverCtrl.text.trim().length < 50) {
+      _showErrorSnackBar('Your cover letter is too short for a professional application!');
+      return;
+    }
+
+    if (wordCount > 150) {
+      _showErrorSnackBar('Cover letter is too long! Please keep it under 150 words (Current: $wordCount).');
+      return;
+    }
+
+    setState(() => _isBusy = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('applications')
+          .doc(widget.applicationId)
+          .update({
+        'portfolioUrl': portfolioText,
+        'coverLetter': _coverCtrl.text.trim(),
+        'skills': _skills,
+        'includeResume': _includeResume,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Application updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, updatedData);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Update failed. Please check your connection.');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _addSkill() async {
@@ -73,6 +144,8 @@ class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final d = widget.applicationData;
+
     return Scaffold(
       backgroundColor: _C.bg,
       appBar: AppBar(
@@ -80,20 +153,18 @@ class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              size: 18, color: _C.textDark),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: _C.textDark),
           onPressed: () => Navigator.maybePop(context),
         ),
-        title: Text('Update Application',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: _C.textDark)),
+        title: const Text('Update Application',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _C.textDark)),
         bottom: const PreferredSize(
             preferredSize: Size.fromHeight(1),
             child: Divider(height: 1, color: _C.border)),
       ),
-      body: Column(children: [
+      body: _isBusy
+          ? const Center(child: CircularProgressIndicator(color: _C.primary))
+          : Column(children: [
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 16),
@@ -101,32 +172,29 @@ class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
-                  // Job card
-                  _Pad(child: _JobCard()),
+                  _Pad(child: _JobCard(
+                    title: d['jobTitle'] ?? 'Position',
+                    company: d['company'] ?? 'Company',
+                  )),
                   const SizedBox(height: 16),
-                  // Resume / CV
+                  // Resume / CV Section
                   _Pad(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionHeader(
-                              title: 'Resume/CV',
-                              actionLabel: 'Update',
-                              onAction: () {}),
+                          const _SectionHeader(title: 'Resume/CV'),
                           const SizedBox(height: 10),
                           _RadioOption(
                             selected: _includeResume,
-                            label: 'Lee_resume_2026.pdf',
-                            subtitle: 'Added about 9 hours ago',
-                            onTap: () =>
-                                setState(() => _includeResume = true),
+                            label: d['resumeName'] ?? 'Lee_resume_2026.pdf',
+                            subtitle: 'Current file stored in JobBuddy',
+                            onTap: () => setState(() => _includeResume = true),
                           ),
                           const SizedBox(height: 8),
                           _RadioOption(
                             selected: !_includeResume,
                             label: "Don't include a resume",
-                            onTap: () =>
-                                setState(() => _includeResume = false),
+                            onTap: () => setState(() => _includeResume = false),
                           ),
                         ]),
                   ),
@@ -160,10 +228,8 @@ class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
                             children: _skills
                                 .map((s) => _SkillTag(
                               label: s,
-                              onRemove: () =>
-                                  setState(() => _skills.remove(s)),
-                            ))
-                                .toList(),
+                              onRemove: () => setState(() => _skills.remove(s)),
+                            )).toList(),
                           ),
                         ]),
                   ),
@@ -184,36 +250,33 @@ class _UpdateApplicationScreenState extends State<UpdateApplicationScreen> {
         // Bottom CTA
         Container(
           color: _C.white,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(children: [
             _PrimaryButton(
               label: 'Save Changes',
-              trailing: const Icon(Icons.check_circle_outline_rounded,
-                  color: _C.white, size: 18),
-              onTap: () => Navigator.maybePop(context),
+              trailing: const Icon(Icons.check_circle_outline_rounded, color: _C.white, size: 18),
+              onTap: _handleSave,
             ),
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () => Navigator.maybePop(context),
-              child: Text('Cancel Update',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: _C.textSub)),
+              child: const Text('Cancel Update',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _C.textSub)),
             ),
-            const SizedBox(height: 16),
           ]),
         ),
       ]),
     );
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // JOB CARD
 // ─────────────────────────────────────────────────────────────────────────────
 class _JobCard extends StatelessWidget {
-  const _JobCard();
+  final String title;
+  final String company;
+  const _JobCard({required this.title, required this.company});
+
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
@@ -229,29 +292,16 @@ class _JobCard extends StatelessWidget {
         decoration: BoxDecoration(
             color: _C.primaryLight,
             borderRadius: BorderRadius.circular(12)),
-        child: const Icon(Icons.business_center_rounded,
-            color: _C.primary, size: 24),
+        child: const Icon(Icons.business_center_rounded, color: _C.primary, size: 24),
       ),
       const SizedBox(width: 12),
       Expanded(
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Senior Product Designer',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _C.textDark)),
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _C.textDark)),
               const SizedBox(height: 2),
-              Text('TechFlow Inc.',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _C.primary)),
-              const SizedBox(height: 2),
-              Text('Applied Oct 24, 2023',
-                  style: TextStyle(
-                      fontSize: 11, color: _C.textSub)),
+              Text(company, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _C.primary)),
             ]),
       ),
     ]),

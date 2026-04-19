@@ -108,7 +108,6 @@ class Applicant {
       coverLetter: map['coverLetter'] ?? '',
       skills: List<String>.from(map['skills'] ?? []),
       submittedAt: map['submittedAt'] ?? '',
-      // ADD THESE LINES:
       salary: map['salary'] ?? '',
       workType: map['workType'] ?? '',
       workplace: map['workplace'] ?? '',

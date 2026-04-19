@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/fcm_service.dart'; // ✅ Add this
 
 // ── Model ──────────────────────────────────────────────────────────────────
 class ApplicantModel {
   final String id;
+  final String userId;
   final String jobId;
   final String jobTitle;
   final String jobLevel;
@@ -24,6 +27,7 @@ class ApplicantModel {
 
   const ApplicantModel({
     required this.id,
+    required this.userId,
     required this.jobId,
     required this.jobTitle,
     required this.jobLevel,
@@ -45,6 +49,7 @@ class ApplicantModel {
   factory ApplicantModel.fromMap(String id, Map<String, dynamic> data) {
     return ApplicantModel(
       id:              id,
+      userId:          data['userId']         ?? '',
       jobId:           data['jobId']          ?? '',
       jobTitle:        data['jobTitle']        ?? 'Untitled',
       jobLevel:        data['jobLevel']        ?? '',
@@ -320,32 +325,91 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
     return m;
   }
 
-  Future<void> _updateStatus(String id, String status) async {
-    await FirebaseFirestore.instance.collection('applications').doc(id).update({'status': status});
+  Future<void> _updateStatus(ApplicantModel a, String status) async {
+    await FirebaseFirestore.instance.collection('applications').doc(a.id).update({'status': status});
+
+    // Notify Jobseeker
+    if (a.userId.isNotEmpty) {
+      String title = '';
+      String body  = '';
+      ApplicationStatus? fcmStatus;
+
+      if (status == 'shortlisted') {
+        fcmStatus = ApplicationStatus.shortlisted;
+      } else if (status == 'declined') {
+        fcmStatus = ApplicationStatus.rejected;
+      } else if (status == 'interview') {
+        fcmStatus = ApplicationStatus.interview;
+      }
+
+      if (fcmStatus != null) {
+        title = fcmStatus.notificationTitle(a.jobTitle);
+        body  = fcmStatus.notificationBody(a.candidateName, a.jobTitle);
+
+        // In-app
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(a.userId)
+            .collection('notifications')
+            .add({
+          'applicationId': a.id,
+          'title': title,
+          'body': body,
+          'type': fcmStatus.firestoreValue,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        // Push
+        await FCMService().sendPushNotification(
+          recipientId: a.userId,
+          title: title,
+          body: body,
+          data: {
+            'type': fcmStatus.firestoreValue,
+            'applicationId': a.id,
+          },
+        );
+      }
+    }
   }
 
   void _showStatusSheet(ApplicantModel a) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _StatusSheet(
         applicant: a,
         onSelected: (status) async {
           Navigator.pop(context);
-          await _updateStatus(a.id, status);
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${a.candidateName} moved to ${status[0].toUpperCase()}${status.substring(1)}'),
-            backgroundColor: _primaryBlue,
-            duration: const Duration(seconds: 2),
-          ));
+          await _updateStatus(a, status);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+               content: Text('${a.candidateName} moved to ${status[0].toUpperCase()}${status.substring(1)}'),
+               backgroundColor: _primaryBlue,
+               duration: const Duration(seconds: 2),
+            ));
+          }
         },
       ),
     );
   }
 
   void _openApplicantDetail(ApplicantModel a) {
-    Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ApplicantDetailScreen(applicant: a, onStatusUpdate: _updateStatus)));
+
+    //if (a.status == 'unprocessed') {
+    //  _updateStatus(a, 'under review');
+    //}
+
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => ApplicantDetailScreen(
+                applicant: a, onStatusUpdate: _updateStatus
+            ),
+        ),
+    );
   }
 
   @override
@@ -423,6 +487,7 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
   Widget _buildFilterChips(Map<String, int> counts) {
     final filters = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'count': counts['unprocessed'] ?? 0},
+      {'key': 'under review', 'label': 'Under Review', 'count': counts['under review'] ?? 0},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'count': counts['shortlisted']  ?? 0},
       {'key': 'interview',    'label': 'Interview',    'count': counts['interview']    ?? 0},
       {'key': 'declined',     'label': 'Declined',     'count': counts['declined']     ?? 0},
@@ -610,7 +675,7 @@ class _ApplicantCard extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 class ApplicantDetailScreen extends StatefulWidget {
   final ApplicantModel applicant;
-  final Future<void> Function(String id, String status) onStatusUpdate;
+  final Future<void> Function(ApplicantModel a, String status) onStatusUpdate;
 
   const ApplicantDetailScreen({super.key, required this.applicant, required this.onStatusUpdate});
 
@@ -628,12 +693,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   static const Map<String, Color> _statusColor = {
     'unprocessed': Color(0xFFEF6C00),
+    'under review': Color(0xFF9C27B0),
     'shortlisted': Color(0xFF1565C0),
     'interview':   Color(0xFF2E7D32),
     'declined':    Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
     'unprocessed': Color(0xFFFFF3E0),
+    'under review': Color(0xFFF3E5F5),
     'shortlisted': Color(0xFFE3F2FD),
     'interview':   Color(0xFFE8F5E9),
     'declined':    Color(0xFFFFEBEE),
@@ -648,6 +715,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   void _showStatusPicker() {
     final statuses = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'icon': Icons.hourglass_empty_rounded, 'desc': 'Move back to unprocessed queue'},
+      {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
@@ -671,7 +739,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
             return GestureDetector(
               onTap: () async {
                 Navigator.pop(context);
-                await widget.onStatusUpdate(widget.applicant.id, key);
+                await widget.onStatusUpdate(widget.applicant, key);
                 if (mounted) {
                   setState(() => _currentStatus = key);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -966,12 +1034,14 @@ class _StatusSheet extends StatelessWidget {
 
   static const Map<String, Color> _statusColor = {
     'unprocessed': Color(0xFFEF6C00),
+    'under review': Color(0xFF9C27B0),
     'shortlisted': Color(0xFF1565C0),
     'interview':   Color(0xFF2E7D32),
     'declined':    Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
     'unprocessed': Color(0xFFFFF3E0),
+    'under review': Color(0xFFF3E5F5),
     'shortlisted': Color(0xFFE3F2FD),
     'interview':   Color(0xFFE8F5E9),
     'declined':    Color(0xFFFFEBEE),
@@ -983,12 +1053,13 @@ class _StatusSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final statuses = [
       {'key': 'unprocessed', 'label': 'Unprocessed', 'icon': Icons.hourglass_empty_rounded, 'desc': 'Move back to unprocessed queue'},
+      {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
     ];
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Center(child: Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),

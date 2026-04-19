@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -12,70 +15,148 @@ class NotificationService {
   FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  StreamSubscription<QuerySnapshot>? _pushQueueSub;
 
-  /// Call this once in main() or before using notifications
+  static const String _channelId   = 'jobbuddy_high_priority_alerts';
+  static const String _channelName = 'JobBuddy Notifications';
+
+  // ─── Initialize (call once in main.dart) ─────────────────────────────────
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     tz.initializeTimeZones();
 
-    const androidSettings =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
 
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
     await _notifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap — you can navigate here if needed
-        debugPrint('Notification tapped: ${response.payload}');
+      // Use 'settings:' instead of 'initializationSettings:'
+      settings: const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+      onDidReceiveNotificationResponse: (NotificationResponse r) {
+        debugPrint('Notification tapped: ${r.payload}');
       },
     );
 
-    // Request Android 13+ permission
-    await _notifications
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    if (Platform.isAndroid) {
+      final impl = _notifications
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await impl?.requestNotificationsPermission();
+      await impl?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _channelId,
+          _channelName,
+          description: 'Job application and interview updates',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          showBadge: true,
+        ),
+      );
+    }
 
     _isInitialized = true;
   }
 
-  // ─── Notification Channel Details ─────────────────────────────────────────
+  // ─── Show a local popup banner on THIS device immediately ────────────────
 
-  NotificationDetails get _interviewNotificationDetails =>
-      const NotificationDetails(
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    await initialize();
+    await _notifications.show(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          'interview_channel',       // channel id
-          'Interview Notifications', // channel name
-          channelDescription: 'Notifications for scheduled interviews',
+          _channelId,
+          _channelName,
           importance: Importance.max,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
-          color: Color(0xFF425AE2),
+          color: const Color(0xFF3B52E8),
+          ticker: 'ticker',
           enableVibration: true,
           playSound: true,
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
         ),
-      );
+      ),
+      payload: payload,
+    );
+  }
 
-  // ─── Public API ────────────────────────────────────────────────────────────
+  // ─── Cross-device push: listen to push_notifications_queue ───────────────
+  //
+  // HOW IT WORKS (no Cloud Function / no server needed):
+  //
+  //   Sender   → FCMService().sendPushNotification(recipientId, title, body)
+  //            → writes {recipientId, title, body, status:'pending'} to Firestore
+  //
+  //   Recipient device → this listener (started at login) sees the new doc
+  //            → calls showNotification() → popup appears
+  //            → marks doc status:'delivered' so it never fires again
+  //
+  // KEY DESIGN:
+  //   • Query is ONLY on recipientId + status == 'pending'
+  //     No createdAt filter — avoids needing a composite index and avoids the
+  //     server-timestamp timing bug where client startTime > server write time.
+  //   • Uses DocumentChangeType.added so already-delivered docs are ignored.
+  //   • Marks 'delivered' before returning so even if the listener fires twice
+  //     (e.g. app restart), the doc is already gone from the query.
 
-  /// Show an immediate notification when an interview is scheduled.
-  /// Call this from the Employer side when they schedule an interview.
+  void startListeningToFirestore(String uid) {
+    _pushQueueSub?.cancel();
+    if (uid.isEmpty) return;
+
+    _pushQueueSub = FirebaseFirestore.instance
+        .collection('push_notifications_queue')
+        .where('recipientId', isEqualTo: uid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen(
+          (snap) async {
+        for (final change in snap.docChanges) {
+          // Only react to new docs, not existing ones loaded at startup
+          if (change.type != DocumentChangeType.added) continue;
+
+          final data  = change.doc.data() as Map<String, dynamic>? ?? {};
+          final title = (data['title'] as String?) ?? 'JobBuddy';
+          final body  = (data['body']  as String?) ?? '';
+
+          // Mark delivered FIRST to prevent double-firing on reconnect
+          await change.doc.reference
+              .update({'status': 'delivered'}).catchError((_) {});
+
+          // Then show the popup
+          await showNotification(title: title, body: body);
+        }
+      },
+      onError: (e) => debugPrint('push_queue listener error: $e'),
+    );
+  }
+
+  void stopListening() {
+    _pushQueueSub?.cancel();
+    _pushQueueSub = null;
+  }
+
+  // ─── Legacy methods kept so existing callers compile ─────────────────────
+
   Future<void> sendInterviewScheduledNotification({
     required String candidateName,
     required String jobTitle,
@@ -84,22 +165,16 @@ class NotificationService {
     required String location,
     String? meetingLink,
   }) async {
-    await initialize();
-
-    final isOnline = meetingLink != null && meetingLink.isNotEmpty;
-    final locationText =
-    isOnline ? 'Online — $meetingLink' : 'Location: $location';
-
-    await _notifications.show(
-      _generateId(),
-      '📅 Interview Scheduled — $jobTitle',
-      'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locationText',
-      _interviewNotificationDetails,
+    final locText = (meetingLink != null && meetingLink.isNotEmpty)
+        ? 'Online — $meetingLink'
+        : 'Location: $location';
+    await showNotification(
+      title:   '📅 Interview Scheduled — $jobTitle',
+      body:    'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locText',
       payload: 'interview_scheduled',
     );
   }
 
-  /// Schedule a reminder notification X minutes before the interview.
   Future<void> scheduleInterviewReminder({
     required String candidateName,
     required String jobTitle,
@@ -107,41 +182,31 @@ class NotificationService {
     int minutesBefore = 60,
   }) async {
     await initialize();
-
-    final reminderTime = interviewDateTime.subtract(
-      Duration(minutes: minutesBefore),
-    );
-
-    if (reminderTime.isBefore(DateTime.now())) {
-      debugPrint('Reminder time is in the past, skipping scheduled reminder.');
-      return;
-    }
+    final reminderTime =
+    interviewDateTime.subtract(Duration(minutes: minutesBefore));
+    if (reminderTime.isBefore(DateTime.now())) return;
 
     await _notifications.zonedSchedule(
-      _generateId(),
-      '⏰ Interview Reminder — $jobTitle',
-      'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
-      tz.TZDateTime.from(reminderTime, tz.local),
-      _interviewNotificationDetails,
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: '⏰ Interview Reminder — $jobTitle',
+      body: 'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
+      scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+            presentAlert: true, presentBadge: true, presentSound: true),
+      ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'interview_reminder',
     );
   }
 
-  /// Cancel all pending notifications (e.g. if interview is cancelled).
-  Future<void> cancelAllNotifications() async {
-    await _notifications.cancelAll();
-  }
-
-  /// Cancel a specific notification by id.
-  Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id);
-  }
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-
-  int _generateId() =>
-      DateTime.now().millisecondsSinceEpoch.remainder(100000);
+  Future<void> cancelAllNotifications() => _notifications.cancelAll();
+  Future<void> cancelNotification(int id) => _notifications.cancel(id: id);
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../services/fcm_service.dart'; // ✅ Import FCM service
 
 // ── Local notifier ────────────────────────────────────────────────────────────
 class _LocalNotifier {
@@ -11,15 +12,20 @@ class _LocalNotifier {
 
   static Future<void> _init() async {
     if (_ready) return;
+
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios     = DarwinInitializationSettings();
+
     await _plugin.initialize(
-        const InitializationSettings(android: android, iOS: ios));
+      settings: const InitializationSettings(android: android, iOS: ios),
+    );
+
     await _plugin
         .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(const AndroidNotificationChannel(
-      'interview_channel', 'Interview Notifications',
+      'interview_channel',
+      'Interview Notifications',
       description: 'Interview schedule updates',
       importance: Importance.max,
     ));
@@ -29,16 +35,23 @@ class _LocalNotifier {
   static Future<void> show(String title, String body) async {
     await _init();
     await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title, body,
-      const NotificationDetails(
+      // Add the names: id, title, and body
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          'interview_channel', 'Interview Notifications',
-          importance: Importance.max, priority: Priority.high,
-          color: Color(0xFF3B4FD8), icon: '@mipmap/ic_launcher',
+          'interview_channel',
+          'Interview Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          color: Color(0xFF3B4FD8),
+          icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(
-            presentAlert: true, presentBadge: true, presentSound: true),
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true),
       ),
     );
   }
@@ -204,6 +217,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         'notes':              _notesCtrl.text.trim(),
         'status':             targetStatus,
         'updatedAt':          FieldValue.serverTimestamp(),
+        // Add pendingAcceptance flag for reschedule proposals
         if (_isRescheduling) 'pendingAcceptance': true,
         // Remove these fields so the request is considered "resolved"
         'rescheduleReason':   FieldValue.delete(),
@@ -243,6 +257,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'Please check the app to confirm.';
 
       if (widget.candidateUserId.isNotEmpty) {
+        // 1. Write to user's in-app notifications
         await db
             .collection('users')
             .doc(widget.candidateUserId)
@@ -256,9 +271,22 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'isRead':             false,
           'createdAt':          FieldValue.serverTimestamp(),
         });
+
+        // 2. Queue a Push Notification for the candidate (different device)
+        await FCMService().sendPushNotification(
+          recipientId: widget.candidateUserId,
+          title: notifTitle,
+          body: notifBody,
+          data: {
+            'applicationId': widget.applicationId,
+            'jobId': widget.jobId,
+            'type': _isRescheduling ? 'reschedule_proposal' : 'interview',
+          },
+        );
       }
 
-      await _LocalNotifier.show(notifTitle, notifBody);
+      // Removed _LocalNotifier.show here because it shows on the EMPLOYER'S device.
+      // The push notification above handles notifying the jobseeker.
 
       if (!mounted) return;
       _snack(_isRescheduling ? 'Proposed new time to candidate!' : 'Interview saved!', const Color(0xFF22C55E));
@@ -328,6 +356,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
       // Notify candidate inbox
       if (widget.candidateUserId.isNotEmpty) {
+        // 1. In-app notification
         await db
             .collection('users')
             .doc(widget.candidateUserId)
@@ -341,9 +370,21 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           'isRead':        false,
           'createdAt':     FieldValue.serverTimestamp(),
         });
+
+        // 2. Push notification for candidate
+        await FCMService().sendPushNotification(
+          recipientId: widget.candidateUserId,
+          title: notifTitle,
+          body: notifBody,
+          data: {
+            'applicationId': widget.applicationId,
+            'jobId': widget.jobId,
+            'type': 'interview_cancelled',
+          },
+        );
       }
 
-      await _LocalNotifier.show(notifTitle, notifBody);
+      // Removed _LocalNotifier.show here as it shows on the employer's device.
 
       if (!mounted) return;
       _snack('Interview cancelled. ${widget.candidateName} has been notified.',
@@ -754,8 +795,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           decoration: BoxDecoration(
             color: Colors.white, borderRadius: BorderRadius.circular(10),
             boxShadow: [BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6, offset: const Offset(0, 2))],
+                color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(

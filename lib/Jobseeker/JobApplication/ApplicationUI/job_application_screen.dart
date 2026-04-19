@@ -4,10 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
 import 'package:assignment/Jobseeker/JobApplication/ApplicationServices/applicant_service.dart';
 import '../../../Employer/models/job_model.dart';
-import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/resume_upload_widget.dart';
-import '../ApplicationServices/applicant_service.dart';
-import '../../Widgets/nav_bar_widget.dart';
+import '../../../services/fcm_service.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final String jobId;
@@ -47,10 +45,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   String _resumePath     = '';
   String _resumeFileName = '';
   bool   _isSubmitting   = false;
-  int    _currentIndex   = 2;
+  bool   _isDrafting     = false;
+  //int    _currentIndex   = 2;
+  String? _portfolioError;
 
   // TODO: Replace with actual user skills from profile
-  final List<String> _skills = ['UI Design', 'Prototyping', 'Figma', 'React'];
+  final List<String> _skills = [];
+  bool _isExtractingSkills = false;
 
   @override
   void dispose() {
@@ -81,6 +82,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
+    final url = _portfolioController.text.trim();
+
+    if (url.isNotEmpty && !Uri.tryParse(url)!.hasAbsolutePath) {
+      setState(() => _portfolioError = 'Please enter a valid URL');
+      return;
+    }
 
     if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,6 +134,58 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
+  Future<void> _processResume(String path) async {
+    setState(() => _isExtractingSkills = true);
+    try {
+      // We only need this ONE call now. It does OCR and Skill picking in one go.
+      final extractedSkills = await ApplicantService.extractSkillsWithAi(path);
+
+      setState(() {
+        _skills.clear();
+        _skills.addAll(extractedSkills);
+      });
+    } catch (e) {
+      debugPrint("Skill extraction failed: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Could not extract skills from resume.")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExtractingSkills = false);
+      }
+    }
+  }
+
+  // AI cover letter draft
+  Future<void> _handleAiDraft() async {
+    if (_isDrafting) return;
+
+    setState(() => _isDrafting = true);
+
+    try {
+      final applicant = _buildApplicant();
+      final draft = await ApplicantService.generateAiDraft(applicant);
+
+      // CRITICAL: Check if the user is still on this screen
+      if (!mounted) return;
+
+      setState(() {
+        _coverLetterController.text = draft;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to generate draft: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDrafting = false);
+      }
+    }
+  }
+
   // ── Employer notification ──────────────────────────────────────────────────
 
   Future<void> _notifyEmployer(String applicationDocId) async {
@@ -155,7 +214,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         return;
       }
 
-      // Write to employer_notifications ─────────────────────────────────────
+      final title = '📋 New Application — ${widget.jobTitle}';
+      final body  = '$seekerName has applied for ${widget.jobTitle}.';
+
+      // 1. In-app notification
       await db.collection('employer_notifications').add({
         'employerId':      employerId,
         'applicationId':   applicationDocId,   // real Firestore doc ID
@@ -163,14 +225,26 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         'candidateUserId': jobseeker?.uid ?? '',
         'candidateName':   seekerName,
         'jobTitle':        widget.jobTitle,
-        'title':  '📋 New Application — ${widget.jobTitle}',
-        'body':   '$seekerName has applied for ${widget.jobTitle}.',
-        'type':   'new_application',
-        'status': 'unprocessed',
-        'appliedAt': FieldValue.serverTimestamp(),
-        'isRead':    false,
-        'createdAt': FieldValue.serverTimestamp(),
+        'title':           title,
+        'body':            body,
+        'type':            'new_application',
+        'status':          'unprocessed',
+        'appliedAt':       FieldValue.serverTimestamp(),
+        'isRead':          false,
+        'createdAt':       FieldValue.serverTimestamp(),
       });
+
+      // 2. Push Notification
+      await FCMService().sendPushNotification(
+        recipientId: employerId,
+        title:       title,
+        body:        body,
+        data: {
+          'type':          'new_application',
+          'applicationId': applicationDocId,
+          'jobId':         widget.jobId,
+        },
+      );
 
       debugPrint('Employer notification sent to: $employerId');
     } catch (e) {
@@ -179,10 +253,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
-  void _handleAiDraft() {
-    final applicant = _buildApplicant();
-    _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
-  }
+  //void _handleAiDraft() {
+  //  final applicant = _buildApplicant();
+  //  _coverLetterController.text = ApplicantService.generateAiDraft(applicant);
+  //}
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -209,6 +283,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                           _resumePath     = path;
                           _resumeFileName = name;
                         });
+                        _processResume(path);
                       },
                     ),
                     const SizedBox(height: 20),
@@ -225,26 +300,26 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 ),
               ),
             ),
-            NavBarWidget(
-              currentIndex: _currentIndex,
-              onTabSelected: (index) {
-                if (index == _currentIndex) return;
-                setState(() => _currentIndex = index);
-                if (index == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                } else if (index == 1) {
-                  // TODO: Navigate to Saved Jobs screen
-                } else if (index == 3) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ProfilePage(
-                          user: FirebaseAuth.instance.currentUser),
-                    ),
-                  );
-                }
-              },
-            ),
+            //NavBarWidget(
+            //  currentIndex: _currentIndex,
+            //  onTabSelected: (index) {
+            //    if (index == _currentIndex) return;
+            //    setState(() => _currentIndex = index);
+            //    if (index == 0) {
+            //      Navigator.of(context).popUntil((route) => route.isFirst);
+            //    } else if (index == 1) {
+            //      // TODO: Navigate to Saved Jobs screen
+            //    } else if (index == 3) {
+            //      Navigator.pushReplacement(
+            //        context,
+            //        MaterialPageRoute(
+            //          builder: (_) => ProfilePage(
+            //              user: FirebaseAuth.instance.currentUser),
+            //        ),
+            //      );
+            //    }
+            //  },
+            //),
           ],
         ),
       ),
@@ -339,6 +414,34 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  //Widget _buildPortfolioSection() {
+  //  return Column(
+  //    crossAxisAlignment: CrossAxisAlignment.start,
+  //    children: [
+  //      _buildSectionLabel('Portfolio URL'),
+  //      const SizedBox(height: 8),
+  //      Container(
+  //        decoration: BoxDecoration(
+  //          color: Colors.white,
+  //          borderRadius: BorderRadius.circular(12),
+  //          border: Border.all(color: kBorder),
+  //        ),
+  //        child: TextField(
+  //          controller: _portfolioController,
+  //          style: const TextStyle(fontSize: 14, color: kTextPrimary),
+  //          decoration: const InputDecoration(
+  //            hintText: 'https://portfolio.com',
+  //            hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
+  //            prefixIcon: Icon(Icons.link_rounded, color: kTextPlaceholder, size: 20),
+  //            border: InputBorder.none,
+  //            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+  //          ),
+  //        ),
+  //      ),
+  //    ],
+  //  );
+  //}
+
   Widget _buildPortfolioSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,11 +452,21 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kBorder),
+            // Toggle border color based on error state
+            border: Border.all(
+              color: _portfolioError == null ? kBorder : Colors.redAccent,
+              width: _portfolioError == null ? 1 : 1.5,
+            ),
           ),
           child: TextField(
             controller: _portfolioController,
             style: const TextStyle(fontSize: 14, color: kTextPrimary),
+            onChanged: (value) {
+              // Clear error the moment the user starts typing
+              if (_portfolioError != null) {
+                setState(() => _portfolioError = null);
+              }
+            },
             decoration: const InputDecoration(
               hintText: 'https://portfolio.com',
               hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
@@ -363,6 +476,15 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             ),
           ),
         ),
+        // Display the error message text
+        if (_portfolioError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              _portfolioError!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ),
       ],
     );
   }
@@ -373,10 +495,25 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       children: [
         _buildSectionLabel('Profile Skills', trailing: _buildAiVerifiedBadge()),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: _skills.map((s) => _buildSkillChip(s)).toList(),
-        ),
+
+        // ADD THIS LOADING CHECK:
+        if (_isExtractingSkills)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(10.0),
+              child: CircularProgressIndicator(strokeWidth: 2, color: kAiGreen),
+            ),
+          )
+        else if (_skills.isEmpty)
+          const Text(
+            "No skills extracted. Try uploading a different resume image.",
+            style: TextStyle(fontSize: 12, color: kTextSecondary),
+          )
+        else
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _skills.map((s) => _buildSkillChip(s)).toList(),
+          ),
       ],
     );
   }
@@ -440,12 +577,18 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Widget _buildAiDraftBadge() {
     return GestureDetector(
-      onTap: _handleAiDraft,
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.auto_awesome_rounded, size: 14, color: kAiPurple),
-        SizedBox(width: 4),
-        Text('AI DRAFT',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+      onTap: _isDrafting ? null : _handleAiDraft,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (_isDrafting)
+          const SizedBox(
+            width: 14, height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: kAiPurple),
+          )
+        else
+          const Icon(Icons.auto_awesome_rounded, size: 14, color: kAiPurple),
+        const SizedBox(width: 4),
+        Text(_isDrafting ? 'GENERATING...' : 'AI DRAFT',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                 color: kAiPurple, letterSpacing: 0.3)),
       ]),
     );

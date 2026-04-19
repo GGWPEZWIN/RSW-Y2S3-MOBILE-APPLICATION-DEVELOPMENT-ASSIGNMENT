@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
+import '../JobApplication/ApplicationServices/C-B-F_Machine_Learning.dart';
 import '../JobApplication/ApplicationUI/job_details_screen.dart';
-import '../JobApplication/ApplicationServices/apply_job_service.dart';
 import '../JobApplication/ApplicationUI/jobseeker_notification_page.dart';
 import '../Widgets/nav_bar_widget.dart';
 import 'AI_Matching.dart';
@@ -23,7 +23,13 @@ class _HomePageState extends State<HomePage> {
   String _selectedTab      = 'All';
   String _selectedCategory = 'All Jobs';
   Set<String> _appliedJobs = {};
-  Set<String> _savedJobs   = {}; // ✅ track saved job IDs
+  Set<String> _savedJobs   = {};
+
+  // ── Content-based filtering ML ───────────────────────────────────────────
+  final RecommendationService _recommendationService =
+  RecommendationService('AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0');
+  List<JobRecommendation>? _aiRecommendations;
+  bool _isAiLoading = false;
 
   static const Color _blue = Color(0xFF3B52E8);
 
@@ -35,7 +41,48 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadAppliedJobs();
-    _loadSavedJobs(); // ✅ load saved on init
+    _loadSavedJobs();
+    _fetchAiRecommendations();
+  }
+
+  // ── Fetch AI recommendations ─────────────────────────────────────────────
+  Future<void> _fetchAiRecommendations() async {
+    if (!mounted) return;
+    setState(() => _isAiLoading = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 1. Get user data (including resume base64)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final userData = userDoc.data() ?? {};
+
+      // 2. Get all active jobs
+      final jobsSnap =
+      await FirebaseFirestore.instance.collection('jobs').get();
+      final allJobs =
+      jobsSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+
+      // 3. Run AI pipeline
+      final results = await _recommendationService.recommendJobs(
+        userData: userData,
+        allJobs: allJobs,
+      );
+
+      if (mounted) {
+        setState(() {
+          _aiRecommendations = results;
+          _isAiLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("AI Recommendation Error: $e");
+      if (mounted) setState(() => _isAiLoading = false);
+    }
   }
 
   // ── Load applied jobs ────────────────────────────────────────────────────
@@ -53,7 +100,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ── Load saved jobs from subcollection ───────────────────────────────────
+  // ── Load saved jobs ──────────────────────────────────────────────────────
   Future<void> _loadSavedJobs() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -70,10 +117,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ── Toggle save / unsave ─────────────────────────────────────────────────
-  // Saves ALL job fields needed by SavedJobsScreen + InterviewPractice
   Future<void> _toggleSave(Job job, Map<String, dynamic> fullData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    if (job.id == null || job.id!.isEmpty) return;
 
     final ref = FirebaseFirestore.instance
         .collection('users')
@@ -82,7 +129,6 @@ class _HomePageState extends State<HomePage> {
         .doc(job.id);
 
     if (_savedJobs.contains(job.id)) {
-      // ── Unsave ───────────────────────────────────────────────────────────
       await ref.delete();
       if (mounted) setState(() => _savedJobs.remove(job.id));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,24 +138,20 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } else {
-      // ── Save — store FULL job data so interview practice can use it ──────
       await ref.set({
-        // Basic display fields
-        'jobId':     job.id,
-        'jobTitle':  job.title,
-        'company':   job.company,
-        'location':  job.location,
-        'workType':  job.workType,
-        'workplace': job.workplace,
-        'salary':    job.salary,
-        // ✅ Rich fields for interview question generation
+        'jobId':           job.id,
+        'jobTitle':        job.title,
+        'company':         job.company,
+        'location':        job.location,
+        'workType':        job.workType,
+        'workplace':       job.workplace,
+        'salary':          job.salary,
         'description':     fullData['description']     ?? '',
         'requirements':    fullData['requirements']    ?? '',
         'benefits':        fullData['benefits']        ?? '',
         'experienceLevel': fullData['experienceLevel'] ?? '',
         'educationLevel':  fullData['educationLevel']  ?? '',
-        // Metadata
-        'savedAt': FieldValue.serverTimestamp(),
+        'savedAt':         FieldValue.serverTimestamp(),
       });
       if (mounted) setState(() => _savedJobs.add(job.id!));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,6 +164,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
   String _parseApplicants(dynamic raw) {
     if (raw == null) return '0 applied';
     if (raw is int) return '$raw applied';
@@ -162,6 +205,7 @@ class _HomePageState extends State<HomePage> {
     return 'Just now';
   }
 
+  // ── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -242,7 +286,8 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   if (unread > 0)
                                     Positioned(
-                                      right: 8, top: 8,
+                                      right: 8,
+                                      top: 8,
                                       child: Container(
                                         padding: const EdgeInsets.all(4),
                                         decoration: const BoxDecoration(
@@ -269,7 +314,8 @@ class _HomePageState extends State<HomePage> {
                           ),
                           Image.asset(
                             'assets/icons/homedeco.png',
-                            width: 80, height: 80,
+                            width: 80,
+                            height: 80,
                             fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) =>
                             const SizedBox(width: 80, height: 80),
@@ -288,8 +334,8 @@ class _HomePageState extends State<HomePage> {
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Search for jobs ......',
-                        hintStyle: TextStyle(
-                            color: Colors.grey[500], fontSize: 14),
+                        hintStyle:
+                        TextStyle(color: Colors.grey[500], fontSize: 14),
                         suffixIcon: Icon(Icons.search,
                             color: Colors.grey[500], size: 22),
                         border: InputBorder.none,
@@ -309,7 +355,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     const SizedBox(height: 20),
 
-                    // Recommendations + tabs
+                    // ── Recommendations header + tabs ─────────────────────
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
@@ -360,10 +406,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // How it works card
+                    // ── "How it works" info card ──────────────────────────
                     Padding(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -415,32 +460,28 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Category chips
+                    // ── Category chips ────────────────────────────────────
                     SizedBox(
                       height: 38,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20),
+                        padding:
+                        const EdgeInsets.symmetric(horizontal: 20),
                         itemCount: _categories.length,
                         itemBuilder: (_, i) {
                           final cat = _categories[i];
                           final active = _selectedCategory == cat;
                           return GestureDetector(
-                            onTap: () => setState(
-                                    () => _selectedCategory = cat),
+                            onTap: () =>
+                                setState(() => _selectedCategory = cat),
                             child: AnimatedContainer(
-                              duration:
-                              const Duration(milliseconds: 150),
-                              margin:
-                              const EdgeInsets.only(right: 8),
+                              duration: const Duration(milliseconds: 150),
+                              margin: const EdgeInsets.only(right: 8),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 18, vertical: 8),
                               decoration: BoxDecoration(
-                                color:
-                                active ? _blue : Colors.white,
-                                borderRadius:
-                                BorderRadius.circular(20),
+                                color: active ? _blue : Colors.white,
+                                borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                     color: active
                                         ? _blue
@@ -461,102 +502,11 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Job cards from Firestore
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('jobs')
-                          .orderBy('createdAt', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40),
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
+                    // ── ✅ INTEGRATED: Switch between All Jobs & AI tab ───
+                    _selectedTab == 'New to you'
+                        ? _buildAiSection()
+                        : _buildAllJobsStream(),
 
-                        final now = DateTime.now();
-                        final docs =
-                        snapshot.data!.docs.where((doc) {
-                          final d =
-                          doc.data() as Map<String, dynamic>;
-                          final pub =
-                          (d['publishDate'] as Timestamp?)
-                              ?.toDate();
-                          if (pub != null && pub.isAfter(now)) {
-                            return false;
-                          }
-                          final exp =
-                          (d['expiryDate'] as Timestamp?)
-                              ?.toDate();
-                          if (exp != null && exp.isBefore(now)) {
-                            return false;
-                          }
-                          return true;
-                        }).toList();
-
-                        if (docs.isEmpty) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40),
-                              child: Text('No jobs available yet.'),
-                            ),
-                          );
-                        }
-
-                        return ListView.builder(
-                          shrinkWrap: true,
-                          physics:
-                          const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20),
-                          itemCount: docs.length,
-                          itemBuilder: (context, index) {
-                            final doc  = docs[index];
-                            final data =
-                            doc.data() as Map<String, dynamic>;
-
-                            final job = Job(
-                              id:        doc.id,
-                              title:     data['title']     ?? 'Untitled',
-                              companyId: data['companyId'] ?? '',
-                              company:   data['company']   ?? 'Company',
-                              location:  data['location']  ?? '',
-                              workType:  data['workType']  ?? 'Full-time',
-                              workplace: data['workplace'] ?? 'On-site',
-                              salary:    data['salary']    ?? 'Salary not specified',
-                              postedTime: data['postedTime'] ?? '',
-                              applicants: _parseApplicants(
-                                  data['applicants']),
-                              createdAt:
-                              (data['createdAt'] as Timestamp?)
-                                  ?.toDate() ??
-                                  DateTime.now(),
-                            );
-
-                            final benefits =
-                            (data['benefits'] ?? '') as String;
-                            final benefitLines = benefits
-                                .split('\n')
-                                .map((l) => l.trim())
-                                .where((l) => l.isNotEmpty)
-                                .take(3)
-                                .toList();
-
-                            final hasApplied =
-                            _appliedJobs.contains(job.id);
-                            final isSaved =
-                            _savedJobs.contains(job.id);
-
-                            return _jobCard(context, job,
-                                benefitLines, hasApplied, isSaved,
-                                data); // ✅ pass full data for saving
-                          },
-                        );
-                      },
-                    ),
                     const SizedBox(height: 30),
                   ],
                 ),
@@ -572,16 +522,14 @@ class _HomePageState extends State<HomePage> {
           if (index == 1) {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const SavedJobsScreen()),
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
             ).then((_) => _loadSavedJobs());
             return;
           }
           if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const AppliedJobsScreen()),
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
             ).then((_) => _loadAppliedJobs());
             return;
           }
@@ -597,13 +545,260 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── ✅ NEW: AI section with loading + empty states ────────────────────────
+  Widget _buildAiSection() {
+    if (_isAiLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 60),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: _blue),
+              SizedBox(height: 16),
+              Text(
+                'Analysing your profile...',
+                style: TextStyle(
+                  color: Color(0xFF555555),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Finding your best matches',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_aiRecommendations == null || _aiRecommendations!.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.psychology_outlined,
+                  size: 56, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              const Text(
+                'No AI matches found yet',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Complete your profile and upload your resume to get personalised job recommendations.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _buildAiList();
+  }
+
+  // ── ✅ NEW: Extracted Firestore stream into its own method ────────────────
+  Widget _buildAllJobsStream() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('jobs')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final now = DateTime.now();
+        final docs = snapshot.data!.docs.where((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+
+          final pub = (d['publishDate'] as Timestamp?)?.toDate();
+          if (pub != null && pub.isAfter(now)) return false;
+
+          final exp = (d['expiryDate'] as Timestamp?)?.toDate();
+          if (exp != null && exp.isBefore(now)) return false;
+
+          // ── Category filter ──────────────────────────────────────────
+          if (_selectedCategory != 'All Jobs') {
+            final category = (d['category'] ?? '').toString().toLowerCase();
+            if (!category.contains(_selectedCategory.toLowerCase())) {
+              return false;
+            }
+          }
+
+          return true;
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Text('No jobs available yet.'),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final doc  = docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+
+            final job = Job(
+              id:         doc.id,
+              title:      data['title']     ?? 'Untitled',
+              companyId:  data['companyId'] ?? '',
+              company:    data['company']   ?? 'Company',
+              location:   data['location']  ?? '',
+              workType:   data['workType']  ?? 'Full-time',
+              workplace:  data['workplace'] ?? 'On-site',
+              salary:     data['salary']    ?? 'Salary not specified',
+              postedTime: data['postedTime'] ?? '',
+              applicants: _parseApplicants(data['applicants']),
+              createdAt:  (data['createdAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+            );
+
+            final benefits = (data['benefits'] ?? '') as String;
+            final benefitLines = benefits
+                .split('\n')
+                .map((l) => l.trim())
+                .where((l) => l.isNotEmpty)
+                .take(3)
+                .toList();
+
+            final hasApplied = _appliedJobs.contains(job.id);
+            final isSaved    = _savedJobs.contains(job.id);
+
+            return _jobCard(
+                context, job, benefitLines, hasApplied, isSaved, data);
+          },
+        );
+      },
+    );
+  }
+
+  // ── ✅ FIXED: AI list now shown only when tab is "New to you" ─────────────
+  Widget _buildAiList() {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemCount: _aiRecommendations!.length,
+      itemBuilder: (context, index) {
+        final rec  = _aiRecommendations![index];
+        final data = rec.jobData;
+
+        final job = Job(
+          id:         data['id'],
+          title:      data['title']     ?? 'Untitled',
+          companyId:  data['companyId'] ?? '',
+          company:    data['company']   ?? 'Company',
+          location:   data['location']  ?? '',
+          workType:   data['workType']  ?? 'Full-time',
+          workplace:  data['workplace'] ?? 'On-site',
+          salary:     data['salary']    ?? 'N/A',
+          postedTime: '',
+          applicants: '',
+          createdAt:  (data['createdAt'] as Timestamp?)?.toDate() ??
+              DateTime.now(),
+        );
+
+        final matchPercent =
+        (rec.similarityScore * 100).toStringAsFixed(0);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // ── Match score badge ────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _matchGradient(rec.similarityScore),
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: _matchGradient(rec.similarityScore)
+                        .first
+                        .withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.auto_awesome_rounded,
+                      size: 11, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$matchPercent% Match',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _jobCard(
+              context,
+              job,
+              [],
+              _appliedJobs.contains(job.id),
+              _savedJobs.contains(job.id),
+              data,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Match badge gradient based on score ──────────────────────────────────
+  List<Color> _matchGradient(double score) {
+    if (score >= 0.75) {
+      return [const Color(0xFF16A34A), const Color(0xFF22C55E)]; // green
+    } else if (score >= 0.5) {
+      return [const Color(0xFF2563EB), const Color(0xFF3B82F6)]; // blue
+    } else {
+      return [const Color(0xFFCA8A04), const Color(0xFFEAB308)]; // amber
+    }
+  }
+
+  // ── Job card ─────────────────────────────────────────────────────────────
   Widget _jobCard(
       BuildContext context,
       Job job,
       List<String> benefits,
       bool hasApplied,
       bool isSaved,
-      Map<String, dynamic> fullData, // ✅ needed for saving rich fields
+      Map<String, dynamic> fullData,
       ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -625,13 +820,12 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 8),
                   _tag(job.workplace),
                   const Spacer(),
-
-                  // ✅ FIXED: bookmark with onTap to save/unsave
                   GestureDetector(
                     onTap: () => _toggleSave(job, fullData),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      width: 34, height: 34,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: isSaved
                             ? const Color(0xFFF5C842)
@@ -642,9 +836,8 @@ class _HomePageState extends State<HomePage> {
                         isSaved
                             ? Icons.bookmark_rounded
                             : Icons.bookmark_border_rounded,
-                        color: isSaved
-                            ? const Color(0xFF1A1A2E)
-                            : Colors.white,
+                        color:
+                        isSaved ? const Color(0xFF1A1A2E) : Colors.white,
                         size: 18,
                       ),
                     ),
@@ -655,7 +848,8 @@ class _HomePageState extends State<HomePage> {
                 // Company logo + title
                 Row(children: [
                   Container(
-                    width: 44, height: 44,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -685,8 +879,7 @@ class _HomePageState extends State<HomePage> {
                                 fontWeight: FontWeight.bold)),
                         Text(job.company,
                             style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13)),
+                                color: Colors.white70, fontSize: 13)),
                       ],
                     ),
                   ),
@@ -719,24 +912,20 @@ class _HomePageState extends State<HomePage> {
                 if (benefits.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   ...benefits.map((b) {
-                    final text = b.startsWith('•')
-                        ? b.substring(1).trim()
-                        : b;
+                    final text =
+                    b.startsWith('•') ? b.substring(1).trim() : b;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Row(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('• ',
                               style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12)),
+                                  color: Colors.white70, fontSize: 12)),
                           Expanded(
                             child: Text(text,
                                 style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12)),
+                                    color: Colors.white70, fontSize: 12)),
                           ),
                         ],
                       ),
@@ -749,8 +938,8 @@ class _HomePageState extends State<HomePage> {
 
           // Bottom strip
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 12),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
               borderRadius: const BorderRadius.only(
@@ -759,8 +948,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             child: Row(children: [
-              const Icon(Icons.access_time,
-                  size: 13, color: Colors.white60),
+              const Icon(Icons.access_time, size: 13, color: Colors.white60),
               const SizedBox(width: 4),
               Text(_getTimeAgo(job.createdAt),
                   style: const TextStyle(
@@ -781,6 +969,7 @@ class _HomePageState extends State<HomePage> {
                         builder: (_) => JobDetailsPage(job: job)),
                   );
                   _loadAppliedJobs();
+                  _loadSavedJobs();
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -796,9 +985,7 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: hasApplied
-                          ? Colors.white
-                          : Colors.black,
+                      color: hasApplied ? Colors.white : Colors.black,
                     ),
                   ),
                 ),
@@ -810,6 +997,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── Tag chip ─────────────────────────────────────────────────────────────
   Widget _tag(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),

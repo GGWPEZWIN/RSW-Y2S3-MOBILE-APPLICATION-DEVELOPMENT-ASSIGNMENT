@@ -1,42 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../services/fcm_service.dart';
+import '../../services/notification_service.dart';
 
-// ── Local notifier (reused pattern) ──────────────────────────────────────────
-class _LocalNotifier {
-  static final FlutterLocalNotificationsPlugin _plugin =
-  FlutterLocalNotificationsPlugin();
-  static bool _ready = false;
-
-  static Future<void> _init() async {
-    if (_ready) return;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios     = DarwinInitializationSettings();
-    await _plugin.initialize(
-        const InitializationSettings(android: android, iOS: ios));
-    _ready = true;
-  }
-
-  static Future<void> show(String title, String body) async {
-    await _init();
-    await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title, body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'interview_channel', 'Interview Notifications',
-          importance: Importance.max, priority: Priority.high,
-          color: Color(0xFF2563EB), icon: '@mipmap/ic_launcher',
-        ),
-        iOS: DarwinNotificationDetails(
-            presentAlert: true, presentBadge: true, presentSound: true),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 class JobseekerInterviewPage extends StatelessWidget {
   const JobseekerInterviewPage({super.key});
 
@@ -62,7 +29,6 @@ class JobseekerInterviewPage extends StatelessWidget {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Fetch all interviews where candidateUserId == logged-in user
         stream: FirebaseFirestore.instance
             .collection('interviews')
             .where('candidateUserId', isEqualTo: _uid)
@@ -75,16 +41,14 @@ class JobseekerInterviewPage extends StatelessWidget {
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return _emptyState();
           }
-          final docs = snap.data!.docs;
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
+            itemCount: snap.data!.docs.length,
             itemBuilder: (context, i) {
-              final doc  = docs[i];
-              final data = doc.data() as Map<String, dynamic>;
+              final doc  = snap.data!.docs[i];
               return _InterviewCard(
                 interviewId: doc.id,
-                data:        data,
+                data:        doc.data() as Map<String, dynamic>,
               );
             },
           );
@@ -93,38 +57,38 @@ class JobseekerInterviewPage extends StatelessWidget {
     );
   }
 
-  Widget _emptyState() {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color: kBlue.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(Icons.event_available_rounded,
-              size: 44, color: kBlue),
-        ),
-        const SizedBox(height: 16),
-        const Text('No interviews yet',
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
-        const SizedBox(height: 6),
-        const Text('Scheduled interviews will appear here.',
-            style: TextStyle(fontSize: 13, color: kSubtext)),
-      ]),
-    );
-  }
+  Widget _emptyState() => Center(
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Container(
+        width: 80, height: 80,
+        decoration: BoxDecoration(
+            color: kBlue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+        child: const Icon(Icons.event_available_rounded, size: 44, color: kBlue),
+      ),
+      const SizedBox(height: 16),
+      const Text('No interviews yet',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
+      const SizedBox(height: 6),
+      const Text('Scheduled interviews will appear here.',
+          style: TextStyle(fontSize: 13, color: kSubtext)),
+    ]),
+  );
 }
 
-// ── Interview Card ─────────────────────────────────────────────────────────────
-
-class _InterviewCard extends StatelessWidget {
-  final String interviewId; // same as applicationId
+// ══════════════════════════════════════════════════════════════════════════════
+// INTERVIEW CARD
+// ══════════════════════════════════════════════════════════════════════════════
+class _InterviewCard extends StatefulWidget {
+  final String interviewId;
   final Map<String, dynamic> data;
 
   const _InterviewCard({required this.interviewId, required this.data});
 
+  @override
+  State<_InterviewCard> createState() => _InterviewCardState();
+}
+
+class _InterviewCardState extends State<_InterviewCard> {
   static const Color kBlue   = Color(0xFF2563EB);
   static const Color kText   = Color(0xFF0F172A);
   static const Color kSubtext= Color(0xFF64748B);
@@ -132,23 +96,27 @@ class _InterviewCard extends StatelessWidget {
   static const Color kGreen  = Color(0xFF22C55E);
   static const Color kRed    = Color(0xFFEF4444);
   static const Color kOrange = Color(0xFFF59E0B);
-  static const Color kGrey   = Color(0xFF94A3B8);
+  static const Color kPurple = Color(0xFF8B5CF6);
 
-  Color _statusColor(String status) {
-    switch (status) {
+  bool _isBusy = false;
+
+  Color _statusColor(String s) {
+    switch (s) {
       case 'scheduled':          return kGreen;
       case 'cancelled':          return kRed;
       case 'reschedule_pending': return kOrange;
+      case 'reschedule_proposed':return kPurple;
       default:                   return kBlue;
     }
   }
 
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'scheduled':          return 'Scheduled';
-      case 'cancelled':          return 'Cancelled';
-      case 'reschedule_pending': return 'Reschedule Pending';
-      default:                   return status;
+  String _statusLabel(String s) {
+    switch (s) {
+      case 'scheduled':           return 'Scheduled';
+      case 'cancelled':           return 'Cancelled';
+      case 'reschedule_pending':  return 'Reschedule Pending';
+      case 'reschedule_proposed': return 'New Time Proposed';
+      default:                    return s;
     }
   }
 
@@ -160,20 +128,426 @@ class _InterviewCard extends StatelessWidget {
     return '${dt.day}/${dt.month}/${dt.year}  $h:$m';
   }
 
+  // ── Always fetch employerId fresh from the interview doc ──────────────────
+  Future<String> _getEmployerId() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('interviews').doc(widget.interviewId).get();
+    return (doc.data()?['employerId'] as String?) ?? '';
+  }
+
+  // ── Write employer_notifications + send push ──────────────────────────────
+  Future<void> _notifyEmployer({
+    required String employerId,
+    required String jobTitle,
+    required String type,
+    required String title,
+    required String body,
+    String? rescheduleReason,
+  }) async {
+    if (employerId.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final db  = FirebaseFirestore.instance;
+
+    // 1. In-app notification doc (read by NotificationService listener on employer's device)
+    final notifData = <String, dynamic>{
+      'employerId':      employerId,
+      'applicationId':   widget.interviewId,
+      'jobId':           widget.data['jobId'] ?? '',
+      'candidateUserId': uid,
+      'candidateName':   widget.data['candidateName'] ??
+          FirebaseAuth.instance.currentUser?.displayName ?? '',
+      'jobTitle':        jobTitle,
+      'title':           title,
+      'body':            body,
+      'type':            type,
+      'status':          'unread',
+      'isRead':          false,
+      'createdAt':       FieldValue.serverTimestamp(),
+    };
+    if (rescheduleReason != null) notifData['rescheduleReason'] = rescheduleReason;
+    await db.collection('employer_notifications').add(notifData);
+
+    // 2. Push notification → queued for Cloud Function / local fallback
+    await FCMService().sendPushNotification(
+      recipientId: employerId,
+      title:       title,
+      body:        body,
+      data: {
+        'type':          type,
+        'applicationId': widget.interviewId,
+        'jobId':         widget.data['jobId'] ?? '',
+      },
+    );
+  }
+
+  // ── CANCEL ────────────────────────────────────────────────────────────────
+  Future<void> _confirmCancel(String jobTitle) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Interview?'),
+        content: Text('Cancel your interview for $jobTitle?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep it')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: kRed),
+            child: const Text('Cancel Interview',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final db  = FirebaseFirestore.instance;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+      // 1. Update Firestore
+      final batch = db.batch();
+      batch.update(db.collection('interviews').doc(widget.interviewId),
+          {'status': 'cancelled', 'updatedAt': FieldValue.serverTimestamp()});
+      batch.update(db.collection('applications').doc(widget.interviewId),
+          {'status': 'shortlisted', 'updatedAt': FieldValue.serverTimestamp()});
+      await batch.commit();
+
+      // 2. Self notification (jobseeker's own inbox)
+      await db.collection('users').doc(uid).collection('notifications').add({
+        'applicationId': widget.interviewId,
+        'jobId':         widget.data['jobId'] ?? '',
+        'title':         '❌ Interview Cancelled — $jobTitle',
+        'body':          'You cancelled your interview for $jobTitle.',
+        'type':          'interview_cancelled',
+        'isRead':        false,
+        'createdAt':     FieldValue.serverTimestamp(),
+      });
+
+      // 3. Notify employer (in-app + push) — fetch employerId fresh
+      final employerId = await _getEmployerId();
+      await _notifyEmployer(
+        employerId: employerId,
+        jobTitle:   jobTitle,
+        type:       'interview_cancelled',
+        title:      '❌ Interview Cancelled — $jobTitle',
+        body:       'The candidate has cancelled their interview for $jobTitle.',
+      );
+
+      // 4. Local banner on THIS device
+      await NotificationService().showNotification(
+        title: '❌ Interview Cancelled — $jobTitle',
+        body:  'You cancelled your interview for $jobTitle.',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Interview cancelled. Employer has been notified.'),
+          backgroundColor: kRed,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: kRed));
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ── REQUEST RESCHEDULE ────────────────────────────────────────────────────
+  Future<void> _requestReschedule(String jobTitle) async {
+    final reasonCtrl = TextEditingController();
+    final submitted  = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.schedule_rounded, color: Color(0xFFF59E0B), size: 22),
+          SizedBox(width: 8),
+          Flexible(child: Text('Request Reschedule')),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            'Tell the employer why you need to reschedule your interview for $jobTitle.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: reasonCtrl,
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: 'e.g. I have a prior commitment on that day...',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFADBAC7)),
+              filled: true, fillColor: const Color(0xFFF5F6FA),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                  const BorderSide(color: Color(0xFFF59E0B), width: 1.5)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF64748B)))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            child: const Text('Send Request',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (submitted != true || !mounted) return;
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+    if (reason.isEmpty) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final db  = FirebaseFirestore.instance;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+      // 1. Update interview doc only — do NOT change applications.status
+      //    so the employer's interview list remains intact
+      await db.collection('interviews').doc(widget.interviewId).update({
+        'status':            'reschedule_pending',
+        'rescheduleReason':  reason,
+        'rescheduleBy':      'candidate',
+        'pendingAcceptance': false,
+        'updatedAt':         FieldValue.serverTimestamp(),
+      });
+
+      // 2. Notify employer (in-app + push) — always fetch employerId fresh
+      final employerId = await _getEmployerId();
+      await _notifyEmployer(
+        employerId:      employerId,
+        jobTitle:        jobTitle,
+        type:            'reschedule_request',
+        title:           '🔄 Reschedule Request — $jobTitle',
+        body:            'A candidate has requested to reschedule their interview for $jobTitle.',
+        rescheduleReason: reason,
+      );
+
+      // 3. Self notification (jobseeker's inbox)
+      await db.collection('users').doc(uid).collection('notifications').add({
+        'applicationId': widget.interviewId,
+        'jobId':         widget.data['jobId'] ?? '',
+        'title':         '🔄 Reschedule Requested — $jobTitle',
+        'body':          'Your reschedule request has been sent. Waiting for the employer to respond.',
+        'type':          'reschedule_request',
+        'isRead':        false,
+        'createdAt':     FieldValue.serverTimestamp(),
+      });
+
+      // 4. Local banner on THIS device
+      await NotificationService().showNotification(
+        title: '🔄 Reschedule Requested',
+        body:  'Your reschedule request has been sent to the employer.',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Reschedule request sent to employer.'),
+          backgroundColor: kOrange,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: kRed));
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ── ACCEPT employer's proposed new time ───────────────────────────────────
+  Future<void> _acceptReschedule(String jobTitle) async {
+    setState(() => _isBusy = true);
+    try {
+      final db  = FirebaseFirestore.instance;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+      await db.collection('interviews').doc(widget.interviewId).update({
+        'status':            'scheduled',
+        'pendingAcceptance': false,
+        'rescheduleReason':  FieldValue.delete(),
+        'rescheduleBy':      FieldValue.delete(),
+        'updatedAt':         FieldValue.serverTimestamp(),
+      });
+
+      final employerId = await _getEmployerId();
+      await _notifyEmployer(
+        employerId: employerId,
+        jobTitle:   jobTitle,
+        type:       'reschedule_accepted',
+        title:      '✅ Reschedule Accepted — $jobTitle',
+        body:       'The candidate has accepted the new interview time for $jobTitle.',
+      );
+
+      await NotificationService().showNotification(
+        title: '✅ New Time Confirmed',
+        body:  'You accepted the new interview time for $jobTitle.',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('New interview time accepted ✓'),
+          backgroundColor: kGreen,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: kRed));
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ── DECLINE employer's proposed new time (with reason) ────────────────────
+  Future<void> _declineReschedule(String jobTitle) async {
+    final reasonCtrl = TextEditingController();
+    final submitted  = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.cancel_outlined, color: kRed, size: 22),
+          SizedBox(width: 8),
+          Flexible(child: Text('Decline New Time')),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            'Tell the employer why this time does not work for you.',
+            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: reasonCtrl,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'e.g. I am also unavailable on that date...',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFADBAC7)),
+              filled: true, fillColor: const Color(0xFFF5F6FA),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: kRed, width: 1.5)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Back',
+                  style: TextStyle(color: Color(0xFF64748B)))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: kRed,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
+            child: const Text('Decline & Notify',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (submitted != true || !mounted) return;
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+    if (reason.isEmpty) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final db  = FirebaseFirestore.instance;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+      // Put ball back in employer's court
+      await db.collection('interviews').doc(widget.interviewId).update({
+        'status':            'reschedule_pending',
+        'rescheduleReason':  reason,
+        'rescheduleBy':      'candidate',
+        'pendingAcceptance': false,
+        'updatedAt':         FieldValue.serverTimestamp(),
+      });
+
+      final employerId = await _getEmployerId();
+      await _notifyEmployer(
+        employerId:       employerId,
+        jobTitle:         jobTitle,
+        type:             'reschedule_request',
+        title:            '❌ New Time Declined — $jobTitle',
+        body:             'The candidate declined your proposed time and sent a new reschedule request.',
+        rescheduleReason: reason,
+      );
+
+      await NotificationService().showNotification(
+        title: '❌ Time Declined',
+        body:  'You declined the proposed time. Waiting for employer to suggest another.',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Decline sent — waiting for employer to propose another time.'),
+          backgroundColor: kOrange,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: kRed));
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ── BUILD ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final jobId      = data['jobId']           as String? ?? '';
-    final status     = data['status']          as String? ?? 'scheduled';
-    final locType    = data['locationType']    as String? ?? '';
-    final locDetail  = data['locationDetail']  as String? ?? '';
-    final notes      = data['notes']           as String? ?? '';
-    final ts         = data['interviewTimestamp'] as Timestamp?;
+    final jobId         = widget.data['jobId']              as String?   ?? '';
+    final status        = widget.data['status']             as String?   ?? 'scheduled';
+    final locType       = widget.data['locationType']       as String?   ?? '';
+    final locDetail     = widget.data['locationDetail']     as String?   ?? '';
+    final notes         = widget.data['notes']              as String?   ?? '';
+    final ts            = widget.data['interviewTimestamp'] as Timestamp?;
+    final reschedReason = widget.data['rescheduleReason']   as String?   ?? '';
+    final pendingAcc    = widget.data['pendingAcceptance']  as bool?     ?? false;
 
-    final isCancelled = status == 'cancelled';
-    final statusColor = _statusColor(status);
+    final isCancelled       = status == 'cancelled';
+    final isPendingCandidate = status == 'reschedule_pending' && !pendingAcc;
+    final isNewTimeProposed  = (status == 'reschedule_pending' && pendingAcc)
+        || status == 'reschedule_proposed';
+    final isScheduled        = status == 'scheduled';
+    final statusColor        = _statusColor(status);
 
     return FutureBuilder<DocumentSnapshot>(
-      // Join jobs/{jobId} to get title
       future: FirebaseFirestore.instance.collection('jobs').doc(jobId).get(),
       builder: (context, jobSnap) {
         final jobData  = jobSnap.hasData && jobSnap.data!.exists
@@ -187,29 +561,33 @@ class _InterviewCard extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isCancelled ? kRed.withOpacity(0.3) : kBorder,
-              width: isCancelled ? 1.5 : 1,
+              color: isCancelled
+                  ? kRed.withOpacity(0.3)
+                  : isNewTimeProposed
+                  ? kPurple.withOpacity(0.4)
+                  : isPendingCandidate
+                  ? kOrange.withOpacity(0.4)
+                  : kBorder,
+              width: (isCancelled || isNewTimeProposed || isPendingCandidate) ? 1.5 : 1,
             ),
             boxShadow: [BoxShadow(
                 color: Colors.black.withOpacity(0.04),
                 blurRadius: 10, offset: const Offset(0, 3))],
           ),
           child: Column(children: [
+
+            // ── Card body ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Title + status badge
+
+                // Job title + status badge
                 Row(children: [
-                  Expanded(
-                    child: Text(jobTitle,
-                        style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: kText)),
-                  ),
+                  Expanded(child: Text(jobTitle,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold, color: kText))),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -217,16 +595,13 @@ class _InterviewCard extends StatelessWidget {
                     ),
                     child: Text(_statusLabel(status),
                         style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor)),
+                            fontSize: 11, fontWeight: FontWeight.bold, color: statusColor)),
                   ),
                 ]),
                 const SizedBox(height: 12),
 
-                // Date + time
-                _infoRow(Icons.calendar_today_rounded,
-                    _formatTs(ts), kBlue),
+                // Date/time
+                _infoRow(Icons.calendar_today_rounded, _formatTs(ts), kBlue),
                 const SizedBox(height: 6),
 
                 // Location
@@ -244,36 +619,82 @@ class _InterviewCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   _infoRow(Icons.notes_rounded, notes, kSubtext),
                 ],
+
+                // ── Status banners ──────────────────────────────────────
+
+                // Awaiting employer response
+                if (isPendingCandidate) ...[
+                  const SizedBox(height: 12),
+                  _banner(
+                    color: kOrange, bgColor: const Color(0xFFFFFBEB),
+                    icon: Icons.schedule_rounded,
+                    text: 'Reschedule request sent. Waiting for employer to propose a new time.',
+                  ),
+                  if (reschedReason.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _reasonBox(reschedReason, kOrange),
+                  ],
+                ],
+
+                // New time proposed by employer — Accept / Decline
+                if (isNewTimeProposed) ...[
+                  const SizedBox(height: 12),
+                  _banner(
+                    color: kPurple, bgColor: const Color(0xFFF5F3FF),
+                    icon: Icons.event_available_rounded,
+                    text: 'The employer has proposed a new interview time. Please accept or decline below.',
+                  ),
+                ],
+
+                // Cancelled
+                if (isCancelled) ...[
+                  const SizedBox(height: 12),
+                  _banner(
+                    color: kRed, bgColor: const Color(0xFFFEF2F2),
+                    icon: Icons.cancel_outlined,
+                    text: 'This interview has been cancelled.',
+                  ),
+                ],
               ]),
             ),
 
-            // Action strip — hidden if cancelled
-            if (!isCancelled) ...[
+            // ── Action buttons strip ─────────────────────────────────────
+            if (!isCancelled && !isPendingCandidate) ...[
               const Divider(height: 1, color: Color(0xFFE2E8F0)),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                child: Row(children: [
-                  // Cancel button
-                  Expanded(
-                    child: _ActionBtn(
-                      label: 'Cancel',
-                      icon:  Icons.cancel_outlined,
-                      color: kRed,
-                      onTap: () => _confirmCancel(context, jobTitle),
-                    ),
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: isNewTimeProposed
+                // New time proposed: Accept / Decline
+                    ? Row(children: [
+                  Expanded(child: _ActionBtn(
+                    label: 'Accept',
+                    icon:  Icons.check_circle_outline_rounded,
+                    color: kGreen,
+                    onTap: _isBusy ? null : () => _acceptReschedule(jobTitle),
+                  )),
                   const SizedBox(width: 10),
-                  // Request reschedule
-                  Expanded(
-                    flex: 2,
-                    child: _ActionBtn(
-                      label: 'Request Reschedule',
-                      icon:  Icons.schedule_rounded,
-                      color: kOrange,
-                      onTap: () => _requestReschedule(context, jobTitle),
-                    ),
-                  ),
+                  Expanded(child: _ActionBtn(
+                    label: 'Decline & Reason',
+                    icon:  Icons.cancel_outlined,
+                    color: kRed,
+                    onTap: _isBusy ? null : () => _declineReschedule(jobTitle),
+                  )),
+                ])
+                // Normal scheduled: Reschedule / Cancel
+                    : Row(children: [
+                  Expanded(child: _ActionBtn(
+                    label: 'Cancel',
+                    icon:  Icons.cancel_outlined,
+                    color: kRed,
+                    onTap: _isBusy ? null : () => _confirmCancel(jobTitle),
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(flex: 2, child: _ActionBtn(
+                    label: 'Request Reschedule',
+                    icon:  Icons.schedule_rounded,
+                    color: kOrange,
+                    onTap: _isBusy ? null : () => _requestReschedule(jobTitle),
+                  )),
                 ]),
               ),
             ],
@@ -283,297 +704,82 @@ class _InterviewCard extends StatelessWidget {
     );
   }
 
-  // ── Cancel ──────────────────────────────────────────────────────────────
+  Widget _infoRow(IconData icon, String text, Color color) => Row(children: [
+    Icon(icon, size: 15, color: color),
+    const SizedBox(width: 6),
+    Expanded(child: Text(text,
+        style: TextStyle(fontSize: 13, color: color),
+        overflow: TextOverflow.ellipsis)),
+  ]);
 
-  Future<void> _confirmCancel(BuildContext context, String jobTitle) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Interview?'),
-        content: Text(
-            'Are you sure you want to cancel your interview for $jobTitle?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep it'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: kRed),
-            child: const Text('Cancel Interview',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final db  = FirebaseFirestore.instance;
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-    final batch = db.batch();
-
-    // 1. Update interview status
-    batch.update(db.collection('interviews').doc(interviewId),
-        {'status': 'cancelled', 'updatedAt': FieldValue.serverTimestamp()});
-
-    // 2. Update application status back to 'shortlisted'
-    batch.update(db.collection('applications').doc(interviewId),
-        {'status': 'shortlisted', 'updatedAt': FieldValue.serverTimestamp()});
-
-    await batch.commit();
-
-    // 3. Write cancellation notification to jobseeker's own inbox
-    final notifTitle = '❌ Interview Cancelled — $jobTitle';
-    const notifBody  = 'You have cancelled your interview. '
-        'The employer has been notified.';
-
-    await db
-        .collection('users').doc(uid)
-        .collection('notifications')
-        .add({
-      'applicationId': interviewId,
-      'title':  notifTitle,
-      'body':   notifBody,
-      'type':   'interview_cancelled',
-      'isRead': false,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    // 4. Notify employer via employer_notifications
-    final interviewDoc = await db.collection('interviews').doc(interviewId).get();
-    final employerId   = interviewDoc.data()?['employerId'] as String? ?? '';
-    if (employerId.isNotEmpty) {
-      await db.collection('employer_notifications').add({
-        'employerId':    employerId,
-        'applicationId': interviewId,
-        'jobId':         data['jobId'] ?? '',
-        'candidateUserId': uid,
-        'title':  '❌ Interview Cancelled — $jobTitle',
-        'body':   'The candidate has cancelled their interview for $jobTitle.',
-        'type':   'interview_cancelled',
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    // 5. Local device notification
-    await _LocalNotifier.show(notifTitle, notifBody);
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Application cancelled.'),
-        backgroundColor: kRed,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  }
-
-  // ── Request reschedule ───────────────────────────────────────────────────
-
-  Future<void> _requestReschedule(
-      BuildContext context, String jobTitle) async {
-    final reasonCtrl = TextEditingController();
-
-    final submitted = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [
-          Icon(Icons.schedule_rounded, color: Color(0xFFF59E0B), size: 22),
-          SizedBox(width: 8),
-          Text('Request Reschedule'),
+  Widget _banner({
+    required Color color, required Color bgColor,
+    required IconData icon, required String text,
+  }) =>
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: bgColor, borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.35)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text,
+              style: TextStyle(fontSize: 12, color: color,
+                  fontWeight: FontWeight.w500, height: 1.4))),
         ]),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(
-            'Tell the employer why you need to reschedule your interview for $jobTitle.',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: reasonCtrl,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: 'e.g. I have a prior commitment on that day...',
-              hintStyle:
-              const TextStyle(fontSize: 13, color: Color(0xFFADBAC7)),
-              filled: true,
-              fillColor: const Color(0xFFF5F6FA),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                    color: Color(0xFFF59E0B), width: 1.5),
-              ),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B)),
-            child: const Text('Send Request',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (submitted != true) return;
-
-    final reason = reasonCtrl.text.trim();
-    if (reason.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Please provide a reason for rescheduling.'),
-          backgroundColor: Colors.orange,
-        ));
-      }
-      return;
-    }
-
-    final db  = FirebaseFirestore.instance;
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-    final batch = db.batch();
-
-    // 1. Update the Interview document status and reason
-    final interviewRef = db.collection('interviews').doc(interviewId);
-    batch.update(interviewRef, {
-      'status':            'reschedule_pending',
-      'rescheduleReason':  reason,
-      'rescheduleBy':      uid,
-      'updatedAt':         FieldValue.serverTimestamp(),
-    });
-
-    // 2. Update the Application document status
-    final appRef = db.collection('applications').doc(interviewId);
-    batch.update(appRef, {
-      'status':            'reschedule_pending',
-      'updatedAt':         FieldValue.serverTimestamp(),
-    });
-
-    try {
-      await batch.commit();
-
-      // 3. Notify employer
-      String employerId = data['employerId'] as String? ?? '';
-      if (employerId.isEmpty) {
-        final interviewDoc = await interviewRef.get();
-        employerId = interviewDoc.data()?['employerId'] as String? ?? '';
-      }
-
-      if (employerId.isNotEmpty) {
-        await db.collection('employer_notifications').add({
-          'employerId':      employerId,
-          'applicationId':   interviewId,
-          'jobId':           data['jobId'] ?? '',
-          'candidateUserId': uid,
-          'rescheduleReason': reason,
-          'title':  '🔄 Reschedule Request — $jobTitle',
-          'body':   'A candidate has requested to reschedule their interview for $jobTitle.',
-          'type':   'reschedule_request',
-          'isRead': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // 4. Record in user's own notifications
-      final notifTitle = '🔄 Reschedule Requested — $jobTitle';
-      final notifBody  = 'You requested to reschedule your interview. The employer has been notified.';
-      
-      await db.collection('users').doc(uid).collection('notifications').add({
-        'applicationId': interviewId,
-        'title':  notifTitle,
-        'body':   notifBody,
-        'type':   'reschedule_request',
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await _LocalNotifier.show(notifTitle, notifBody);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Reschedule request sent.'),
-          backgroundColor: kOrange,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ));
-      }
-    }
-  }
-
-  // ── UI helpers ─────────────────────────────────────────────────────────────
-
-  Widget _infoRow(IconData icon, String text, Color color) {
-    return Row(children: [
-      Icon(icon, size: 15, color: color),
+  Widget _reasonBox(String reason, Color color) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.25)),
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(Icons.chat_bubble_outline_rounded, size: 13, color: color),
       const SizedBox(width: 6),
-      Expanded(
-        child: Text(text,
-            style: TextStyle(fontSize: 13, color: color),
-            overflow: TextOverflow.ellipsis),
-      ),
-    ]);
-  }
+      Expanded(child: Text('"$reason"',
+          style: TextStyle(fontSize: 12, color: color,
+              fontStyle: FontStyle.italic, height: 1.4))),
+    ]),
+  );
 }
 
-// ── Action Button ─────────────────────────────────────────────────────────────
-
+// ── Small action button ───────────────────────────────────────────────────────
 class _ActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ActionBtn({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
+    required this.label, required this.icon,
+    required this.color, required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: color),
-                overflow: TextOverflow.ellipsis),
+      child: Opacity(
+        opacity: onTap == null ? 0.5 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.3)),
           ),
-        ]),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Flexible(child: Text(label,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                overflow: TextOverflow.ellipsis)),
+          ]),
+        ),
       ),
     );
   }

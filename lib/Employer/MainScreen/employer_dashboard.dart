@@ -9,6 +9,7 @@ import 'applicants_interview_screen.dart';
 import 'employer_profile_screen.dart';
 import '../MainScreen/applicants_list_screen.dart';
 import 'employer_notifications_page.dart';
+import '../../services/notification_service.dart'; // ✅ Add this
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 String _parseApplicants(dynamic raw) {
@@ -43,6 +44,11 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   static const Color _primaryBlue = Color(0xFF3B4FD8);
 
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   void _navigateToCreateJob() {
     Navigator.push(
