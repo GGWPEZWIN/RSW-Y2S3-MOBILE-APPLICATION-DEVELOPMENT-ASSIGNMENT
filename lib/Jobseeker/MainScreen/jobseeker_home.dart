@@ -85,17 +85,25 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ── Load applied jobs ────────────────────────────────────────────────────
   Future<void> _loadAppliedJobs() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
     final snap = await FirebaseFirestore.instance
         .collection('applications')
         .where('userId', isEqualTo: user.uid)
         .get();
+
     if (mounted) {
       setState(() {
-        _appliedJobs = snap.docs.map((d) => d['jobId'] as String).toSet();
+        // We filter the docs: Only include jobIds where the status is NOT 'withdrawn'
+        _appliedJobs = snap.docs
+            .where((doc) {
+          final data = doc.data();
+          return data['status'] != 'withdrawn';
+        })
+            .map((d) => d['jobId'] as String)
+            .toSet();
       });
     }
   }
@@ -962,7 +970,9 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.white60, fontSize: 12)),
               const Spacer(),
               GestureDetector(
-                onTap: () async {
+                onTap: hasApplied
+                    ? null // Disable tap if already applied and NOT withdrawn
+                    : () async {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -972,12 +982,12 @@ class _HomePageState extends State<HomePage> {
                   _loadSavedJobs();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                   decoration: BoxDecoration(
+                    // Change color based on current status
                     color: hasApplied
-                        ? const Color(0xFF2CB06A)
-                        : const Color(0xFFF0C040),
+                        ? const Color(0xFF2CB06A) // Green for active application
+                        : const Color(0xFFF0C040), // Yellow for "Apply" or "Re-apply"
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(

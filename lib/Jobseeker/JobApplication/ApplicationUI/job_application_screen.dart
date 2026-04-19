@@ -84,20 +84,21 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
-    final url = _portfolioController.text.trim();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
+    // URL Validation
+    final url = _portfolioController.text.trim();
     if (url.isNotEmpty && !Uri.tryParse(url)!.hasAbsolutePath) {
       setState(() => _portfolioError = 'Please enter a valid URL');
       return;
     }
 
+    // Form Validation
     if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Please upload a resume, write a cover letter, '
-                'and select at least one skill.',
-          ),
+          content: Text('Please upload a resume, write a cover letter, and select skills.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -106,33 +107,61 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     setState(() => _isSubmitting = true);
 
-    // submitApplicant now returns the real Firestore doc ID, or null on failure
-    final docId = await ApplicantService.submitApplicant(applicant);
-    final success = docId != null;
+    try {
+      final db = FirebaseFirestore.instance;
 
-    if (success) {
-      // Notify employer with the real Firestore applicationId
-      await _notifyEmployer(docId!);
-    }
+      // --- DUPLICATION CHECK ---
+      // Check if an application already exists for this user and this job
+      final existingQuery = await db.collection('applications')
+          .where('jobId', isEqualTo: widget.jobId)
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get();
 
-    setState(() => _isSubmitting = false);
+      String? finalDocId;
 
-    if (!mounted) return;
+      // Prepare the resume string (since applicant.resumePath is causing errors)
+      final String combinedResume = "$_resumeFileName:$_resumePath";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Application submitted successfully!'
-              : 'Submission failed. Please try again.',
-        ),
-        backgroundColor:
-        success ? const Color(0xFF0BA87E) : Colors.redAccent,
-      ),
-    );
+      if (existingQuery.docs.isNotEmpty) {
+        // UPDATE EXISTING: Reuse the document ID to prevent duplicate records
+        finalDocId = existingQuery.docs.first.id;
+        await db.collection('applications').doc(finalDocId).update({
+          'status': 'unprocessed',
+          'appliedAt': FieldValue.serverTimestamp(),
+          'resumePath': combinedResume, // Using the local combined string
+          'portfolioUrl': _portfolioController.text,
+          'coverLetter': _coverLetterController.text,
+          'skills': _skills,
+        });
+      } else {
+        // CREATE NEW: If no record exists, use your existing Service
+        finalDocId = await ApplicantService.submitApplicant(applicant);
+      }
 
-    if (success) {
-      Navigator.pop(context, true);
+      if (finalDocId != null) {
+        // Notify employer using the docId (works for both New and Updated docs)
+        await _notifyEmployer(finalDocId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Application submitted successfully!'),
+              backgroundColor: kAiGreen,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      debugPrint("Submission error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Submission failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 

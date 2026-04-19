@@ -236,9 +236,6 @@ class _ApplicationStatusScreenState extends State<ApplicationStatusScreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF135BEC), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                         icon: const Icon(Icons.edit_note_rounded, size: 20),
                         label: const Text('Edit Application', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                        //onPressed: () async {
-                        //  await Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateApplicationScreen(applicationId: widget.applicationId, applicationData: liveData)));
-                        //},
                         onPressed: _handleEditApplication,
                       ),
                     ),

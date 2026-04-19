@@ -286,7 +286,7 @@ class ProfilePage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Edit Profile',
-                      style: TextStyle(fontSize: 16)),
+                      style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
               ),
               const SizedBox(height: 12),

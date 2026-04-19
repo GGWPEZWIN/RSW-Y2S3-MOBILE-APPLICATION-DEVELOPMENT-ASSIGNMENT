@@ -52,6 +52,20 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     }
   }
 
+  static Future<bool> hasApplied(String jobId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('applications') // Or your specific collection name
+        .where('jobId', isEqualTo: jobId)
+        .where('userId', isEqualTo: user.uid)
+        .where('status', isNotEqualTo: 'withdrawn') // Add this filter
+        .get();
+
+    return snap.docs.isNotEmpty;
+  }
+
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -59,73 +73,81 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       return;
     }
 
-    final results = await Future.wait([
-      FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
-      ApplyJobService.hasApplied(widget.job.id!),
-      // Check if already saved
-      FirebaseFirestore.instance
+    try {
+      // 1. Fetch User Data
+      final userDocFuture = FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+      // 2. Fetch active applications (filtering out withdrawn ones)
+      final appQueryFuture = FirebaseFirestore.instance
+          .collection('applications')
+          .where('jobId', isEqualTo: widget.job.id)
+          .where('userId', isEqualTo: user.uid)
+          .where('status', isNotEqualTo: 'withdrawn') // This is the fix
+          .get();
+
+      // 3. Check if saved
+      final savedDocFuture = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('savedJobs')
           .doc(widget.job.id)
-          .get(),
-    ]);
+          .get();
 
-    final userDoc    = results[0] as DocumentSnapshot;
-    final hasApplied = results[1] as bool;
-    final savedDoc   = results[2] as DocumentSnapshot; // Check existence
-    final companyId  = (userDoc.data() as Map<String, dynamic>?)?['companyId'];
+      final results = await Future.wait([userDocFuture, appQueryFuture, savedDocFuture]);
 
-    if (mounted) {
-      setState(() {
-        _isEmployer   = companyId != null;
-        _userCompanyId = companyId as String?;
-        _hasApplied   = hasApplied;
-        _isSaved      = savedDoc.exists; // Sync the UI icon
-        _isLoading    = false;
-      });
+      final userDoc = results[0] as DocumentSnapshot;
+      final appSnap = results[1] as QuerySnapshot;
+      final savedDoc = results[2] as DocumentSnapshot;
+
+      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'];
+
+      if (mounted) {
+        setState(() {
+          _isEmployer = companyId != null;
+          _userCompanyId = companyId as String?;
+          // If docs are empty, it means no active (non-withdrawn) application exists
+          _hasApplied = appSnap.docs.isNotEmpty;
+          _isSaved = savedDoc.exists;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleApply() async {
-    if (_hasApplied) return;
+    if (_hasApplied || _isApplying) return;
 
-    setState(() => _isApplying = true); // Start loading
-
-    final updatedJob = widget.job.copyWith(
-      educationLevel: _fetchedEducation,
-      experienceLevel: _fetchedExperience,
-    );
+    setState(() => _isApplying = true);
 
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => JobApplicationScreen(
-          jobId: updatedJob.id!,
-          jobTitle: updatedJob.title,
-          company: updatedJob.company,
-          companyId: updatedJob.companyId,
-          job: updatedJob,
+          jobId: widget.job.id!,
+          jobTitle: widget.job.title,
+          company: widget.job.company,
+          companyId: widget.job.companyId,
+          job: widget.job,
         ),
       ),
     );
 
+    // If they applied successfully, refresh the state from Firestore
     if (result == true && mounted) {
-      setState(() {
-        _hasApplied = true;
-        _applicantCount++;
-      });
+      await _loadUserData();
+      await _loadApplicantCount();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Application submitted!'),
           backgroundColor: _green,
-          duration: Duration(seconds: 3),
         ),
       );
     }
 
-    // Stop loading
     if (mounted) setState(() => _isApplying = false);
   }
 
