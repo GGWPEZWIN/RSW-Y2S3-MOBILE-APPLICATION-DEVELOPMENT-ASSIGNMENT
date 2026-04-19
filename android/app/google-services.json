@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "767259078927",
+    "firebase_url": "https://mobileapplicationassignm-a4587-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "mobileapplicationassignm-a4587",
     "storage_bucket": "mobileapplicationassignm-a4587.firebasestorage.app"
   },
@@ -13,6 +14,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "767259078927-bhq0p5af2pfn4aqf7400f9dluv6i9nvf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.assignment",
+            "certificate_hash": "e6604378a9f267263e2352c5d51ed953f30325a8"
+          }
+        },
         {
           "client_id": "767259078927-d1djabq2j6t59va73gsbmdgto4umb0a2.apps.googleusercontent.com",
           "client_type": 1,

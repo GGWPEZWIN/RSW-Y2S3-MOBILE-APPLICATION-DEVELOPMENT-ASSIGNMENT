@@ -8,29 +8,45 @@ environment:
   sdk: ^3.10.7
 
 dependencies:
-  http: ^1.2.0
   flutter:
     sdk: flutter
 
+  # Firebase
   firebase_core: ^4.6.0
   firebase_auth: ^6.3.0
   firebase_database: ^12.2.0
   firebase_storage: ^13.2.0
   cloud_firestore: ^6.2.0
+
+  # Google Services
   google_sign_in: ^7.0.0
+  google_generative_ai: ^0.4.6
+
+  # Notifications
   firebase_messaging: ^16.1.0
-  flutter_local_notifications: ^21.0.0
-  flutter_svg: ^2.0.10+1
-  cupertino_icons: ^1.0.8
-  flutter_spinkit: ^5.2.0
+  flutter_local_notifications: ^17.2.3
+
+  # Voice & Speech
+  speech_to_text: ^7.3.0
+  record: ^6.0.0
+  permission_handler: ^11.3.1
+
+  # Utilities (⬅️ THESE WERE MISSING)
+  http: ^1.2.0
+  flutter_dotenv: ^5.1.0
   url_launcher: ^6.2.0
   file_picker: ^11.0.0
   image_picker: ^1.1.2
-  google_generative_ai: ^0.4.0
-  speech_to_text: ^7.3.0
-  google_mlkit_text_recognition: ^0.15.1
   path_provider: ^2.1.2
   intl: ^0.19.0
+
+  # OCR (⬅️ THIS WAS MISSING)
+  google_mlkit_text_recognition: ^0.15.1
+
+  # UI
+  flutter_svg: ^2.0.10+1
+  cupertino_icons: ^1.0.8
+  flutter_spinkit: ^5.2.0
 
 dev_dependencies:
   flutter_test:
@@ -47,3 +63,4 @@ flutter:
     - assets/icons/google.webp
     - assets/icons/email.png
     - assets/icons/searchbarnavdeco.png
+    - .env

@@ -1,30 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'login.dart';
-import 'services/google_sign_in_service.dart';
-import 'services/fcm_service.dart'; // Add this
+import 'services/google_sign_in_service.dart'; // ✅ added
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await Firebase.initializeApp();
-    debugPrint('Firebase initialized successfully');
-    
-    // Initialize FCM Service
-    await FCMService().initialize();
-    debugPrint('FCM Service initialized');
-  } catch (e) {
-    debugPrint('Error initializing Firebase/FCM: $e');
-  }
+  // Load .env file FIRST
+  await dotenv.load();
 
-  try {
-    await GoogleSignIn.instance.initialize();
-    debugPrint('GoogleSignIn initialized successfully');
-  } catch (e) {
-    debugPrint('Error initializing GoogleSignIn: $e');
-  }
+  await Firebase.initializeApp();
+
+  await GoogleSignInService.initialize(); // ✅ added
 
   runApp(const MyApp());
 }

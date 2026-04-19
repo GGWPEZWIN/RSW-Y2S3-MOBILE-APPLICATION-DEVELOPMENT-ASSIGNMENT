@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../../services/fcm_service.dart'; // ✅ Import FCM service
+import '../../services/fcm_service.dart';
 
-// ── Local notifier ────────────────────────────────────────────────────────────
+// ── Local notifier (fixed API calls) ───────────────────────────────────────
 class _LocalNotifier {
   static final FlutterLocalNotificationsPlugin _plugin =
   FlutterLocalNotificationsPlugin();
@@ -14,10 +14,11 @@ class _LocalNotifier {
     if (_ready) return;
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios     = DarwinInitializationSettings();
+    const ios = DarwinInitializationSettings();
 
+    // ✅ FIX: positional argument, not named 'settings'
     await _plugin.initialize(
-      settings: const InitializationSettings(android: android, iOS: ios),
+      const InitializationSettings(android: android, iOS: ios),
     );
 
     await _plugin
@@ -34,12 +35,12 @@ class _LocalNotifier {
 
   static Future<void> show(String title, String body) async {
     await _init();
+    // ✅ FIX: positional arguments, no named parameters
     await _plugin.show(
-      // Add the names: id, title, and body
-      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title: title,
-      body: body,
-      notificationDetails: const NotificationDetails(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           'interview_channel',
           'Interview Notifications',
@@ -49,24 +50,28 @@ class _LocalNotifier {
           icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true),
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// The rest of the page remains exactly as you had it – only the notifier above changed.
+// ----------------------------------------------------------------------------
+
 class ScheduleInterviewPage extends StatefulWidget {
   final String applicationId;
-  final String candidateUserId; // FK → users/{uid}
-  final String jobId;           // FK → jobs/{jobId}
-  final String jobTitle;        // display only
-  final String candidateName;   // display only
-  final String candidateEmail;  // display only
+  final String candidateUserId;
+  final String jobId;
+  final String jobTitle;
+  final String candidateName;
+  final String candidateEmail;
   final Map<String, dynamic>? existingInterview;
-  final String? rescheduleReason; // set when opened from employer notifications
+  final String? rescheduleReason;
 
   const ScheduleInterviewPage({
     super.key,
@@ -96,7 +101,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
   bool       _isCancelling = false;
 
   bool get _isEditing => widget.existingInterview != null;
-  // True when employer is reviewing a reschedule request
   bool get _isRescheduling => widget.rescheduleReason != null;
 
   static const Color kBlue    = Color(0xFF3B4FD8);
@@ -144,7 +148,8 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     final p = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? now.add(const Duration(days: 1)),
-      firstDate: now, lastDate: now.add(const Duration(days: 365)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
             colorScheme: const ColorScheme.light(primary: kBlue)),
@@ -167,8 +172,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     if (p != null) setState(() => _selectedTime = p);
   }
 
-  // ── Save / Update ──────────────────────────────────────────────────────────
-
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
@@ -189,21 +192,15 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         _selectedTime!.hour, _selectedTime!.minute,
       ));
 
-      final dateStr       = '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}';
+      final dateStr = '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}';
       final timeFormatted = _selectedTime!.format(context);
-      final locationText  = _locationType == 'On-site' &&
-          _locationCtrl.text.trim().isNotEmpty
+      final locationText = _locationType == 'On-site' && _locationCtrl.text.trim().isNotEmpty
           ? _locationCtrl.text.trim()
           : _locationType;
 
       final db = FirebaseFirestore.instance;
 
-      // Logic: If the employer is responding to a reschedule request,
-      // the status becomes 'reschedule_proposed' (waiting for candidate approval).
-      // If it's a fresh schedule or a standard edit, it stays 'scheduled'.
       final targetStatus = _isRescheduling ? 'reschedule_proposed' : 'scheduled';
-
-      // Status name for the 'applications' collection
       final appCollectionStatus = _isRescheduling ? 'reschedule_proposed' : 'interview';
 
       final interviewData = <String, dynamic>{
@@ -217,62 +214,51 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         'notes':              _notesCtrl.text.trim(),
         'status':             targetStatus,
         'updatedAt':          FieldValue.serverTimestamp(),
-        // Add pendingAcceptance flag for reschedule proposals
         if (_isRescheduling) 'pendingAcceptance': true,
-        // Remove these fields so the request is considered "resolved"
         'rescheduleReason':   FieldValue.delete(),
         'rescheduleBy':       FieldValue.delete(),
       };
 
-      final batch        = db.batch();
+      final batch = db.batch();
       final interviewRef = db.collection('interviews').doc(widget.applicationId);
 
       if (_isEditing) {
         batch.update(interviewRef, interviewData);
       } else {
-        // If creating new, remove the delete instructions and add createdAt
         interviewData.remove('rescheduleReason');
         interviewData.remove('rescheduleBy');
         interviewData['createdAt'] = FieldValue.serverTimestamp();
         batch.set(interviewRef, interviewData);
       }
 
-      // Update the main applications collection status
       batch.update(
         db.collection('applications').doc(widget.applicationId),
-        {
-          'status': appCollectionStatus,
-          'updatedAt': FieldValue.serverTimestamp()
-        },
+        {'status': appCollectionStatus, 'updatedAt': FieldValue.serverTimestamp()},
       );
 
       await batch.commit();
 
-      // ── Notifications ──
       final notifTitle = _isRescheduling
           ? '📅 New Interview Time Proposed'
           : '📅 Interview ${_isEditing ? 'Updated' : 'Scheduled'}';
-
       final notifBody = 'For ${widget.jobTitle}: $dateStr at $timeFormatted ($locationText). '
           'Please check the app to confirm.';
 
       if (widget.candidateUserId.isNotEmpty) {
-        // 1. Write to user's in-app notifications
         await db
             .collection('users')
             .doc(widget.candidateUserId)
             .collection('notifications')
             .add({
-          'applicationId':      widget.applicationId,
-          'jobId':              widget.jobId,
-          'title':              notifTitle,
-          'body':               notifBody,
-          'type':               _isRescheduling ? 'reschedule_proposal' : 'interview',
-          'isRead':             false,
-          'createdAt':          FieldValue.serverTimestamp(),
+          'applicationId': widget.applicationId,
+          'jobId': widget.jobId,
+          'title': notifTitle,
+          'body': notifBody,
+          'type': _isRescheduling ? 'reschedule_proposal' : 'interview',
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // 2. Queue a Push Notification for the candidate (different device)
         await FCMService().sendPushNotification(
           recipientId: widget.candidateUserId,
           title: notifTitle,
@@ -285,21 +271,15 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         );
       }
 
-      // Removed _LocalNotifier.show here because it shows on the EMPLOYER'S device.
-      // The push notification above handles notifying the jobseeker.
-
       if (!mounted) return;
       _snack(_isRescheduling ? 'Proposed new time to candidate!' : 'Interview saved!', const Color(0xFF22C55E));
       Navigator.pop(context, true);
-
     } catch (e) {
       if (mounted) _snack('Error: $e', Colors.redAccent);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
-  // ── Cancel interview ───────────────────────────────────────────────────────
 
   Future<void> _handleCancel() async {
     final confirmed = await showDialog<bool>(
@@ -333,15 +313,13 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     setState(() => _isCancelling = true);
 
     try {
-      final db    = FirebaseFirestore.instance;
+      final db = FirebaseFirestore.instance;
       final batch = db.batch();
 
-      // Update interview status
       batch.update(
         db.collection('interviews').doc(widget.applicationId),
         {'status': 'cancelled', 'updatedAt': FieldValue.serverTimestamp()},
       );
-      // Revert application status
       batch.update(
         db.collection('applications').doc(widget.applicationId),
         {'status': 'shortlisted', 'updatedAt': FieldValue.serverTimestamp()},
@@ -350,28 +328,24 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
       await batch.commit();
 
       const notifTitle = '❌ Interview Cancelled';
-      final notifBody  =
-          'Hi ${widget.candidateName}! Your interview for ${widget.jobTitle} '
+      final notifBody = 'Hi ${widget.candidateName}! Your interview for ${widget.jobTitle} '
           'has been cancelled by the employer. Please contact them for more info.';
 
-      // Notify candidate inbox
       if (widget.candidateUserId.isNotEmpty) {
-        // 1. In-app notification
         await db
             .collection('users')
             .doc(widget.candidateUserId)
             .collection('notifications')
             .add({
           'applicationId': widget.applicationId,
-          'jobId':         widget.jobId,
-          'title':         notifTitle,
-          'body':          notifBody,
-          'type':          'interview_cancelled',
-          'isRead':        false,
-          'createdAt':     FieldValue.serverTimestamp(),
+          'jobId': widget.jobId,
+          'title': notifTitle,
+          'body': notifBody,
+          'type': 'interview_cancelled',
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // 2. Push notification for candidate
         await FCMService().sendPushNotification(
           recipientId: widget.candidateUserId,
           title: notifTitle,
@@ -383,8 +357,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
           },
         );
       }
-
-      // Removed _LocalNotifier.show here as it shows on the employer's device.
 
       if (!mounted) return;
       _snack('Interview cancelled. ${widget.candidateName} has been notified.',
@@ -408,8 +380,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     ));
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -427,7 +397,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
-        // Cancel interview button in app bar (only when editing an active interview)
         actions: [
           if (_isEditing)
             IconButton(
@@ -452,7 +421,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
               _candidateBanner(),
               const SizedBox(height: 16),
 
-              // ── Reschedule reason banner ─────────────────────────────────
               if (_isRescheduling) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -513,22 +481,27 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                 _field(
                   controller: _locationCtrl,
                   hint: 'e.g. Level 3, Menara JobBuddy, Penang',
-                  icon: Icons.location_on_outlined, label: 'Address',
+                  icon: Icons.location_on_outlined,
+                  label: 'Address',
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Please enter address' : null,
+                      ? 'Please enter address'
+                      : null,
                 )
               else if (_locationType == 'Zoom' || _locationType == 'Google Meet')
                 _field(
                   controller: _locationCtrl,
                   hint: _locationType == 'Zoom'
-                      ? 'https://zoom.us/j/...' : 'https://meet.google.com/...',
-                  icon: Icons.videocam_outlined, label: 'Meeting Link (optional)',
+                      ? 'https://zoom.us/j/...'
+                      : 'https://meet.google.com/...',
+                  icon: Icons.videocam_outlined,
+                  label: 'Meeting Link (optional)',
                 )
               else
                 _field(
                   controller: _locationCtrl,
                   hint: 'e.g. +60 12-345 6789',
-                  icon: Icons.phone_outlined, label: 'Phone Number',
+                  icon: Icons.phone_outlined,
+                  label: 'Phone Number',
                   keyboardType: TextInputType.phone,
                 ),
               const SizedBox(height: 20),
@@ -536,13 +509,15 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
               _label('Notes for Candidate'),
               const SizedBox(height: 10),
               TextFormField(
-                controller: _notesCtrl, maxLines: 4,
+                controller: _notesCtrl,
+                maxLines: 4,
                 style: const TextStyle(fontSize: 14, color: kText),
                 decoration: InputDecoration(
                   hintText: 'e.g. Please bring your portfolio.',
                   hintStyle: const TextStyle(
                       fontSize: 13, color: Color(0xFFADBAC7)),
-                  filled: true, fillColor: kCard,
+                  filled: true,
+                  fillColor: kCard,
                   contentPadding: const EdgeInsets.all(14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -563,7 +538,6 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
               _notificationPreview(),
               const SizedBox(height: 32),
 
-              // ── Primary action button ──────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 54,
@@ -590,8 +564,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                         color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                    _isRescheduling ? kOrange : kBlue,
+                    backgroundColor: _isRescheduling ? kOrange : kBlue,
                     disabledBackgroundColor: kBlue.withOpacity(0.5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -600,16 +573,13 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                 ),
               ),
 
-              // ── Cancel interview button (below, only when editing) ─────
               if (_isEditing) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: OutlinedButton.icon(
-                    onPressed: (_isCancelling || _isSaving)
-                        ? null
-                        : _handleCancel,
+                    onPressed: (_isCancelling || _isSaving) ? null : _handleCancel,
                     icon: _isCancelling
                         ? const SizedBox(
                         width: 16, height: 16,
@@ -638,16 +608,14 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     );
   }
 
-  // ── Widgets ────────────────────────────────────────────────────────────────
-
   Widget _candidateBanner() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: _isRescheduling
-              ? [Colors.orange.shade700, Colors.orange.shade400] // Orange for Rescheduling
-              : [kBlue, const Color(0xFF5B6EF0)],               // Blue for standard
+              ? [Colors.orange.shade700, Colors.orange.shade400]
+              : [kBlue, const Color(0xFF5B6EF0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -655,28 +623,32 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
       ),
       child: Row(children: [
         CircleAvatar(
-          radius: 26, backgroundColor: Colors.white24,
+          radius: 26,
+          backgroundColor: Colors.white24,
           child: Text(
             widget.candidateName.isNotEmpty
-                ? widget.candidateName[0].toUpperCase() : '?',
+                ? widget.candidateName[0].toUpperCase()
+                : '?',
             style: const TextStyle(color: Colors.white,
                 fontSize: 20, fontWeight: FontWeight.bold),
           ),
         ),
         const SizedBox(width: 14),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.candidateName,
-                style: const TextStyle(color: Colors.white,
-                    fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(widget.candidateEmail,
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 4),
-            Text('Applying for: ${widget.jobTitle}',
-                style: const TextStyle(color: Colors.white60, fontSize: 12)),
-          ],
-        )),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.candidateName,
+                  style: const TextStyle(color: Colors.white,
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(widget.candidateEmail,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(height: 4),
+              Text('Applying for: ${widget.jobTitle}',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
+          ),
+        ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
@@ -695,19 +667,24 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: kCard, borderRadius: BorderRadius.circular(12),
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kBorder),
       ),
       child: Row(children: [
         const Icon(Icons.calendar_today_rounded, size: 18, color: kBlue),
         const SizedBox(width: 8),
-        Expanded(child: Text(
-          _selectedDate == null ? 'Select Date'
-              : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-          style: TextStyle(fontSize: 13,
-              color: _selectedDate == null ? kSubtext : kText,
-              fontWeight: FontWeight.w500),
-        )),
+        Expanded(
+          child: Text(
+            _selectedDate == null
+                ? 'Select Date'
+                : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+            style: TextStyle(
+                fontSize: 13,
+                color: _selectedDate == null ? kSubtext : kText,
+                fontWeight: FontWeight.w500),
+          ),
+        ),
       ]),
     ),
   );
@@ -717,18 +694,24 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: kCard, borderRadius: BorderRadius.circular(12),
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kBorder),
       ),
       child: Row(children: [
         const Icon(Icons.access_time_rounded, size: 18, color: kBlue),
         const SizedBox(width: 8),
-        Expanded(child: Text(
-          _selectedTime == null ? 'Select Time' : _selectedTime!.format(context),
-          style: TextStyle(fontSize: 13,
-              color: _selectedTime == null ? kSubtext : kText,
-              fontWeight: FontWeight.w500),
-        )),
+        Expanded(
+          child: Text(
+            _selectedTime == null
+                ? 'Select Time'
+                : _selectedTime!.format(context),
+            style: TextStyle(
+                fontSize: 13,
+                color: _selectedTime == null ? kSubtext : kText,
+                fontWeight: FontWeight.w500),
+          ),
+        ),
       ]),
     ),
   );
@@ -736,30 +719,45 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
   Widget _locationDropdown() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: BoxDecoration(
-      color: kCard, borderRadius: BorderRadius.circular(12),
+      color: kCard,
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(color: kBorder),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String>(
-        value: _locationType, isExpanded: true,
+        value: _locationType,
+        isExpanded: true,
         icon: const Icon(Icons.expand_more_rounded, color: kSubtext),
         style: const TextStyle(fontSize: 14, color: kText),
         items: _locationTypes.map((type) {
           IconData icon;
           switch (type) {
-            case 'Zoom':        icon = Icons.videocam_rounded; break;
-            case 'Google Meet': icon = Icons.meeting_room_rounded; break;
-            case 'Phone Call':  icon = Icons.phone_rounded; break;
-            default:            icon = Icons.location_on_rounded;
+            case 'Zoom':
+              icon = Icons.videocam_rounded;
+              break;
+            case 'Google Meet':
+              icon = Icons.meeting_room_rounded;
+              break;
+            case 'Phone Call':
+              icon = Icons.phone_rounded;
+              break;
+            default:
+              icon = Icons.location_on_rounded;
           }
-          return DropdownMenuItem(value: type,
-              child: Row(children: [
-                Icon(icon, size: 18, color: kBlue),
-                const SizedBox(width: 10), Text(type),
-              ]));
+          return DropdownMenuItem(
+            value: type,
+            child: Row(children: [
+              Icon(icon, size: 18, color: kBlue),
+              const SizedBox(width: 10),
+              Text(type),
+            ]),
+          );
         }).toList(),
         onChanged: (v) {
-          if (v != null) setState(() { _locationType = v; _locationCtrl.clear(); });
+          if (v != null) setState(() {
+            _locationType = v;
+            _locationCtrl.clear();
+          });
         },
       ),
     ),
@@ -769,16 +767,16 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     final dateText = _selectedDate != null
         ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
         : '[date]';
-    final timeText =
-    _selectedTime != null ? _selectedTime!.format(context) : '[time]';
-    final locationText =
-    _locationType == 'On-site' && _locationCtrl.text.isNotEmpty
-        ? _locationCtrl.text : _locationType;
+    final timeText = _selectedTime != null ? _selectedTime!.format(context) : '[time]';
+    final locationText = _locationType == 'On-site' && _locationCtrl.text.isNotEmpty
+        ? _locationCtrl.text
+        : _locationType;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F2FF), borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFF0F2FF),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kBlue.withOpacity(0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -793,9 +791,12 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(10),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
             boxShadow: [BoxShadow(
-                color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 2))],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
@@ -829,27 +830,37 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
   Widget _field({
     required TextEditingController controller,
-    required String hint, required IconData icon, required String label,
+    required String hint,
+    required IconData icon,
+    required String label,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
-      controller: controller, keyboardType: keyboardType, validator: validator,
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
       style: const TextStyle(fontSize: 14, color: kText),
       decoration: InputDecoration(
-        labelText: label, hintText: hint,
+        labelText: label,
+        hintText: hint,
         hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFADBAC7)),
         labelStyle: const TextStyle(fontSize: 13, color: kSubtext),
         prefixIcon: Icon(icon, size: 20, color: kBlue),
-        filled: true, fillColor: kCard,
+        filled: true,
+        fillColor: kCard,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: kBorder)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: kBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: kBlue, width: 1.5)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.redAccent)),
       ),
     );

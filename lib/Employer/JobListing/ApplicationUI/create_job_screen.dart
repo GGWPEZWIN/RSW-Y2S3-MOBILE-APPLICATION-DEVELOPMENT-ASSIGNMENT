@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../models/job_model.dart';
 
 class CreateJobPage extends StatefulWidget {
@@ -15,7 +19,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
 
-  // ── Step control (0=Classify, 1=Write, 2=Manage) ──────────────────────────
+  // ── Step control ──────────────────────────────────────────────────────────
   int _currentStep = 0;
   final List<String> _stepLabels = ['Classify', 'Write', 'Manage'];
 
@@ -32,13 +36,22 @@ class _CreateJobPageState extends State<CreateJobPage> {
   String _selectedCurrency  = 'MYR';
   String _showPayOnAd       = 'Yes';
 
+  // ── Google Places autocomplete ────────────────────────────────────────────
+  List<Map<String, String>> _placeSuggestions = [];
+  Timer? _debounce;
+  bool _showPlaceSuggestions = false;
+  bool _isLoadingPlaces = false;
+  final FocusNode _locationFocus = FocusNode();
+
   // ── Step 2 ────────────────────────────────────────────────────────────────
   late TextEditingController _descriptionController;
   late TextEditingController _requirementsController;
   late TextEditingController _benefitsController;
   late TextEditingController _vacanciesController;
-  String _selectedExperience = 'Fresh Graduate';
-  String _selectedEducation  = 'Diploma';
+
+  // ✅ FIX: multi-select for experience and education
+  final Set<String> _selectedExperiences = {'Fresh Graduate'};
+  final Set<String> _selectedEducations  = {'Diploma'};
 
   // ── Step 3 ────────────────────────────────────────────────────────────────
   DateTime? _publishDate;
@@ -56,7 +69,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
   final List<String> _appMethodOptions  = ['In-app', 'Email', 'External URL'];
 
   // ── Suggestion chips data ─────────────────────────────────────────────────
-  // Description suggestions per work type
   final Map<String, List<String>> _descSuggestions = {
     'Full-time': [
       'Responsible for day-to-day operations',
@@ -90,7 +102,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     ],
   };
 
-  // Requirements suggestions
   final Map<String, List<String>> _reqSuggestions = {
     'General': [
       'Minimum 1 year relevant experience',
@@ -129,7 +140,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     ],
   };
 
-  // Benefits suggestions
   final List<String> _benefitsSuggestions = [
     'EPF & SOCSO contributions',
     'Annual leave (14 days)',
@@ -148,7 +158,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     'Phone & data allowance',
   ];
 
-  // Which category is active for requirements
   String _reqCategory = 'General';
   final List<String> _reqCategories = ['General', 'IT / Tech', 'Design', 'Sales'];
 
@@ -175,6 +184,18 @@ class _CreateJobPageState extends State<CreateJobPage> {
     _applicationUrlController   = TextEditingController();
     _applicationEmailController = TextEditingController();
 
+    // Listen for location changes to trigger autocomplete
+    _locationController.addListener(_onLocationChanged);
+
+    // Hide suggestions when location field loses focus
+    _locationFocus.addListener(() {
+      if (!_locationFocus.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) setState(() => _showPlaceSuggestions = false);
+        });
+      }
+    });
+
     if (isEditing) {
       final job = widget.jobToEdit!;
       _jobTitleController.text = job.title;
@@ -192,6 +213,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _locationFocus.dispose();
     _jobTitleController.dispose();
     _locationController.dispose();
     _minPayController.dispose();
@@ -205,13 +228,111 @@ class _CreateJobPageState extends State<CreateJobPage> {
     super.dispose();
   }
 
-  // ── Append suggestion to a controller ────────────────────────────────────
+  // ── Google Places Autocomplete ────────────────────────────────────────────
+
+  void _onLocationChanged() {
+    final query = _locationController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _placeSuggestions = [];
+        _showPlaceSuggestions = false;
+      });
+      return;
+    }
+
+    // Debounce 400ms so we don't call on every keystroke
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (query.length >= 2) _fetchPlaceSuggestions(query);
+    });
+  }
+
+  Future<void> _fetchPlaceSuggestions(String query) async {
+    if (!mounted) return;
+    setState(() => _isLoadingPlaces = true);
+
+    try {
+      final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+      if (apiKey.isEmpty) {
+        // Fallback: show Malaysian city suggestions manually
+        _showFallbackSuggestions(query);
+        return;
+      }
+
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json'
+            '?input=${Uri.encodeComponent(query)}'
+            '&types=(cities)'
+            '&components=country:my'  // restrict to Malaysia; remove to allow worldwide
+            '&key=$apiKey',
+      );
+
+      final response = await http.get(url).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final predictions = data['predictions'] as List? ?? [];
+        if (mounted) {
+          setState(() {
+            _placeSuggestions = predictions.map<Map<String, String>>((p) => {
+              'description': p['description']?.toString() ?? '',
+              'placeId':     p['place_id']?.toString()    ?? '',
+            }).toList();
+            _showPlaceSuggestions = _placeSuggestions.isNotEmpty;
+            _isLoadingPlaces = false;
+          });
+        }
+      }
+    } catch (_) {
+      // On error, show fallback
+      _showFallbackSuggestions(query);
+    } finally {
+      if (mounted) setState(() => _isLoadingPlaces = false);
+    }
+  }
+
+  // Fallback suggestions if no API key or network error
+  void _showFallbackSuggestions(String query) {
+    final allCities = [
+      'Kuala Lumpur', 'Petaling Jaya', 'Shah Alam', 'Subang Jaya',
+      'Johor Bahru', 'Georgetown, Penang', 'Ipoh', 'Kota Kinabalu',
+      'Kuching', 'Malacca City', 'Seremban', 'Alor Setar',
+      'Kuantan', 'Kota Bharu', 'Kuala Terengganu', 'Sandakan',
+      'Miri', 'Sibu', 'Bintulu', 'Klang', 'Putrajaya', 'Cyberjaya',
+      'Puchong', 'Cheras', 'Ampang', 'Kepong', 'Bangsar',
+    ];
+    final q = query.toLowerCase();
+    final matched = allCities
+        .where((c) => c.toLowerCase().contains(q))
+        .map((c) => {'description': c, 'placeId': ''})
+        .toList();
+
+    if (mounted) {
+      setState(() {
+        _placeSuggestions = matched;
+        _showPlaceSuggestions = matched.isNotEmpty;
+        _isLoadingPlaces = false;
+      });
+    }
+  }
+
+  void _selectPlace(String description) {
+    _locationController.text = description;
+    _locationController.selection = TextSelection.fromPosition(
+      TextPosition(offset: description.length),
+    );
+    setState(() {
+      _placeSuggestions = [];
+      _showPlaceSuggestions = false;
+    });
+    _locationFocus.unfocus();
+  }
+
+  // ── Append suggestion ─────────────────────────────────────────────────────
   void _appendSuggestion(TextEditingController ctrl, String chip) {
     final current = ctrl.text.trim();
     if (current.isEmpty) {
       ctrl.text = '• $chip\n';
     } else {
-      // avoid duplicates
       if (current.contains(chip)) return;
       ctrl.text = '$current\n• $chip\n';
     }
@@ -225,45 +346,45 @@ class _CreateJobPageState extends State<CreateJobPage> {
   Future<void> _saveJob() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // ✅ Extra validation for fields not covered by TextFormField validators
+    if (_locationController.text.trim().isEmpty) {
+      _showError('Please enter a location');
+      return;
+    }
+    if (_selectedExperiences.isEmpty) {
+      _showError('Please select at least one experience level');
+      return;
+    }
+    if (_selectedEducations.isEmpty) {
+      _showError('Please select at least one education level');
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
-      // Get current user (without login check)
       final user = FirebaseAuth.instance.currentUser;
-
-      // Default values — overwritten once we read from Firestore
       String companyName = 'Your Company';
       String companyId   = user?.uid ?? 'unknown';
 
       if (user != null) {
         try {
           final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-
+              .collection('users').doc(user.uid).get();
           if (userDoc.exists) {
             final data = userDoc.data() as Map<String, dynamic>? ?? {};
-
-            // ── companyName: prefer 'companyName', fall back to 'name' ──
             final cn = data['companyName']?.toString().trim() ?? '';
             final n  = data['name']?.toString().trim() ?? '';
-            if (cn.isNotEmpty) {
-              companyName = cn;
-            } else if (n.isNotEmpty) {
-              companyName = n;
-            }
-
-            // ── companyId: use stored company doc ID if available ──────
+            if (cn.isNotEmpty) companyName = cn;
+            else if (n.isNotEmpty) companyName = n;
             final cid = data['companyId']?.toString().trim() ?? '';
             if (cid.isNotEmpty) companyId = cid;
           }
         } catch (e) {
-          print('Error getting user data: $e');
-          // Continue with default values
+          debugPrint('Error getting user data: $e');
         }
       }
 
-      final salary = 'RM${_minPayController.text.trim()} - RM${_maxPayController.text.trim()}';
+      final salary = '${_selectedCurrency}${_minPayController.text.trim()} - ${_selectedCurrency}${_maxPayController.text.trim()}';
       final now    = DateTime.now();
 
       final jobData = {
@@ -280,8 +401,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
         'requirements':      _requirementsController.text.trim(),
         'benefits':          _benefitsController.text.trim(),
         'vacancies':         int.tryParse(_vacanciesController.text.trim()) ?? 1,
-        'experienceLevel':   _selectedExperience,
-        'educationLevel':    _selectedEducation,
+        'experienceLevel':   _selectedExperiences.join(', '),
+        'educationLevel':    _selectedEducations.join(', '),
         'publishDate':       _publishDate ?? now,
         'expiryDate':        _expiryDate,
         'applicationMethod': _applicationMethod,
@@ -290,36 +411,30 @@ class _CreateJobPageState extends State<CreateJobPage> {
         'postedTime':        'Just now',
         'applicants':        isEditing ? widget.jobToEdit!.applicants : '0 applied',
         'createdAt':         isEditing ? widget.jobToEdit!.createdAt : now,
-        'employerId':        user?.uid ?? '',   // ← used by delete-account & applicant queries
+        'employerId':        user?.uid ?? '',
       };
 
       if (isEditing && widget.jobToEdit!.id != null) {
         await FirebaseFirestore.instance
-            .collection('jobs')
-            .doc(widget.jobToEdit!.id)
-            .update(jobData);
+            .collection('jobs').doc(widget.jobToEdit!.id).update(jobData);
       } else {
         await FirebaseFirestore.instance.collection('jobs').add(jobData);
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isEditing ? 'Job updated!' : 'Job posted!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isEditing ? 'Job updated!' : 'Job posted!'),
+          backgroundColor: Colors.green,
+        ));
         Navigator.pop(context, true);
       }
     } catch (e) {
-      print('Save error: $e');
+      debugPrint('Save error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -329,11 +444,57 @@ class _CreateJobPageState extends State<CreateJobPage> {
   // ── Step validation ───────────────────────────────────────────────────────
   bool _validateStep(int step) {
     if (step == 0) {
-      if (_jobTitleController.text.trim().isEmpty) { _showError('Please enter a job title'); return false; }
-      if (_locationController.text.trim().isEmpty) { _showError('Please enter a location');  return false; }
+      if (_jobTitleController.text.trim().isEmpty) {
+        _showError('Please enter a job title'); return false;
+      }
+      if (_locationController.text.trim().isEmpty) {
+        _showError('Please enter a location'); return false;
+      }
+      if (_minPayController.text.trim().isEmpty) {
+        _showError('Please enter minimum pay'); return false;
+      }
+      if (_maxPayController.text.trim().isEmpty) {
+        _showError('Please enter maximum pay'); return false;
+      }
+      final min = double.tryParse(_minPayController.text.trim()) ?? -1;
+      final max = double.tryParse(_maxPayController.text.trim()) ?? -1;
+      if (min < 0) { _showError('Minimum pay must be a valid number'); return false; }
+      if (max < 0) { _showError('Maximum pay must be a valid number'); return false; }
+      if (max < min) { _showError('Maximum pay cannot be less than minimum pay'); return false; }
     }
     if (step == 1) {
-      if (_descriptionController.text.trim().isEmpty) { _showError('Please enter a job description'); return false; }
+      if (_descriptionController.text.trim().isEmpty) {
+        _showError('Please enter a job description'); return false;
+      }
+      if (_requirementsController.text.trim().isEmpty) {
+        _showError('Please enter job requirements'); return false;
+      }
+      if (_selectedExperiences.isEmpty) {
+        _showError('Please select at least one experience level'); return false;
+      }
+      if (_selectedEducations.isEmpty) {
+        _showError('Please select at least one education level'); return false;
+      }
+    }
+    if (step == 2) {
+      if (_applicationMethod == 'Email' && _applicationEmailController.text.trim().isEmpty) {
+        _showError('Please enter an application email'); return false;
+      }
+      if (_applicationMethod == 'Email') {
+        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+        if (!emailRegex.hasMatch(_applicationEmailController.text.trim())) {
+          _showError('Please enter a valid email address'); return false;
+        }
+      }
+      if (_applicationMethod == 'External URL' && _applicationUrlController.text.trim().isEmpty) {
+        _showError('Please enter an application URL'); return false;
+      }
+      if (_applicationMethod == 'External URL') {
+        final url = _applicationUrlController.text.trim();
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          _showError('URL must start with http:// or https://'); return false;
+        }
+      }
     }
     return true;
   }
@@ -341,15 +502,14 @@ class _CreateJobPageState extends State<CreateJobPage> {
   void _showError(String msg) => ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red));
 
-  // ✅ FIX 1: Dismiss keyboard AND unfocus before switching step
   void _nextStep() {
     if (!_validateStep(_currentStep)) return;
-    FocusScope.of(context).unfocus(); // ← dismisses keyboard, clears focus
+    FocusScope.of(context).unfocus();
     if (_currentStep < 2) setState(() => _currentStep++);
   }
 
   void _prevStep() {
-    FocusScope.of(context).unfocus(); // ← also dismiss on back
+    FocusScope.of(context).unfocus();
     if (_currentStep > 0) setState(() => _currentStep--);
   }
 
@@ -400,10 +560,11 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  Widget _label(String text, {bool showInfo = false}) => Padding(
+  Widget _label(String text, {bool showInfo = false, bool required = false}) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(children: [
       Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _labelColor)),
+      if (required) const Text(' *', style: TextStyle(color: Colors.red, fontSize: 15, fontWeight: FontWeight.w700)),
       if (showInfo) ...[const SizedBox(width: 4), const Icon(Icons.help_outline_rounded, size: 16, color: _inactiveGrey)],
     ]),
   );
@@ -413,20 +574,27 @@ class _CreateJobPageState extends State<CreateJobPage> {
     child: Text(text, style: const TextStyle(fontSize: 12, color: _helperColor)),
   );
 
-  InputDecoration _dec({required String hint, Widget? prefix}) => InputDecoration(
+  InputDecoration _dec({required String hint, Widget? prefix, String? errorText}) => InputDecoration(
     hintText: hint,
     hintStyle: const TextStyle(color: _hintColor, fontSize: 13),
     prefixIcon: prefix,
+    errorText: errorText,
     border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _primaryBlue, width: 1.5)),
     errorBorder:   OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.red)),
+    focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.red, width: 1.5)),
     filled: true, fillColor: _fillColor,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     alignLabelWithHint: true,
   );
 
-  Widget _chips({required List<String> options, required String selected, required ValueChanged<String> onSelect}) {
+  // ✅ FIX: Single-select chips (original behaviour kept for workplace/worktype/pay)
+  Widget _chips({
+    required List<String> options,
+    required String selected,
+    required ValueChanged<String> onSelect,
+  }) {
     return Wrap(spacing: 10, runSpacing: 10, children: options.map((opt) {
       final active = opt == selected;
       return GestureDetector(
@@ -447,6 +615,61 @@ class _CreateJobPageState extends State<CreateJobPage> {
         ),
       );
     }).toList());
+  }
+
+  // ✅ FIX: Multi-select chips with deselect support for experience & education
+  Widget _multiChips({
+    required List<String> options,
+    required Set<String> selected,
+    required Function(String) onToggle,
+    bool required = false,
+  }) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(spacing: 10, runSpacing: 10, children: options.map((opt) {
+        final active = selected.contains(opt);
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              if (active) {
+                // ✅ Allow deselect only if more than 1 selected (keep at least 1 if required)
+                if (!required || selected.length > 1) {
+                  selected.remove(opt);
+                }
+              } else {
+                selected.add(opt);
+              }
+            });
+            onToggle(opt);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: active ? _primaryBlue : Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: active ? _primaryBlue : _borderColor, width: 1.5),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (active) ...[
+                const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                const SizedBox(width: 4),
+              ],
+              Text(opt, style: TextStyle(
+                fontSize: 13,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active ? Colors.white : const Color(0xFF444444),
+              )),
+            ]),
+          ),
+        );
+      }).toList()),
+      if (required && selected.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text('Please select at least one option',
+              style: TextStyle(fontSize: 12, color: Colors.red)),
+        ),
+    ]);
   }
 
   Widget _dropdown(String value, List<String> options, ValueChanged<String> onChanged) {
@@ -495,59 +718,51 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
-  // ── ✅ FIX 2: Suggestion chip row — tapping appends to the field ──────────
   Widget _suggestionRow(List<String> suggestions, TextEditingController ctrl) {
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.lightbulb_outline_rounded, size: 14, color: Color(0xFFE07B39)),
-            const SizedBox(width: 4),
-            const Text('Suggestions — tap to add', style: TextStyle(fontSize: 11, color: Color(0xFFE07B39), fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: suggestions.map((s) {
-              final alreadyAdded = ctrl.text.contains(s);
-              return GestureDetector(
-                onTap: alreadyAdded ? null : () => _appendSuggestion(ctrl, s),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: alreadyAdded ? const Color(0xFFE8FBF0) : const Color(0xFFF0F2FF),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: alreadyAdded ? const Color(0xFF2CB06A) : const Color(0xFF3B4FD8),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(
-                      alreadyAdded ? Icons.check_rounded : Icons.add_rounded,
-                      size: 13,
-                      color: alreadyAdded ? const Color(0xFF2CB06A) : _primaryBlue,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(s, style: TextStyle(
-                      fontSize: 12,
-                      color: alreadyAdded ? const Color(0xFF2CB06A) : _primaryBlue,
-                      fontWeight: FontWeight.w500,
-                    )),
-                  ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.lightbulb_outline_rounded, size: 14, color: Color(0xFFE07B39)),
+          const SizedBox(width: 4),
+          const Text('Suggestions — tap to add', style: TextStyle(fontSize: 11, color: Color(0xFFE07B39), fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: suggestions.map((s) {
+          final alreadyAdded = ctrl.text.contains(s);
+          return GestureDetector(
+            onTap: alreadyAdded ? null : () => _appendSuggestion(ctrl, s),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: alreadyAdded ? const Color(0xFFE8FBF0) : const Color(0xFFF0F2FF),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: alreadyAdded ? const Color(0xFF2CB06A) : const Color(0xFF3B4FD8),
+                  width: 1,
                 ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(
+                  alreadyAdded ? Icons.check_rounded : Icons.add_rounded,
+                  size: 13,
+                  color: alreadyAdded ? const Color(0xFF2CB06A) : _primaryBlue,
+                ),
+                const SizedBox(width: 4),
+                Text(s, style: TextStyle(
+                  fontSize: 12,
+                  color: alreadyAdded ? const Color(0xFF2CB06A) : _primaryBlue,
+                  fontWeight: FontWeight.w500,
+                )),
+              ]),
+            ),
+          );
+        }).toList()),
+      ]),
     );
   }
 
-  // ── Nav buttons ───────────────────────────────────────────────────────────
   Widget _buildNavButtons() {
     final isLast = _currentStep == 2;
     return Padding(
@@ -585,13 +800,15 @@ class _CreateJobPageState extends State<CreateJobPage> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP SCREENS
+  // STEP 1 — CLASSIFY
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildClassify() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 24),
-      _label('Job Title', showInfo: true),
+
+      // ── Job Title ──────────────────────────────────────────────────────
+      _label('Job Title', showInfo: true, required: true),
       TextFormField(
         controller: _jobTitleController,
         decoration: _dec(
@@ -599,52 +816,132 @@ class _CreateJobPageState extends State<CreateJobPage> {
           prefix: Padding(padding: const EdgeInsets.all(12),
               child: Icon(Icons.work_outline_rounded, size: 20, color: Colors.grey[400])),
         ),
-        validator: (v) => (v == null || v.trim().isEmpty) ? 'Please add job title' : null,
+        validator: (v) => (v == null || v.trim().isEmpty) ? 'Job title is required' : null,
       ),
       const SizedBox(height: 20),
 
-      _label('Location', showInfo: true),
-      TextFormField(
-        controller: _locationController,
-        decoration: _dec(
-          hint: 'Enter a suburb, city or region (e.g. Kuala Lumpur)',
-          prefix: const Padding(padding: EdgeInsets.all(12),
-              child: Icon(Icons.location_on_outlined, size: 20, color: _inactiveGrey)),
+      // ── Location with Google Places ────────────────────────────────────
+      _label('Location', showInfo: true, required: true),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextFormField(
+          controller: _locationController,
+          focusNode: _locationFocus,
+          decoration: _dec(
+            hint: 'Search for a city or area...',
+            prefix: Padding(
+              padding: const EdgeInsets.all(12),
+              child: _isLoadingPlaces
+                  ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: _primaryBlue))
+                  : const Icon(Icons.location_on_outlined, size: 20, color: _inactiveGrey),
+            ),
+          ),
+          validator: (v) => (v == null || v.trim().isEmpty) ? 'Location is required' : null,
         ),
-      ),
-      _hint('Suggestions will appear below the field as you type'),
+
+        // ✅ Place suggestions dropdown
+        if (_showPlaceSuggestions && _placeSuggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _borderColor),
+              boxShadow: [BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8, offset: const Offset(0, 4),
+              )],
+            ),
+            child: Column(
+              children: _placeSuggestions.take(5).map((place) {
+                return InkWell(
+                  onTap: () => _selectPlace(place['description']!),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(children: [
+                      const Icon(Icons.location_on_outlined, size: 16, color: _primaryBlue),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(
+                        place['description']!,
+                        style: const TextStyle(fontSize: 13, color: _labelColor),
+                      )),
+                    ]),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ]),
+      _hint('Start typing to search for a location'),
       const SizedBox(height: 16),
 
+      // ── Workplace ──────────────────────────────────────────────────────
       _label('Workplace Option'),
-      _dropdown(_selectedWorkplace, ['On-site', 'Remote', 'Hybrid'], (v) => setState(() => _selectedWorkplace = v)),
-      _hint('Suggestions will appear below the field as you type'),
+      _dropdown(_selectedWorkplace, ['On-site', 'Remote', 'Hybrid'],
+              (v) => setState(() => _selectedWorkplace = v)),
       const SizedBox(height: 16),
 
-      _label('Work type'),
-      _chips(options: _workTypeOptions, selected: _selectedWorkType, onSelect: (v) => setState(() => _selectedWorkType = v)),
+      // ── Work type ──────────────────────────────────────────────────────
+      _label('Work type', required: true),
+      _chips(
+        options: _workTypeOptions,
+        selected: _selectedWorkType,
+        onSelect: (v) => setState(() => _selectedWorkType = v),
+      ),
       const SizedBox(height: 20),
 
-      _label('Pay type'),
-      _chips(options: _payTypeOptions, selected: _selectedPayType, onSelect: (v) => setState(() => _selectedPayType = v)),
+      // ── Pay type ───────────────────────────────────────────────────────
+      _label('Pay type', required: true),
+      _chips(
+        options: _payTypeOptions,
+        selected: _selectedPayType,
+        onSelect: (v) => setState(() => _selectedPayType = v),
+      ),
       const SizedBox(height: 20),
 
-      _label('Pay Range', showInfo: true),
-      const Text('Enter a range to offer candidates. If pay is an exact amount, enter the same in both fields.',
+      // ── Pay Range ──────────────────────────────────────────────────────
+      _label('Pay Range', showInfo: true, required: true),
+      const Text('Enter a range. If exact, enter the same value in both fields.',
           style: TextStyle(fontSize: 12, color: _helperColor, height: 1.4)),
       const SizedBox(height: 14),
 
       _label('Currency'),
-      _dropdown(_selectedCurrency, _currencyOptions, (v) => setState(() => _selectedCurrency = v)),
+      _dropdown(_selectedCurrency, _currencyOptions,
+              (v) => setState(() => _selectedCurrency = v)),
       const SizedBox(height: 14),
 
-      _label('From'),
-      TextFormField(controller: _minPayController, keyboardType: TextInputType.number, decoration: _dec(hint: 'Enter minimum pay')),
+      _label('From', required: true),
+      TextFormField(
+        controller: _minPayController,
+        keyboardType: TextInputType.number,
+        decoration: _dec(hint: 'Enter minimum pay'),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return 'Minimum pay is required';
+          if (double.tryParse(v.trim()) == null) return 'Must be a valid number';
+          if (double.parse(v.trim()) < 0) return 'Pay cannot be negative';
+          return null;
+        },
+      ),
       const SizedBox(height: 12),
 
-      _label('To'),
-      TextFormField(controller: _maxPayController, keyboardType: TextInputType.number, decoration: _dec(hint: 'Enter maximum pay')),
+      _label('To', required: true),
+      TextFormField(
+        controller: _maxPayController,
+        keyboardType: TextInputType.number,
+        decoration: _dec(hint: 'Enter maximum pay'),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return 'Maximum pay is required';
+          if (double.tryParse(v.trim()) == null) return 'Must be a valid number';
+          final max = double.parse(v.trim());
+          final min = double.tryParse(_minPayController.text.trim()) ?? 0;
+          if (max < 0) return 'Pay cannot be negative';
+          if (max < min) return 'Maximum pay cannot be less than minimum pay';
+          return null;
+        },
+      ),
       const SizedBox(height: 20),
 
+      // ── Show pay on ad ─────────────────────────────────────────────────
       _label('Pay shown on ad'),
       Row(children: ['Yes', 'No'].map((opt) {
         final active = _showPayOnAd == opt;
@@ -670,6 +967,10 @@ class _CreateJobPageState extends State<CreateJobPage> {
     ]);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 2 — WRITE
+  // ─────────────────────────────────────────────────────────────────────────
+
   Widget _buildWrite() {
     final descSuggestions = _descSuggestions[_selectedWorkType] ?? _descSuggestions['Full-time']!;
 
@@ -677,20 +978,18 @@ class _CreateJobPageState extends State<CreateJobPage> {
       const SizedBox(height: 24),
 
       // ── Job Description ────────────────────────────────────────────────
-      _label('Job Description', showInfo: true),
+      _label('Job Description', showInfo: true, required: true),
       TextFormField(
         controller: _descriptionController,
         maxLines: 6,
         decoration: _dec(hint: 'Describe the role, day-to-day tasks and responsibilities...'),
-        validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a job description' : null,
+        validator: (v) => (v == null || v.trim().isEmpty) ? 'Job description is required' : null,
       ),
-      // Suggestions for description
       _suggestionRow(descSuggestions, _descriptionController),
       const SizedBox(height: 24),
 
       // ── Requirements ──────────────────────────────────────────────────
-      _label('Requirements & Skills'),
-      // Category tabs for requirements
+      _label('Requirements & Skills', required: true),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: _reqCategories.map((cat) {
@@ -719,8 +1018,8 @@ class _CreateJobPageState extends State<CreateJobPage> {
         controller: _requirementsController,
         maxLines: 5,
         decoration: _dec(hint: 'e.g. Minimum 2 years experience, proficient in Microsoft Office...'),
+        validator: (v) => (v == null || v.trim().isEmpty) ? 'Requirements are required' : null,
       ),
-      // Suggestions for requirements
       _suggestionRow(_reqSuggestions[_reqCategory]!, _requirementsController),
       const SizedBox(height: 24),
 
@@ -731,14 +1030,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
         maxLines: 4,
         decoration: _dec(hint: 'e.g. EPF & SOCSO, medical coverage, annual leave...'),
       ),
-      // Suggestions for benefits
       _suggestionRow(_benefitsSuggestions, _benefitsController),
       const SizedBox(height: 24),
 
       // ── Vacancies ─────────────────────────────────────────────────────
       _label('Number of Vacancies'),
       Row(children: [
-        // minus
         GestureDetector(
           onTap: () {
             final v = int.tryParse(_vacanciesController.text) ?? 1;
@@ -759,10 +1056,15 @@ class _CreateJobPageState extends State<CreateJobPage> {
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
           decoration: _dec(hint: '1'),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'Required';
+            final n = int.tryParse(v.trim());
+            if (n == null || n < 1) return 'Min 1';
+            return null;
+          },
           onChanged: (_) => setState(() {}),
         )),
         const SizedBox(width: 12),
-        // plus
         GestureDetector(
           onTap: () {
             final v = int.tryParse(_vacanciesController.text) ?? 1;
@@ -780,16 +1082,32 @@ class _CreateJobPageState extends State<CreateJobPage> {
       ]),
       const SizedBox(height: 20),
 
-      // ── Experience Level ──────────────────────────────────────────────
-      _label('Experience Level'),
-      _chips(options: _experienceOptions, selected: _selectedExperience, onSelect: (v) => setState(() => _selectedExperience = v)),
+      // ── Experience Level (multi-select, deselectable) ──────────────────
+      _label('Experience Level', required: true),
+      _hint('Select all that apply — tap again to deselect'),
+      _multiChips(
+        options: _experienceOptions,
+        selected: _selectedExperiences,
+        onToggle: (_) {},
+        required: true,
+      ),
       const SizedBox(height: 20),
 
-      // ── Education Level ───────────────────────────────────────────────
-      _label('Minimum Education'),
-      _chips(options: _educationOptions, selected: _selectedEducation, onSelect: (v) => setState(() => _selectedEducation = v)),
+      // ── Education Level (multi-select, deselectable) ───────────────────
+      _label('Minimum Education', required: true),
+      _hint('Select all that apply — tap again to deselect'),
+      _multiChips(
+        options: _educationOptions,
+        selected: _selectedEducations,
+        onToggle: (_) {},
+        required: true,
+      ),
     ]);
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 3 — MANAGE
+  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildManage() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -821,12 +1139,16 @@ class _CreateJobPageState extends State<CreateJobPage> {
       _hint('Ad will auto-close after this date'),
       const SizedBox(height: 20),
 
-      _label('Application Method'),
-      _chips(options: _appMethodOptions, selected: _applicationMethod, onSelect: (v) => setState(() => _applicationMethod = v)),
+      _label('Application Method', required: true),
+      _chips(
+        options: _appMethodOptions,
+        selected: _applicationMethod,
+        onSelect: (v) => setState(() => _applicationMethod = v),
+      ),
       const SizedBox(height: 16),
 
       if (_applicationMethod == 'Email') ...[
-        _label('Application Email'),
+        _label('Application Email', required: true),
         TextFormField(
           controller: _applicationEmailController,
           keyboardType: TextInputType.emailAddress,
@@ -835,12 +1157,19 @@ class _CreateJobPageState extends State<CreateJobPage> {
             prefix: const Padding(padding: EdgeInsets.all(12),
                 child: Icon(Icons.email_outlined, size: 20, color: _inactiveGrey)),
           ),
+          validator: (v) {
+            if (_applicationMethod != 'Email') return null;
+            if (v == null || v.trim().isEmpty) return 'Email is required';
+            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+            if (!emailRegex.hasMatch(v.trim())) return 'Please enter a valid email';
+            return null;
+          },
         ),
         const SizedBox(height: 16),
       ],
 
       if (_applicationMethod == 'External URL') ...[
-        _label('Application URL'),
+        _label('Application URL', required: true),
         TextFormField(
           controller: _applicationUrlController,
           keyboardType: TextInputType.url,
@@ -849,6 +1178,14 @@ class _CreateJobPageState extends State<CreateJobPage> {
             prefix: const Padding(padding: EdgeInsets.all(12),
                 child: Icon(Icons.link_rounded, size: 20, color: _inactiveGrey)),
           ),
+          validator: (v) {
+            if (_applicationMethod != 'External URL') return null;
+            if (v == null || v.trim().isEmpty) return 'URL is required';
+            if (!v.trim().startsWith('http://') && !v.trim().startsWith('https://')) {
+              return 'URL must start with http:// or https://';
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 16),
       ],
@@ -881,15 +1218,15 @@ class _CreateJobPageState extends State<CreateJobPage> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Ad Summary', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _labelColor)),
           const SizedBox(height: 12),
-          _summaryRow('Job Title',  _jobTitleController.text.isEmpty  ? '—' : _jobTitleController.text),
-          _summaryRow('Location',   _locationController.text.isEmpty   ? '—' : _locationController.text),
-          _summaryRow('Work Type',  _selectedWorkType),
-          _summaryRow('Workplace',  _selectedWorkplace),
-          _summaryRow('Pay',        'RM${_minPayController.text.isEmpty ? "0" : _minPayController.text} – RM${_maxPayController.text.isEmpty ? "0" : _maxPayController.text} / $_selectedPayType'),
-          _summaryRow('Vacancies',  _vacanciesController.text.isEmpty ? '1' : _vacanciesController.text),
-          _summaryRow('Experience', _selectedExperience),
-          _summaryRow('Education',  _selectedEducation),
-          _summaryRow('Apply via',  _applicationMethod),
+          _summaryRow('Job Title',   _jobTitleController.text.isEmpty  ? '—' : _jobTitleController.text),
+          _summaryRow('Location',    _locationController.text.isEmpty   ? '—' : _locationController.text),
+          _summaryRow('Work Type',   _selectedWorkType),
+          _summaryRow('Workplace',   _selectedWorkplace),
+          _summaryRow('Pay',         '${_selectedCurrency}${_minPayController.text.isEmpty ? "0" : _minPayController.text} – ${_selectedCurrency}${_maxPayController.text.isEmpty ? "0" : _maxPayController.text} / $_selectedPayType'),
+          _summaryRow('Vacancies',   _vacanciesController.text.isEmpty ? '1' : _vacanciesController.text),
+          _summaryRow('Experience',  _selectedExperiences.isEmpty ? '—' : _selectedExperiences.join(', ')),
+          _summaryRow('Education',   _selectedEducations.isEmpty  ? '—' : _selectedEducations.join(', ')),
+          _summaryRow('Apply via',   _applicationMethod),
         ]),
       ),
     ]);
