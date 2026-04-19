@@ -101,13 +101,13 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Now shows the real name from the application collection!
-                    _PrototypeField(label: 'Candidate', value: displayName),
+                    _PrototypeField(label: 'Candidate Name', value: displayName),
                     const SizedBox(height: 20),
-                    _PrototypeField(label: 'Current Date', value: _formatTsDate(interviewTs)),
+                    _PrototypeField(label: 'Interview Date', value: _formatTsDate(interviewTs)),
                     const SizedBox(height: 20),
-                    _PrototypeField(label: 'Current Time', value: _formatTsTime(interviewTs)),
+                    _PrototypeField(label: 'Interview Time', value: _formatTsTime(interviewTs)),
                     const SizedBox(height: 20),
-                    _PrototypeField(label: 'Location', value: d['locationType'] ?? 'TBC'),
+                    _PrototypeField(label: 'Interview Location', value: d['locationType'] ?? 'TBC'),
 
                     // Rest of your UI code...
                     const SizedBox(height: 24),
@@ -146,9 +146,21 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
                       decoration: InputDecoration(
                         hintText: "Why are you rescheduling?",
                         filled: true,
-                        fillColor: const Color(0xFFE8E1F7),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                        fillColor: Colors.white, // Pure white background
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFB39DDB), width: 1.5),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFB39DDB), width: 2.0),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
                       ),
+                      style: const TextStyle(color: Colors.black, fontSize: 15),
                     ),
                     const SizedBox(height: 32),
 
@@ -171,7 +183,7 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
       children: [
         Expanded(
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C65C), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
             onPressed: () => _updateResponse('accepted'),
             child: const Text('Accept', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
           ),
@@ -249,7 +261,7 @@ class _EditableSelector extends StatelessWidget {
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFFE8E1F7), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFB39DDB))),
+            decoration: BoxDecoration(color: const Color(0x0fffffff), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFB39DDB))),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
