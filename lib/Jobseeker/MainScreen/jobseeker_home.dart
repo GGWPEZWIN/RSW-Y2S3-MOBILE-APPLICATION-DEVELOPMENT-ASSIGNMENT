@@ -54,20 +54,17 @@ class _HomePageState extends State<HomePage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 1. Get user data (including resume base64)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       final userData = userDoc.data() ?? {};
 
-      // 2. Get all active jobs
       final jobsSnap =
       await FirebaseFirestore.instance.collection('jobs').get();
       final allJobs =
       jobsSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
 
-      // 3. Run AI pipeline
       final results = await _recommendationService.recommendJobs(
         userData: userData,
         allJobs: allJobs,
@@ -244,7 +241,6 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            // ── FIXED: Only ONE greeting (bigger font) ──
                             Row(
                               children: [
                                 Text(_getGreetingEmoji(),
@@ -727,7 +723,6 @@ class _HomePageState extends State<HomePage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // ── Match score badge ────────────────────────────────────
             Container(
               margin: const EdgeInsets.only(bottom: 6),
               padding:
@@ -960,9 +955,7 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.white60, fontSize: 12)),
               const Spacer(),
               GestureDetector(
-                onTap: hasApplied
-                    ? null
-                    : () async {
+                onTap: () async {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -975,17 +968,16 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 18, vertical: 8),
                   decoration: BoxDecoration(
-                    color: hasApplied
-                        ? const Color(0xFF2CB06A)
-                        : const Color(0xFFF0C040),
+                    color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
-                  child: Text(
-                    hasApplied ? 'Applied ✓' : 'Apply',
+                  child: const Text(
+                    'View Details',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: hasApplied ? Colors.white : Colors.black,
+                      color: Colors.white,
                     ),
                   ),
                 ),
