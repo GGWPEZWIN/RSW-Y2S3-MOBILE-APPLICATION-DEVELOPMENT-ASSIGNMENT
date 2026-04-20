@@ -18,8 +18,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
   bool _showWithdrawn = false;
   String _searchQuery = '';
   String _selectedStatusFilter = 'All';
-
-  // UPDATED: Added 'Newest' as the default time-based sort
   String _sortBy = 'Newest';
 
   static const Color _cardColor     = Color(0xFF2D3A8C);
@@ -87,25 +85,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
         title: const Text('My Applied Jobs',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17)),
         centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const InterviewPracticeJobSelectScreen())),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                    color: _blue, borderRadius: BorderRadius.circular(20)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                  Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 15),
-                  SizedBox(width: 5),
-                  Text('Practice', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                ]),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Column(children: [
         Container(
@@ -122,7 +101,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
           ),
         ),
 
-        // Search, Sort, and Status Filter Bar
         _buildAdvancedFilters(),
 
         Expanded(
@@ -139,13 +117,11 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
 
               List<QueryDocumentSnapshot> docs = snap.data!.docs;
 
-              // 1. Tab Filter
               docs = docs.where((d) {
                 final s = ((d.data() as Map)['status'] ?? '').toString();
                 return _showWithdrawn ? _isWithdrawn(s) : !_isWithdrawn(s);
               }).toList();
 
-              // 2. Search Filter
               if (_searchQuery.isNotEmpty) {
                 docs = docs.where((d) {
                   final data = d.data() as Map<String, dynamic>;
@@ -155,7 +131,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 }).toList();
               }
 
-              // 3. Status Filter
               if (_selectedStatusFilter != 'All') {
                 docs = docs.where((d) {
                   final s = ((d.data() as Map)['status'] ?? '').toString().toLowerCase();
@@ -163,18 +138,15 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 }).toList();
               }
 
-              // 4. UPDATED: Sorting Algorithm (Time vs Status)
               docs.sort((a, b) {
                 final dataA = a.data() as Map<String, dynamic>;
                 final dataB = b.data() as Map<String, dynamic>;
 
                 if (_sortBy == 'Newest') {
-                  // Primary Sort: appliedAt (Time)
                   final timeA = dataA['appliedAt'] as Timestamp? ?? Timestamp.now();
                   final timeB = dataB['appliedAt'] as Timestamp? ?? Timestamp.now();
                   return timeB.compareTo(timeA);
                 } else {
-                  // Primary Sort: status (Alphabetical)
                   final statusA = (dataA['status'] ?? '').toString();
                   final statusB = (dataB['status'] ?? '').toString();
                   return statusA.compareTo(statusB);
@@ -199,7 +171,8 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                   final d    = docs[i].data() as Map<String, dynamic>;
                   final s    = (d['status'] ?? 'unprocessed').toString();
                   final sCol = _statusColor(s);
-                  return _card(context, docs[i].id, d, s, sCol);
+                  final isWithdrawn = _isWithdrawn(s);
+                  return _card(context, docs[i].id, d, s, sCol, isWithdrawn);
                 },
               );
             },
@@ -245,7 +218,6 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // UPDATED: Time/Status Sorting Dropdown
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(12)),
@@ -313,7 +285,7 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
     ),
   );
 
-  Widget _card(BuildContext context, String docId, Map<String, dynamic> d, String status, Color sCol) {
+  Widget _card(BuildContext context, String docId, Map<String, dynamic> d, String status, Color sCol, bool isWithdrawn) {
     final title    = d['jobTitle']  ?? 'Unknown Job';
     final company  = d['company']   ?? '';
     final location = d['workplace'] ?? d['location'] ?? '';
@@ -329,41 +301,36 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
         boxShadow: [BoxShadow(
             color: _cardColorDeep.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 6))],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Text(title,
-                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700))),
-              const SizedBox(width: 8),
-              Container(width: 32, height: 32,
-                  decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                  child: const Icon(Icons.bookmark_border_rounded, color: Colors.white70, size: 17)),
-            ]),
-            const SizedBox(height: 4),
-            Text(company, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 10),
-            if (location.isNotEmpty) Row(children: [
-              const Icon(Icons.location_on_outlined, size: 13, color: Colors.white54),
-              const SizedBox(width: 4),
-              Text(location, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ]),
-            const SizedBox(height: 4),
-            Row(children: [
-              const Icon(Icons.access_time, size: 13, color: Colors.white54),
-              const SizedBox(width: 4),
-              Text('Applied ${_timeAgo(d['appliedAt'])}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ]),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Text(title,
+                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700))),
+            const SizedBox(width: 8),
+            Container(width: 32, height: 32,
+                decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.bookmark_border_rounded, color: Colors.white70, size: 17)),
           ]),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08)))),
-          child: Row(children: [
+          const SizedBox(height: 4),
+          Text(company, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 10),
+          if (location.isNotEmpty) Row(children: [
+            const Icon(Icons.location_on_outlined, size: 13, color: Colors.white54),
+            const SizedBox(width: 4),
+            Text(location, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            const Icon(Icons.access_time, size: 13, color: Colors.white54),
+            const SizedBox(width: 4),
+            Text('Applied ${_timeAgo(d['appliedAt'])}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          ]),
+          const SizedBox(height: 4),
+          // Status badge
+          Row(children: [
             Container(width: 8, height: 8,
                 decoration: BoxDecoration(
                   color: sCol, shape: BoxShape.circle,
@@ -371,7 +338,87 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 )),
             const SizedBox(width: 8),
             Text(sLabel, style: TextStyle(color: sCol, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
-            const Spacer(),
+          ]),
+          const SizedBox(height: 14),
+
+          // ✅ FIXED: Use Column instead of Row to prevent overflow
+          if (!isWithdrawn)
+            Column(
+              children: [
+                // Practice Interview Button - Full width
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => InterviewPracticeSessionScreen(savedJobData: d),
+                  ),
+    ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5C842),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.record_voice_over_rounded,
+                            size: 16, color: Color(0xFF1A1A2E)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Practice Interview',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // View Details Button - Full width
+                GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ApplicationStatusScreen(
+                            applicationId: docId,
+                            applicationData: d
+                        ),
+                      ),
+                    );
+                    setState(() {});
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'View Details',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+          // For withdrawn jobs - only View Details button (full width)
+          if (isWithdrawn)
             GestureDetector(
               onTap: () async {
                 await Navigator.push(
@@ -386,19 +433,27 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
                 setState(() {});
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
-                child: const Text('View Details',
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                child: const Center(
+                  child: Text(
+                    'View Details',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ]),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }
