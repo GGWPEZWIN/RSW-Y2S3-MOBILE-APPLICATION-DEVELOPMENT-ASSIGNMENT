@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 /// Jobseeker-side notification inbox.
 /// Add this as a tab or navigate to it from the bottom nav "Applied" tab.
@@ -26,16 +25,6 @@ class _JobseekerNotificationsPageState
   static const Color kRejected    = Color(0xFFEF4444);
   static const Color kShortlisted = Color(0xFFF59E0B);
   static const Color kPending     = Color(0xFF94A3B8);
-
-  // Bottom nav
-  int _currentIndex = 2; // "Applied" tab active by default
-  final List<String> _icons = [
-    'assets/icons/home.svg',
-    'assets/icons/saved.svg',
-    'assets/icons/applied.svg',
-    'assets/icons/profile.svg',
-  ];
-  final List<String> _labels = ['Home', 'Saved', 'Applied', 'Profile'];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -167,7 +156,7 @@ class _JobseekerNotificationsPageState
           );
         },
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      // ❌ REMOVED bottomNavigationBar
     );
   }
 
@@ -344,63 +333,6 @@ class _JobseekerNotificationsPageState
             style: TextStyle(fontSize: 14, color: kTextSecondary),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Bottom Nav (matches your existing style) ───────────────────────────────
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_icons.length, (index) {
-            final isActive = _currentIndex == index;
-            return GestureDetector(
-              onTap: () => setState(() => _currentIndex = index),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SvgPicture.asset(
-                    _icons[index],
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(
-                      isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF94A3B8),
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _labels[index],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                      isActive ? FontWeight.w600 : FontWeight.normal,
-                      color: isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFF94A3B8),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ),
       ),
     );
   }

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
-import '../../MainScreen/jobseeker_profile.dart';
 import '../ApplicationUI/job_details_screen.dart';
 import '../../InterviewPractice/interview_practice_screen.dart';
 import '../../Widgets/nav_bar_widget.dart';
+import '../../MainScreen/jobseeker_profile.dart';
 import 'applied_job_list.dart';
 
 class SavedJobsScreen extends StatefulWidget {
@@ -19,7 +19,6 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
   static const Color _blue = Color(0xFF3B52E8);
   static const Color _bg   = Color(0xFFF4F5FA);
 
-  // Sorting and Filtering State
   String _selectedSort = 'Newest';
   String _searchQuery = '';
 
@@ -39,40 +38,17 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
     return double.tryParse(clean) ?? 0.0;
   }
 
-  // --- UPDATED UNSAVE LOGIC WITH UNDO ---
-  Future<void> _unsaveJob(String jobId, String uid, Map<String, dynamic> jobData) async {
-    final docRef = FirebaseFirestore.instance
+  Future<void> _unsaveJob(String jobId, String uid) async {
+    await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
         .collection('savedJobs')
-        .doc(jobId);
-
-    try {
-      await docRef.delete();
-
-      if (mounted) {
-        // Clear previous SnackBars so the user sees the new one immediately
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Job removed from saved'),
-            backgroundColor: const Color(0xFF1E2A6E),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'UNDO',
-              textColor: const Color(0xFFF5C842), // Matches bookmark yellow
-              onPressed: () async {
-                // Restore the job data exactly as it was
-                await docRef.set(jobData);
-              },
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("Unsave error: $e");
+        .doc(jobId)
+        .delete();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Job removed from saved'), duration: Duration(seconds: 2)),
+      );
     }
   }
 
@@ -94,29 +70,6 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17),
         ),
         centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const InterviewPracticeJobSelectScreen()),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(20)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 15),
-                    SizedBox(width: 5),
-                    Text('Practice', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: user == null
           ? const Center(child: Text('Please log in to see saved jobs.'))
@@ -136,7 +89,6 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
 
                 List<QueryDocumentSnapshot> docs = snap.data!.docs;
 
-                // Client-side Filtering
                 if (_searchQuery.isNotEmpty) {
                   docs = docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
@@ -146,7 +98,6 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                   }).toList();
                 }
 
-                // Sorting
                 docs.sort((a, b) {
                   final dataA = a.data() as Map<String, dynamic>;
                   final dataB = b.data() as Map<String, dynamic>;
@@ -183,7 +134,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           if (index == 1) return;
           if (index == 0) Navigator.pop(context);
           else if (index == 2) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AppliedJobsScreen()));
-          else if (index == 3) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilePage(user: user)));
+          else if (index == 3) Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));
         },
       ),
     );
@@ -271,99 +222,145 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           ),
         ],
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        )),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    // PASS DATA TO THE UNSAVE FUNCTION FOR THE UNDO ACTION
-                    onTap: () => _unsaveJob(jobId, uid, data),
-                    child: Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5C842),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.bookmark_rounded,
-                          color: Color(0xFF1A1A2E), size: 17),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      )),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _unsaveJob(jobId, uid),
+                  child: Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5C842),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: const Icon(Icons.bookmark_rounded,
+                        color: Color(0xFF1A1A2E), size: 17),
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(company, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              const SizedBox(height: 10),
-
-              if (location.isNotEmpty)
-                Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 13, color: Colors.white54),
-                  const SizedBox(width: 4),
-                  Text(location, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                ]),
-
-              if (salary.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.payments_outlined, size: 13, color: Colors.white54),
-                  const SizedBox(width: 4),
-                  Text(salary, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                ]),
+                ),
               ],
+            ),
+            const SizedBox(height: 4),
 
-              const SizedBox(height: 4),
+            Text(company,
+                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            const SizedBox(height: 10),
+
+            if (location.isNotEmpty)
               Row(children: [
-                const Icon(Icons.access_time, size: 13, color: Colors.white54),
+                const Icon(Icons.location_on_outlined,
+                    size: 13, color: Colors.white54),
                 const SizedBox(width: 4),
-                Text(_timeAgo(data['savedAt']), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(location,
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 12)),
               ]),
 
-              const SizedBox(height: 14),
-
-              GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5C842),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF1A1A2E)),
-                      SizedBox(width: 6),
-                      Text(
-                        'View Job Details',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            if (salary.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(children: [
+                const Icon(Icons.payments_outlined,
+                    size: 13, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(salary,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ]),
             ],
-          ),
+
+            const SizedBox(height: 4),
+            Row(children: [
+              const Icon(Icons.access_time, size: 13, color: Colors.white54),
+              const SizedBox(width: 4),
+              Text(_timeAgo(data['savedAt']),
+                  style: const TextStyle(
+                      color: Colors.white54, fontSize: 12)),
+            ]),
+
+            const SizedBox(height: 14),
+
+            // ✅ FIXED: Use Column instead of Row to prevent overflow
+            Column(
+              children: [
+                // Practice Interview Button - Full width
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => InterviewPracticeSessionScreen(savedJobData: data),
+                  ),
+    ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5C842),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.record_voice_over_rounded,
+                            size: 16, color: Color(0xFF1A1A2E)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Practice Interview',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // View Details Button - Full width
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'View Details',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -380,10 +377,15 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
               color: const Color(0xFFEEF0FF),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.bookmark_border_rounded, size: 40, color: Color(0xFF3B52E8)),
+            child: const Icon(Icons.bookmark_border_rounded,
+                size: 40, color: Color(0xFF3B52E8)),
           ),
           const SizedBox(height: 16),
-          const Text('No saved jobs yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
+          const Text('No saved jobs yet',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87)),
           const SizedBox(height: 8),
           const Text(
             'Tap the bookmark icon on any job\nto save it here.',

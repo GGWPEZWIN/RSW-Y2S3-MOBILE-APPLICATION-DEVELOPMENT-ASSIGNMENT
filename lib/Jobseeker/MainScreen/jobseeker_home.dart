@@ -54,20 +54,17 @@ class _HomePageState extends State<HomePage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 1. Get user data (including resume base64)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       final userData = userDoc.data() ?? {};
 
-      // 2. Get all active jobs
       final jobsSnap =
       await FirebaseFirestore.instance.collection('jobs').get();
       final allJobs =
       jobsSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
 
-      // 3. Run AI pipeline
       final results = await _recommendationService.recommendJobs(
         userData: userData,
         allJobs: allJobs,
@@ -221,7 +218,6 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             // ── Header ───────────────────────────────────────────────────
-            // ── Header ───────────────────────────────────────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 20),
@@ -245,53 +241,25 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            // --- FIXED NAME PART START ---
-                            StreamBuilder<DocumentSnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(FirebaseAuth.instance.currentUser?.uid)
-                                  .snapshots(),
-                              builder: (context, snapshot) {
-                                final userData = snapshot.data?.data() as Map<String, dynamic>?;
-                                // Get name from Firestore, fallback to Auth name, fallback to 'user'
-                                final String fullName = userData?['name'] ?? widget.user?.displayName ?? 'user';
-                                final String firstName = fullName.trim().split(RegExp(r'\s+')).first;
-
-                                return Row(children: [
-                                  Text(_getGreetingEmoji(),
-                                      style: const TextStyle(fontSize: 13)),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    '${_getGreeting()}, $firstName',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF555555),
-                                    ),
+                            Row(
+                              children: [
+                                Text(_getGreetingEmoji(),
+                                    style: const TextStyle(fontSize: 20)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${_getGreeting()}, ${_getFirstName()}',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF555555),
                                   ),
-                                ]);
-                              },
-                            ),
-                            // --- FIXED NAME PART END ---
-                            // ── UPDATED: Bigger greeting message ──────────
-                            Row(children: [
-                              Text(_getGreetingEmoji(),
-                                  style: const TextStyle(fontSize: 20)),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${_getGreeting()}, ${_getFirstName()}',
-                                style: const TextStyle(
-                                  fontSize: 20,           // ← was 13
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF555555),
                                 ),
-                              ),
-                            ]),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                      // ── REMOVED: homedeco image icon ──────────────────
-                      // Only the notification bell remains
+                      // Notification bell
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('users')
@@ -755,7 +723,6 @@ class _HomePageState extends State<HomePage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // ── Match score badge ────────────────────────────────────
             Container(
               margin: const EdgeInsets.only(bottom: 6),
               padding:
@@ -988,9 +955,7 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.white60, fontSize: 12)),
               const Spacer(),
               GestureDetector(
-                onTap: hasApplied
-                    ? null
-                    : () async {
+                onTap: () async {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1003,17 +968,16 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 18, vertical: 8),
                   decoration: BoxDecoration(
-                    color: hasApplied
-                        ? const Color(0xFF2CB06A)
-                        : const Color(0xFFF0C040),
+                    color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
-                  child: Text(
-                    hasApplied ? 'Applied ✓' : 'Apply',
+                  child: const Text(
+                    'View Details',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: hasApplied ? Colors.white : Colors.black,
+                      color: Colors.white,
                     ),
                   ),
                 ),

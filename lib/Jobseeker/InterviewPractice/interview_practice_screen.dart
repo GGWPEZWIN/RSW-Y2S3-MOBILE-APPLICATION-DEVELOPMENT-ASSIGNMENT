@@ -1,22 +1,15 @@
 // lib/Jobseeker/InterviewPractice/interview_practice_screen.dart
-//
-// ✅ AI-GENERATED questions — OpenRouter generates 6 personalised questions
-//    based on job title, company, requirements, experience level
-// ✅ AI feedback via OpenRouter free model after each answer
-// ✅ Real speech-to-text via speech_to_text package
 
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODELS
+// MODEL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InterviewQuestion {
@@ -25,26 +18,8 @@ class InterviewQuestion {
   const InterviewQuestion({required this.number, required this.question});
 }
 
-class _PracticeJobItem {
-  final String jobId;
-  final String title;
-  final String company;
-  final String location;
-  final String timeLabel;
-  final Map<String, dynamic> fullData;
-
-  const _PracticeJobItem({
-    required this.jobId,
-    required this.title,
-    required this.company,
-    required this.location,
-    required this.timeLabel,
-    required this.fullData,
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// OPENROUTER HELPER — single reusable call
+// OPENROUTER HELPER
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<String> _callOpenRouter(String prompt, String apiKey) async {
@@ -74,7 +49,7 @@ Future<String> _callOpenRouter(String prompt, String apiKey) async {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI QUESTION GENERATOR — calls OpenRouter to generate 6 personalised Qs
+// AI QUESTION GENERATOR
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<List<InterviewQuestion>> _generateQuestionsFromAI(
@@ -131,11 +106,8 @@ Respond with ONLY a numbered list — no intro text, no explanations:
           .map((e) => InterviewQuestion(number: e.key + 1, question: e.value))
           .toList();
     }
-  } catch (_) {
-    // Fall through to local fallback
-  }
+  } catch (_) {}
 
-  // ── Fallback: smarter local questions using job data ────────────────────
   return _localFallbackQuestions(title, company, requirements, experience);
 }
 
@@ -167,202 +139,7 @@ List<InterviewQuestion> _localFallbackQuestions(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 1 — Job Selection (Saved / Applied tabs)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class InterviewPracticeJobSelectScreen extends StatefulWidget {
-  const InterviewPracticeJobSelectScreen({super.key});
-
-  @override
-  State<InterviewPracticeJobSelectScreen> createState() =>
-      _InterviewPracticeJobSelectScreenState();
-}
-
-class _InterviewPracticeJobSelectScreenState
-    extends State<InterviewPracticeJobSelectScreen> {
-
-  int _tabIndex = 0;
-  static const Color _blue = Color(0xFF3B4FD8);
-  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
-
-  String _ago(dynamic ts) {
-    if (ts == null) return '';
-    DateTime dt;
-    try { dt = (ts as Timestamp).toDate(); } catch (_) { return ''; }
-    final d = DateTime.now().difference(dt);
-    if (d.inDays > 0)  return '${d.inDays}d ago';
-    if (d.inHours > 0) return '${d.inHours}h ago';
-    return 'Just now';
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.white,
-    appBar: _appBar(context),
-    body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        child: Container(
-          height: 40,
-          decoration: BoxDecoration(
-              color: const Color(0xFFF0F1F7),
-              borderRadius: BorderRadius.circular(20)),
-          child: Row(children: [_tab('Saved Jobs', 0), _tab('Applied Jobs', 1)]),
-        ),
-      ),
-      const Padding(
-        padding: EdgeInsets.fromLTRB(20, 24, 20, 16),
-        child: Text('Select a job',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-      ),
-      Expanded(child: _tabIndex == 0 ? _savedList() : _appliedList()),
-    ]),
-  );
-
-  Widget _tab(String label, int i) {
-    final active = _tabIndex == i;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tabIndex = i),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 36, margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: active ? _blue : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Center(child: Text(label, style: TextStyle(
-            fontSize: 13,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            color: active ? Colors.white : const Color(0xFF6B7280),
-          ))),
-        ),
-      ),
-    );
-  }
-
-  Widget _savedList() {
-    if (_uid == null) return _empty('Please log in.');
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users').doc(_uid).collection('savedJobs')
-          .orderBy('savedAt', descending: true).snapshots(),
-      builder: (_, s) {
-        if (s.hasError) return _empty('Failed to load saved jobs.\nPlease try again.');
-        if (!s.hasData) return const Center(child: CircularProgressIndicator(color: _blue));
-        if (s.data!.docs.isEmpty) return _empty('No saved jobs yet.\nSave a job from the home page first.');
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: s.data!.docs.length,
-          itemBuilder: (_, i) {
-            final d = s.data!.docs[i].data() as Map<String, dynamic>;
-            return _card(_PracticeJobItem(
-              jobId: s.data!.docs[i].id,
-              title: d['jobTitle'] ?? d['title'] ?? 'Untitled',
-              company: d['company'] ?? '',
-              location: d['location'] ?? '',
-              timeLabel: 'Saved ${_ago(d['savedAt'])}',
-              fullData: d,
-            ));
-          },
-        );
-      },
-    );
-  }
-
-  Widget _appliedList() {
-    if (_uid == null) return _empty('Please log in.');
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('applications').where('userId', isEqualTo: _uid)
-          .orderBy('appliedAt', descending: true).snapshots(),
-      builder: (_, s) {
-        if (s.hasError) return _empty('Failed to load applications.\nPlease try again.');
-        if (!s.hasData) return const Center(child: CircularProgressIndicator(color: _blue));
-        if (s.data!.docs.isEmpty) return _empty('No applications yet.');
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: s.data!.docs.length,
-          itemBuilder: (_, i) {
-            final d = s.data!.docs[i].data() as Map<String, dynamic>;
-            return _card(_PracticeJobItem(
-              jobId: d['jobId'] ?? '',
-              title: d['jobTitle'] ?? 'Untitled',
-              company: d['company'] ?? '',
-              location: d['workplace'] ?? d['location'] ?? '',
-              timeLabel: 'Applied ${_ago(d['appliedAt'])}',
-              fullData: d,
-            ));
-          },
-        );
-      },
-    );
-  }
-
-  Widget _card(_PracticeJobItem item) => Container(
-    margin: const EdgeInsets.only(bottom: 16),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-          colors: [Color(0xFF3B4FD8), Color(0xFF2A3BB8)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight),
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [BoxShadow(
-          color: const Color(0xFF3B4FD8).withOpacity(0.3),
-          blurRadius: 16, offset: const Offset(0, 6))],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Expanded(child: Text(item.title, style: const TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w800,
-              color: Colors.white, letterSpacing: -0.3))),
-          Container(width: 34, height: 34,
-              decoration: BoxDecoration(color: const Color(0xFFF5C842),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.bookmark_rounded, color: Color(0xFF1A1A2E), size: 18)),
-        ]),
-        const SizedBox(height: 4),
-        Text(item.company,
-            style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8))),
-        const SizedBox(height: 8),
-        if (item.location.isNotEmpty) Row(children: [
-          Icon(Icons.location_on_outlined, size: 13, color: Colors.white.withOpacity(0.7)),
-          const SizedBox(width: 4),
-          Text(item.location,
-              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.85))),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Icon(Icons.access_time, size: 13, color: Colors.white.withOpacity(0.7)),
-          const SizedBox(width: 4),
-          Text(item.timeLabel,
-              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.85))),
-        ]),
-        const SizedBox(height: 14),
-        GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => InterviewPracticeSessionScreen(savedJobData: item.fullData))),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-            decoration: BoxDecoration(
-                color: const Color(0xFFF5C842),
-                borderRadius: BorderRadius.circular(20)),
-            child: const Text('Practice Interview',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-          ),
-        ),
-      ]),
-    ),
-  );
-
-  Widget _empty(String msg) => Center(child: Padding(padding: const EdgeInsets.all(32),
-      child: Text(msg, textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)))));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 2 — Interview Session
+// INTERVIEW SESSION SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InterviewPracticeSessionScreen extends StatefulWidget {
@@ -382,19 +159,9 @@ class _InterviewPracticeSessionScreenState
   static const Color _red   = Color(0xFFE53935);
   static const Color _green = Color(0xFF0BA87E);
 
-  // ── Session state ─────────────────────────────────────────────────────────
-  // 'generating' → loading AI questions at start
-  // 'idle'       → waiting for mic tap
-  // 'listening'  → mic active
-  // 'stopped'    → recording stopped, show retry/submit
-  // 'typing'     → text input mode
-  // 'loading'    → getting AI feedback
-  // 'feedback'   → showing AI feedback
   String _mode = 'generating';
 
-  // ── Questions ─────────────────────────────────────────────────────────────
   List<InterviewQuestion> _questions = [];
-  String _questionLoadError = '';
 
   bool _isMicTapLocked    = false;
   bool _isSubmitting      = false;
@@ -409,18 +176,15 @@ class _InterviewPracticeSessionScreenState
   String _aiFeedback       = '';
   String _aiSampleResponse = '';
 
-  // ── Timer ─────────────────────────────────────────────────────────────────
   static const int _totalSeconds = 120;
   int _remainingSeconds = _totalSeconds;
   Timer? _countdownTimer;
 
-  // ── Speech ────────────────────────────────────────────────────────────────
   final SpeechToText _speech    = SpeechToText();
   bool _speechAvailable         = false;
   bool _speechInitialising      = false;
   String _currentWords          = '';
 
-  // ── Pulse animation ───────────────────────────────────────────────────────
   late AnimationController _pulseCtrl;
   late Animation<double>   _pulseAnim;
 
@@ -429,13 +193,12 @@ class _InterviewPracticeSessionScreenState
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(vsync: this,
-        duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _pulseCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.18).animate(
         CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
     _pulseCtrl.stop();
-
-    //  Generate personalised questions + init speech in parallel
     Future.wait([_loadQuestions(), _initSpeech()]);
   }
 
@@ -449,36 +212,29 @@ class _InterviewPracticeSessionScreenState
     super.dispose();
   }
 
-  // ── Load AI-generated questions ───────────────────────────────────────────
   Future<void> _loadQuestions() async {
     if (_apiKey.isEmpty) {
-      // No API key — use smart local fallback immediately
-      final title = widget.savedJobData['jobTitle'] as String? ??
-          widget.savedJobData['title'] as String? ?? 'this role';
-      final company = widget.savedJobData['company'] as String? ?? 'the company';
-      final reqs = widget.savedJobData['requirements'] as String? ?? '';
-      final exp = widget.savedJobData['experienceLevel'] as String? ?? '';
-      final questions = _localFallbackQuestions(title, company, reqs, exp);
-      if (mounted) setState(() { _questions = questions; _mode = 'idle'; });
+      final title   = widget.savedJobData['jobTitle'] as String? ?? widget.savedJobData['title'] as String? ?? 'this role';
+      final company = widget.savedJobData['company']  as String? ?? 'the company';
+      final reqs    = widget.savedJobData['requirements']    as String? ?? '';
+      final exp     = widget.savedJobData['experienceLevel'] as String? ?? '';
+      final qs = _localFallbackQuestions(title, company, reqs, exp);
+      if (mounted) setState(() { _questions = qs; _mode = 'idle'; });
       return;
     }
-
     try {
-      final questions = await _generateQuestionsFromAI(widget.savedJobData, _apiKey);
-      if (mounted) setState(() { _questions = questions; _mode = 'idle'; });
-    } catch (e) {
-      // Fallback to local questions if API fails
-      final title = widget.savedJobData['jobTitle'] as String? ??
-          widget.savedJobData['title'] as String? ?? 'this role';
-      final company = widget.savedJobData['company'] as String? ?? 'the company';
-      final reqs = widget.savedJobData['requirements'] as String? ?? '';
-      final exp = widget.savedJobData['experienceLevel'] as String? ?? '';
-      final questions = _localFallbackQuestions(title, company, reqs, exp);
-      if (mounted) setState(() { _questions = questions; _mode = 'idle'; });
+      final qs = await _generateQuestionsFromAI(widget.savedJobData, _apiKey);
+      if (mounted) setState(() { _questions = qs; _mode = 'idle'; });
+    } catch (_) {
+      final title   = widget.savedJobData['jobTitle'] as String? ?? widget.savedJobData['title'] as String? ?? 'this role';
+      final company = widget.savedJobData['company']  as String? ?? 'the company';
+      final reqs    = widget.savedJobData['requirements']    as String? ?? '';
+      final exp     = widget.savedJobData['experienceLevel'] as String? ?? '';
+      final qs = _localFallbackQuestions(title, company, reqs, exp);
+      if (mounted) setState(() { _questions = qs; _mode = 'idle'; });
     }
   }
 
-  // ── Speech init ───────────────────────────────────────────────────────────
   Future<void> _initSpeech() async {
     if (_speechInitialising) return;
     if (mounted) setState(() => _speechInitialising = true);
@@ -502,11 +258,9 @@ class _InterviewPracticeSessionScreenState
     if (mounted) setState(() => _speechInitialising = false);
   }
 
-  // ── Speech callbacks ──────────────────────────────────────────────────────
   void _onSpeechResult(SpeechRecognitionResult result) {
     if (!mounted) return;
     setState(() => _currentWords = result.recognizedWords);
-
     if (result.finalResult) {
       final existing = _answerCtrl.text;
       final newWords = result.recognizedWords.trim();
@@ -514,8 +268,8 @@ class _InterviewPracticeSessionScreenState
         _answerCtrl.text = existing.isNotEmpty && !existing.endsWith(' ')
             ? '$existing $newWords'
             : '$existing$newWords';
-        _answerCtrl.selection = TextSelection.fromPosition(
-            TextPosition(offset: _answerCtrl.text.length));
+        _answerCtrl.selection =
+            TextSelection.fromPosition(TextPosition(offset: _answerCtrl.text.length));
       }
       _currentWords = '';
       if (_isWaitingForFinal) {
@@ -526,22 +280,18 @@ class _InterviewPracticeSessionScreenState
     }
   }
 
-  // ── Mic tap ───────────────────────────────────────────────────────────────
   Future<void> _onMicTap() async {
     if (_isMicTapLocked || _mode == 'loading' || _mode == 'feedback' ||
         _mode == 'stopped' || _mode == 'generating') return;
-
     if (_speechInitialising) { _showSnack('Setting up microphone...'); return; }
     if (!_speechAvailable && _mode == 'idle') {
       _showSnack('Microphone unavailable — tap "Or type your answer"');
       return;
     }
-
     setState(() => _isMicTapLocked = true);
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _isMicTapLocked = false);
     });
-
     if (_mode == 'idle') {
       await _startListening();
     } else if (_mode == 'listening') {
@@ -556,7 +306,6 @@ class _InterviewPracticeSessionScreenState
       _remainingSeconds = _totalSeconds;
     });
     _pulseCtrl.repeat(reverse: true);
-
     try {
       await _speech.listen(
         onResult: _onSpeechResult,
@@ -578,7 +327,6 @@ class _InterviewPracticeSessionScreenState
   void _stopRecordingAndShowStopped() {
     _countdownTimer?.cancel();
     _pulseCtrl.stop();
-
     if (_mode == 'listening') {
       if (_currentWords.trim().isNotEmpty) {
         final existing = _answerCtrl.text;
@@ -586,14 +334,12 @@ class _InterviewPracticeSessionScreenState
         _answerCtrl.text = existing.isNotEmpty && !existing.endsWith(' ')
             ? '$existing $newWords'
             : '$existing$newWords';
-        _answerCtrl.selection = TextSelection.fromPosition(
-            TextPosition(offset: _answerCtrl.text.length));
+        _answerCtrl.selection =
+            TextSelection.fromPosition(TextPosition(offset: _answerCtrl.text.length));
         _currentWords = '';
       }
-
       _isWaitingForFinal = true;
       _speech.stop();
-
       _finalResultTimeout?.cancel();
       _finalResultTimeout = Timer(const Duration(seconds: 5), () {
         if (mounted && _isWaitingForFinal) {
@@ -638,7 +384,6 @@ class _InterviewPracticeSessionScreenState
     setState(() { _mode = 'idle'; _remainingSeconds = _totalSeconds; });
   }
 
-  // ── Submit for AI feedback ────────────────────────────────────────────────
   Future<void> _submitForFeedback() async {
     if (_isSubmitting) return;
     _isSubmitting = true;
@@ -672,7 +417,7 @@ class _InterviewPracticeSessionScreenState
 
     final jobTitle = widget.savedJobData['jobTitle'] as String? ??
         widget.savedJobData['title'] as String? ?? 'this role';
-    final company = widget.savedJobData['company'] as String? ?? 'the company';
+    final company  = widget.savedJobData['company']  as String? ?? 'the company';
 
     try {
       if (_apiKey.isEmpty) throw Exception('OPENROUTER_API_KEY not set in .env');
@@ -695,9 +440,9 @@ SCORE: <Score like 7/10 with one sentence justification.>
 
       final text = await _callOpenRouter(prompt, _apiKey);
 
-      final feedbackMatch = RegExp(r'FEEDBACK:\s*(.*?)(?=SAMPLE_RESPONSE:|$)', dotAll: true).firstMatch(text);
-      final sampleMatch   = RegExp(r'SAMPLE_RESPONSE:\s*(.*?)(?=SCORE:|$)',    dotAll: true).firstMatch(text);
-      final scoreMatch    = RegExp(r'SCORE:\s*(.*)',                           dotAll: true).firstMatch(text);
+      final feedbackMatch = RegExp(r'FEEDBACK:\s*(.*?)(?=SAMPLE_RESPONSE:|$)',  dotAll: true).firstMatch(text);
+      final sampleMatch   = RegExp(r'SAMPLE_RESPONSE:\s*(.*?)(?=SCORE:|$)',     dotAll: true).firstMatch(text);
+      final scoreMatch    = RegExp(r'SCORE:\s*(.*)',                            dotAll: true).firstMatch(text);
 
       if (mounted) {
         final score = scoreMatch?.group(1)?.trim() ?? '';
@@ -730,7 +475,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
     }
   }
 
-  // ── Navigation ────────────────────────────────────────────────────────────
   void _nextQuestion() {
     if (_mode == 'loading' || _questions.isEmpty) return;
     _countdownTimer?.cancel();
@@ -769,7 +513,8 @@ SCORE: <Score like 7/10 with one sentence justification.>
           content: const Text('Your recorded answer will be lost.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Stay')),
-            TextButton(onPressed: () => Navigator.pop(context, true),
+            TextButton(
+                onPressed: () => Navigator.pop(context, true),
                 child: const Text('Leave', style: TextStyle(color: Colors.red))),
           ],
         ),
@@ -783,7 +528,8 @@ SCORE: <Score like 7/10 with one sentence justification.>
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg), duration: const Duration(seconds: 3),
+      content: Text(msg),
+      duration: const Duration(seconds: 3),
       behavior: SnackBarBehavior.floating,
     ));
   }
@@ -803,10 +549,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
     return Colors.black54;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) => WillPopScope(
     onWillPop: _onWillPop,
@@ -817,7 +559,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
           ? _buildGeneratingScreen()
           : Column(children: [
 
-        // End & Review
+        // End & Review button
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           child: GestureDetector(
@@ -826,12 +568,14 @@ SCORE: <Score like 7/10 with one sentence justification.>
               duration: const Duration(milliseconds: 300),
               width: double.infinity, height: 48,
               decoration: BoxDecoration(
-                color: (_endReviewActive && _mode != 'loading') ? _red : const Color(0xFFF0F1F7),
+                color: (_endReviewActive && _mode != 'loading')
+                    ? _red : const Color(0xFFF0F1F7),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Center(child: Text('End & Review', style: TextStyle(
                 fontSize: 15, fontWeight: FontWeight.w700,
-                color: (_endReviewActive && _mode != 'loading') ? Colors.white : const Color(0xFF9CA3AF),
+                color: (_endReviewActive && _mode != 'loading')
+                    ? Colors.white : const Color(0xFF9CA3AF),
               ))),
             ),
           ),
@@ -843,10 +587,13 @@ SCORE: <Score like 7/10 with one sentence justification.>
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(color: const Color(0xFFF0F1F7), borderRadius: BorderRadius.circular(24)),
+            decoration: BoxDecoration(
+                color: const Color(0xFFF0F1F7),
+                borderRadius: BorderRadius.circular(24)),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('Question ${(_currentQ?.number ?? 1)} of ${_questions.length}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87)),
               const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.black54),
             ]),
           ),
@@ -864,19 +611,21 @@ SCORE: <Score like 7/10 with one sentence justification.>
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+                boxShadow: [BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
                     blurRadius: 12, offset: const Offset(0, 4))],
               ),
               child: Column(children: [
 
-                // Question text
                 if (_currentQ != null)
-                  Text(_currentQ!.question, textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                  Text(_currentQ!.question,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600,
                           color: Colors.black87, height: 1.5)),
                 const SizedBox(height: 24),
 
-                // ── VOICE MODES ─────────────────────────────────────────
+                // ── VOICE MODES ────────────────────────────────────────
                 if (_mode == 'idle' || _mode == 'listening' || _mode == 'stopped') ...[
                   if (_mode != 'idle') ...[
                     Text(_timerDisplay, style: TextStyle(
@@ -885,10 +634,14 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     const SizedBox(height: 12),
                   ],
                   if (_mode == 'idle') ...[
-                    Text(_speechInitialising ? 'Setting up microphone...'
-                        : _speechAvailable ? 'Tap the mic to start speaking'
-                        : 'Microphone unavailable — use typing below',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+                    Text(
+                      _speechInitialising
+                          ? 'Setting up microphone...'
+                          : _speechAvailable
+                          ? 'Tap the mic to start speaking'
+                          : 'Microphone unavailable — use typing below',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
@@ -906,8 +659,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
                         child: Container(
                           width: 68, height: 68,
                           decoration: BoxDecoration(
-                            color: _mode == 'listening' ? _red
-                                : _mode == 'stopped' ? Colors.grey
+                            color: _mode == 'listening'
+                                ? _red
+                                : _mode == 'stopped'
+                                ? Colors.grey
                                 : _speechAvailable ? _blue : Colors.grey,
                             shape: BoxShape.circle,
                             boxShadow: [BoxShadow(
@@ -917,10 +672,16 @@ SCORE: <Score like 7/10 with one sentence justification.>
                             )],
                           ),
                           child: _speechInitialising
-                              ? const Padding(padding: EdgeInsets.all(20),
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : Icon(_mode == 'listening' ? Icons.stop_rounded : Icons.mic_rounded,
-                              color: Colors.white, size: 30),
+                              ? const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                              : Icon(
+                            _mode == 'listening'
+                                ? Icons.stop_rounded
+                                : Icons.mic_rounded,
+                            color: Colors.white, size: 30,
+                          ),
                         ),
                       ),
                     ),
@@ -928,13 +689,20 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 8),
 
                   Text(
-                    _speechInitialising   ? 'Initialising...'
-                        : _mode == 'idle' ? (_speechAvailable ? 'Tap mic to start' : 'Not available')
-                        : _mode == 'listening' ? 'Recording... tap mic to stop'
+                    _speechInitialising
+                        ? 'Initialising...'
+                        : _mode == 'idle'
+                        ? (_speechAvailable ? 'Tap mic to start' : 'Not available')
+                        : _mode == 'listening'
+                        ? 'Recording... tap mic to stop'
                         : 'Recording stopped',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-                        color: _mode == 'listening' ? _red
-                            : _mode == 'stopped' ? Colors.grey[600] : Colors.grey[500]),
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w500,
+                        color: _mode == 'listening'
+                            ? _red
+                            : _mode == 'stopped'
+                            ? Colors.grey[600]
+                            : Colors.grey[500]),
                   ),
                   const SizedBox(height: 12),
 
@@ -951,9 +719,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
                       child: Row(children: [
                         Icon(Icons.mic_rounded, size: 14, color: _blue.withOpacity(0.7)),
                         const SizedBox(width: 6),
-                        Expanded(child: Text(_currentWords, style: TextStyle(
-                            fontSize: 12, color: _blue.withOpacity(0.85),
-                            fontStyle: FontStyle.italic))),
+                        Expanded(child: Text(_currentWords,
+                            style: TextStyle(
+                                fontSize: 12, color: _blue.withOpacity(0.85),
+                                fontStyle: FontStyle.italic))),
                       ]),
                     ),
 
@@ -976,7 +745,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     ),
                   ],
 
-                  // Retry / Submit buttons (stopped mode)
+                  // Retry / Submit (stopped mode)
                   if (_mode == 'stopped') ...[
                     const SizedBox(height: 20),
                     Row(children: [
@@ -984,11 +753,14 @@ SCORE: <Score like 7/10 with one sentence justification.>
                         child: OutlinedButton(
                           onPressed: _retryRecording,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: _blue, side: BorderSide(color: _blue),
+                            foregroundColor: _blue,
+                            side: BorderSide(color: _blue),
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w600)),
+                          child: const Text('Retry',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -996,9 +768,11 @@ SCORE: <Score like 7/10 with one sentence justification.>
                         child: ElevatedButton(
                           onPressed: _submitForFeedback,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _blue, foregroundColor: Colors.white,
+                            backgroundColor: _blue,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                           child: const Text('Submit for AI Feedback',
                               style: TextStyle(fontWeight: FontWeight.w600)),
@@ -1010,16 +784,18 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 16),
                   GestureDetector(
                     onTap: _switchToTyping,
-                    child: const Text('Or type your answer', style: TextStyle(
-                        fontSize: 13, color: Colors.black54,
-                        decoration: TextDecoration.underline)),
+                    child: const Text('Or type your answer',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.black54,
+                            decoration: TextDecoration.underline)),
                   ),
                 ],
 
-                // ── TYPING ──────────────────────────────────────────────
+                // ── TYPING ─────────────────────────────────────────────
                 if (_mode == 'typing') ...[
                   Container(
-                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE5E7EB)),
+                    decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                         borderRadius: BorderRadius.circular(12)),
                     child: TextField(
                       controller: _answerCtrl,
@@ -1037,9 +813,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: _switchToVoice,
-                    child: const Text('Or record your answer', style: TextStyle(
-                        fontSize: 13, color: Colors.black54,
-                        decoration: TextDecoration.underline)),
+                    child: const Text('Or record your answer',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.black54,
+                            decoration: TextDecoration.underline)),
                   ),
                   const SizedBox(height: 20),
                   ValueListenableBuilder<TextEditingValue>(
@@ -1047,21 +824,26 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     builder: (_, value, __) => SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: value.text.trim().isNotEmpty ? _submitForFeedback : null,
+                        onPressed: value.text.trim().isNotEmpty
+                            ? _submitForFeedback : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _blue, foregroundColor: Colors.white,
+                          backgroundColor: _blue,
+                          foregroundColor: Colors.white,
                           disabledBackgroundColor: Colors.grey[300],
-                          elevation: 0, padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         child: const Text('Submit for Feedback',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
                 ],
 
-                // ── LOADING ─────────────────────────────────────────────
+                // ── LOADING ────────────────────────────────────────────
                 if (_mode == 'loading') ...[
                   const SizedBox(height: 20),
                   const CircularProgressIndicator(color: _blue),
@@ -1074,7 +856,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 20),
                 ],
 
-                // ── FEEDBACK ────────────────────────────────────────────
+                // ── FEEDBACK ───────────────────────────────────────────
                 if (_mode == 'feedback') ...[
                   Container(
                     width: double.infinity,
@@ -1087,8 +869,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     ),
                     child: SingleChildScrollView(
                       child: Text(
-                        _answerCtrl.text.isNotEmpty ? _answerCtrl.text : 'Answer given verbally.',
-                        style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.5),
+                        _answerCtrl.text.isNotEmpty
+                            ? _answerCtrl.text : 'Answer given verbally.',
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black87, height: 1.5),
                       ),
                     ),
                   ),
@@ -1098,14 +882,18 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     child: ElevatedButton(
                       onPressed: _nextQuestion,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _blue, foregroundColor: Colors.white,
-                        elevation: 0, padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        backgroundColor: _blue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         _currentQuestionIndex < _questions.length - 1
                             ? 'Next Question' : 'Finish Practice',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -1113,18 +901,22 @@ SCORE: <Score like 7/10 with one sentence justification.>
 
                 const SizedBox(height: 16),
 
-                // Accordions
-                _accordion(label: 'Feedback', icon: Icons.star_outline_rounded,
-                    iconColor: const Color(0xFFF5C842),
-                    expanded: _feedbackExpanded,
-                    onTap: () => setState(() => _feedbackExpanded = !_feedbackExpanded),
-                    content: _feedbackExpanded && _mode == 'feedback' ? _aiFeedback : null),
-
-                _accordion(label: 'Sample Response', icon: Icons.lightbulb_outline_rounded,
-                    iconColor: _green,
-                    expanded: _sampleExpanded,
-                    onTap: () => setState(() => _sampleExpanded = !_sampleExpanded),
-                    content: _sampleExpanded && _mode == 'feedback' ? _aiSampleResponse : null),
+                _accordion(
+                  label: 'Feedback',
+                  icon: Icons.star_outline_rounded,
+                  iconColor: const Color(0xFFF5C842),
+                  expanded: _feedbackExpanded,
+                  onTap: () => setState(() => _feedbackExpanded = !_feedbackExpanded),
+                  content: _feedbackExpanded && _mode == 'feedback' ? _aiFeedback : null,
+                ),
+                _accordion(
+                  label: 'Sample Response',
+                  icon: Icons.lightbulb_outline_rounded,
+                  iconColor: _green,
+                  expanded: _sampleExpanded,
+                  onTap: () => setState(() => _sampleExpanded = !_sampleExpanded),
+                  content: _sampleExpanded && _mode == 'feedback' ? _aiSampleResponse : null,
+                ),
 
                 const SizedBox(height: 16),
               ]),
@@ -1136,12 +928,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
     ),
   );
 
-  // ── Generating questions loading screen ──────────────────────────────────
   Widget _buildGeneratingScreen() {
-    final title = widget.savedJobData['jobTitle'] as String? ??
-        widget.savedJobData['title'] as String? ?? 'this role';
-    final company = widget.savedJobData['company'] as String? ?? '';
-
+    final title   = widget.savedJobData['jobTitle'] as String? ??
+        widget.savedJobData['title']   as String? ?? 'this role';
+    final company = widget.savedJobData['company']  as String? ?? '';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -1149,20 +939,22 @@ SCORE: <Score like 7/10 with one sentence justification.>
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF0FF),
-              borderRadius: BorderRadius.circular(20),
-            ),
+                color: const Color(0xFFEEF0FF),
+                borderRadius: BorderRadius.circular(20)),
             child: const Icon(Icons.auto_awesome_rounded,
                 size: 40, color: Color(0xFF3B4FD8)),
           ),
           const SizedBox(height: 24),
           const Text('Preparing your interview',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87)),
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87)),
           const SizedBox(height: 10),
           Text(
-            'Generating personalised questions\nfor the $title role${company.isNotEmpty ? ' at $company' : ''}...',
+            'Generating personalised questions\nfor the $title role'
+                '${company.isNotEmpty ? ' at $company' : ''}...',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
+            style: const TextStyle(
+                fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
           ),
           const SizedBox(height: 32),
           const CircularProgressIndicator(color: Color(0xFF3B4FD8)),
@@ -1181,46 +973,64 @@ SCORE: <Score like 7/10 with one sentence justification.>
     required bool expanded,
     required VoidCallback onTap,
     String? content,
-  }) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Row(children: [
-              Icon(icon, size: 18, color: iconColor),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
-            ]),
-            Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                color: Colors.black54, size: 22),
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade200))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      Icon(icon, size: 18, color: iconColor),
+                      const SizedBox(width: 8),
+                      Text(label,
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87)),
+                    ]),
+                    Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: Colors.black54, size: 22,
+                    ),
+                  ]),
+            ),
+            if (content != null && content.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Text(content,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF4B5563),
+                        height: 1.6)),
+              ),
           ]),
         ),
-        if (content != null && content.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Text(content,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563), height: 1.6)),
-          ),
-      ]),
-    ),
-  );
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared AppBar
+// SHARED APPBAR
 // ─────────────────────────────────────────────────────────────────────────────
+
 PreferredSizeWidget _appBar(BuildContext context) => AppBar(
-  backgroundColor: Colors.white, elevation: 0,
+  backgroundColor: Colors.white,
+  elevation: 0,
   leading: IconButton(
     icon: const Icon(Icons.arrow_back, color: Colors.black),
     onPressed: () => Navigator.maybePop(context),
   ),
   title: Row(children: [
     const Text('Interview Practice',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black)),
+        style: TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black)),
     const SizedBox(width: 8),
     Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.grey[600]),
   ]),
