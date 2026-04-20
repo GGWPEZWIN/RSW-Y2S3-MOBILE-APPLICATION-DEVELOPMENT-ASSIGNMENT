@@ -45,35 +45,67 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- AI SAVE LOGIC ---
+  // --- AUTOMATIC UPDATE LOGIC (FOR SKILLS & LANGUAGES) ---
+  Future<void> _autoUpdateProfile(List<String> newSkills, List<String> newLanguages) async {
+    if (newSkills.isEmpty && newLanguages.isEmpty) return;
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('users').doc(widget.user?.uid);
+
+      Map<String, dynamic> updates = {};
+      if (newSkills.isNotEmpty) updates['skills'] = FieldValue.arrayUnion(newSkills);
+      if (newLanguages.isNotEmpty) updates['languages'] = FieldValue.arrayUnion(newLanguages);
+
+      await docRef.update(updates);
+
+      if (mounted) {
+        String message = "";
+        if (newSkills.isNotEmpty) message += "${newSkills.length} skills ";
+        if (newLanguages.isNotEmpty) message += "${message.isNotEmpty ? '& ' : ''}${newLanguages.length} languages ";
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("AI automatically added $message to your profile!"),
+            backgroundColor: const Color(0xFF0BA87E),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Auto update failed: $e");
+    }
+  }
+
+  // --- AI SAVE LOGIC (FOR EDUCATION & EXPERIENCE) ---
   Future<void> _addItemFromAI(Map<String, dynamic> item, String collectionPath) async {
     try {
-      if (collectionPath == 'users') {
-        await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).update({
-          'skills': FieldValue.arrayUnion([item['title']])
-        });
-      } else {
-        Map<String, dynamic> data = {
-          'timestamp': FieldValue.serverTimestamp(),
-        };
+      Map<String, dynamic> data = {
+        'timestamp': FieldValue.serverTimestamp(),
+      };
 
-        if (collectionPath == 'education_history') {
-          data['course'] = item['title'] ?? "Course Name";
-          data['institution'] = item['subtitle'] ?? "Not Specified";
-          data['year'] = item['details'] ?? "";
-        } else if (collectionPath == 'experience_history') {
-          data['role'] = item['title'] ?? "Job Role";
-          data['company'] = item['subtitle'] ?? "Not Specified";
-          data['duration'] = item['details'] ?? "";
-          data['description'] = "Added via AI Resume Image Analysis";
-        }
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.user?.uid)
-            .collection(collectionPath)
-            .add(data);
+      if (collectionPath == 'education_history') {
+        data['course'] = item['title'] ?? "Course Name";
+        data['institution'] = item['subtitle'] ?? "Not Specified";
+        // Date Fallback logic
+        data['year'] = (item['details'] != null && item['details'].toString().isNotEmpty)
+            ? item['details']
+            : "-";
+      } else if (collectionPath == 'experience_history') {
+        data['role'] = item['title'] ?? "Job Role";
+        data['company'] = item['subtitle'] ?? "Not Specified";
+        // Date Fallback logic
+        data['duration'] = (item['details'] != null && item['details'].toString().isNotEmpty)
+            ? item['details']
+            : "-";
+        // Fix: Save real AI text into description so it shows up in Edit Screen
+        data['description'] = item['details'] ?? "Added via AI Resume Image Analysis";
       }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user?.uid)
+          .collection(collectionPath)
+          .add(data);
 
       if (mounted) {
         setState(() {
@@ -131,9 +163,9 @@ class _ProfilePageState extends State<ProfilePage> {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
               final userData = snapshot.data?.data() as Map<String, dynamic>?;
+              final List<dynamic> currentSkills = userData?['skills'] ?? [];
+              final List<dynamic> currentLanguages = userData?['languages'] ?? [];
               final String photoUrl = userData?['photoUrl'] ?? widget.user?.photoURL ?? "";
-              final List<dynamic> skills = userData?['skills'] ?? [];
-              final List<dynamic> languages = userData?['languages'] ?? [];
               final String? resumeUrl = userData?['resumeUrl'];
               final String resumeName = userData?['resumeFileName'] ?? "Resume_Image.png";
               final bool isBase64 = userData?['isBase64'] ?? false;
@@ -178,61 +210,75 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     // 3. SKILLS
                     _buildSectionHeader("Skills", onAction: "Edit", onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: skills, currentLanguages: languages)));
+                      Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: currentSkills, currentLanguages: currentLanguages)));
                     }),
-                    Wrap(spacing: 8, children: skills.map((s) => _buildChip(s.toString())).toList()),
-                    ..._aiSuggestions
-                        .where((i) => (i['category'] ?? '').toString().toLowerCase().contains('skill'))
-                        .map((item) => _buildAICard(item, 'users'))
-                        .toList(),
+                    Wrap(spacing: 8, runSpacing: 4, children: currentSkills.map((s) => _buildChip(s.toString())).toList()),
 
                     const SizedBox(height: 24),
 
                     // 4. LANGUAGES
                     _buildSectionHeader("Languages", onAction: "Edit", onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: skills, currentLanguages: languages)));
+                      Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: currentSkills, currentLanguages: currentLanguages)));
                     }),
-                    Wrap(spacing: 8, children: languages.map((l) => _buildChip(l.toString(), isLanguage: true)).toList()),
+                    Wrap(spacing: 8, runSpacing: 4, children: currentLanguages.map((l) => _buildChip(l.toString(), isLanguage: true)).toList()),
 
                     const SizedBox(height: 24),
 
                     // 5. RESUME SECTION
                     _buildSectionHeader("Resume", onAction: "Upload", onTap: () async {
-                      final newSuggestions = await ResumeService().uploadResume(
+                      final results = await ResumeService().uploadResume(
                           context,
                               (isLoading) => setState(() => _isAnalyzing = isLoading)
                       );
 
-                      if (newSuggestions.isNotEmpty) {
+                      if (results.isNotEmpty) {
+                        List<Map<String, dynamic>> manualList = [];
+                        List<String> autoSkills = [];
+                        List<String> autoLangs = [];
+
+                        for (var item in results) {
+                          String cat = (item['category'] ?? '').toString().toLowerCase();
+                          String title = (item['title'] ?? '').toString().trim();
+
+                          if (cat.contains('skill')) {
+                            if (!currentSkills.any((s) => s.toString().toLowerCase() == title.toLowerCase())) {
+                              autoSkills.add(title);
+                            }
+                          } else if (cat.contains('lang')) {
+                            if (!currentLanguages.any((l) => l.toString().toLowerCase() == title.toLowerCase())) {
+                              autoLangs.add(title);
+                            }
+                          } else {
+                            manualList.add(item);
+                          }
+                        }
+
+                        if (autoSkills.isNotEmpty || autoLangs.isNotEmpty) {
+                          await _autoUpdateProfile(autoSkills, autoLangs);
+                        }
+
                         setState(() {
-                          _aiSuggestions = newSuggestions;
+                          _aiSuggestions = manualList;
                         });
                       }
                     }),
 
                     if (resumeUrl != null && resumeUrl.isNotEmpty)
-                      GestureDetector(
-                        onTap: () => _viewResume(context, resumeUrl, isBase64),
-                        child: _buildContentCard(
-                          context,
-                          title: resumeName,
-                          subtitle: "Resume processed by JobBuddy AI",
-                          icon: Icons.image_outlined,
-                          onDelete: () async {
-                            // IMPROVED DELETE LOGIC:
-                            await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).update({
-                              'resumeUrl': FieldValue.delete(),
-                              'resumeFileName': FieldValue.delete(),
-                              'isBase64': FieldValue.delete(),
-                              'fileType': FieldValue.delete(),
-                              'resumeUploadedAt': FieldValue.delete(),
-                            });
-                            // Clear suggestions when resume is deleted
-                            setState(() {
-                              _aiSuggestions = [];
-                            });
-                          },
-                        ),
+                      _buildContentCard(
+                        context,
+                        title: resumeName,
+                        subtitle: "Resume processed by JobBuddy AI",
+                        icon: Icons.image_outlined,
+                        onDelete: () async {
+                          await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).update({
+                            'resumeUrl': FieldValue.delete(),
+                            'resumeFileName': FieldValue.delete(),
+                            'isBase64': FieldValue.delete(),
+                            'fileType': FieldValue.delete(),
+                            'resumeUploadedAt': FieldValue.delete(),
+                          });
+                          setState(() => _aiSuggestions = []);
+                        },
                       )
                     else
                       const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Text("No resume uploaded.", style: TextStyle(color: kTextSecondary, fontSize: 13))),
@@ -258,7 +304,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         CircularProgressIndicator(color: kPrimaryBlue),
                         SizedBox(height: 20),
                         Text("JobBuddy AI is scanning your resume...", style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Identifying missing skills and education", style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                        Text("Extracting skills and checking history", style: TextStyle(color: kTextSecondary, fontSize: 12)),
                       ],
                     ),
                   ),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:provider/provider.dart';
 import 'login.dart';
 import 'services/google_sign_in_service.dart';
-import 'services/fcm_service.dart'; // Add this
+import 'services/fcm_service.dart';
+import 'services/app_state_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,8 +13,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
     debugPrint('Firebase initialized successfully');
-    
-    // Initialize FCM Service
+
     await FCMService().initialize();
     debugPrint('FCM Service initialized');
   } catch (e) {
@@ -26,7 +27,12 @@ void main() async {
     debugPrint('Error initializing GoogleSignIn: $e');
   }
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppStateManager(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -34,14 +40,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'JobBuddy',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Poppins',
-      ),
-      home: const LoginPage(),
-      debugShowCheckedModeBanner: false,
+    // We use a Builder here to get a 'newContext' that is
+    // located UNDER the ChangeNotifierProvider in the widget tree.
+    return Builder(
+      builder: (newContext) {
+        // Use newContext to find the AppStateManager
+        final stateManager = Provider.of<AppStateManager>(newContext);
+
+        return MaterialApp(
+          title: 'JobBuddy',
+          debugShowCheckedModeBanner: false,
+
+          // THEME LOGIC
+          themeMode: stateManager.themeMode,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            primarySwatch: Colors.blue,
+            fontFamily: 'Poppins',
+            scaffoldBackgroundColor: Colors.white,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+            ),
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            primarySwatch: Colors.blue,
+            fontFamily: 'Poppins',
+            // In Dark Mode, backgrounds and text will switch automatically
+          ),
+
+          // LANGUAGE LOGIC
+          locale: stateManager.locale,
+
+          home: const LoginPage(),
+        );
+      },
     );
   }
 }

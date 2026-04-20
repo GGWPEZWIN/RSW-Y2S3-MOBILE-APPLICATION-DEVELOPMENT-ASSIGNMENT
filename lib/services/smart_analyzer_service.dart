@@ -7,10 +7,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 
 class SmartAnalyzerService {
-  // Use the modern model name found in your teammate's working code
   static const String _AImodel = 'gemini-3-flash-preview';
-
-  // CHANGE THIS: Paste your NEW personal API key here
   static const String _apiKey = 'AIzaSyBNZKfTArIZBG8rmGXyg5XwuA5n83eh35g';
 
   Future<List<Map<String, dynamic>>> getMissingSuggestionsFromImage({
@@ -18,57 +15,83 @@ class SmartAnalyzerService {
     required List<dynamic> existingSkills,
     required List<dynamic> existingEducation,
     required List<dynamic> existingExperience,
+    required List<dynamic> existingLanguages,
   }) async {
     try {
-      // 1. Local OCR: This part works on your device (confirmed by your logs)
+      // 1. OCR Step
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final tempDir = await getTemporaryDirectory();
       final file = await File('${tempDir.path}/profile_ocr.png').create();
       await file.writeAsBytes(imageBytes);
-
-      final inputImage = InputImage.fromFile(file);
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      final RecognizedText recognizedText = await textRecognizer.processImage(InputImage.fromFile(file));
       await textRecognizer.close();
 
       String extractedText = recognizedText.text;
       if (extractedText.isEmpty) return [];
 
-      // 2. Gemini 3: Uses your personal key and the stable text-only path
-      final model = GenerativeModel(
-        model: _AImodel,
-        apiKey: _apiKey,
-      );
+      // 2. AI Analysis Step
+      final model = GenerativeModel(model: _AImodel, apiKey: _apiKey);
 
       final prompt = '''
-      Compare this resume text with the User's Profile and suggest missing items.
+      You are a Resume Analyzer. Extract information from the text provided.
       
       RESUME TEXT: 
       $extractedText
-
-      USER'S PROFILE:
+      
+      CURRENT PROFILE (DO NOT SUGGEST THESE):
       - Skills: $existingSkills
+      - Languages: $existingLanguages
       - Education: $existingEducation
       - Experience: $existingExperience
 
-      Return ONLY a JSON list of missing Skills, Education, or Experience objects.
-      Format: [{"category": "Skill", "title": "Name", "subtitle": "", "details": ""}]
+      STRICT INSTRUCTIONS:
+      1. Extract ONLY items NOT already in the current profile.
+      2. Distinguish between technical "Skill" and spoken "Language".
+      3. For "Education" and "Experience", if a Start/End date is missing, strictly use "-" for the "details" field.
+      4. For "Experience", the "details" field MUST contain a short summary of job responsibilities found in the resume.
+      5. Return ONLY a JSON list of objects.
+
+      CATEGORIES: "Skill", "Language", "Education", "Experience".
+      
+      FORMAT EXAMPLE:
+      [
+        {"category": "Skill", "title": "Java", "subtitle": "", "details": ""},
+        {"category": "Experience", "title": "Manager", "subtitle": "Fajar Export", "details": "Managed 10 employees and reduced friction."}
+      ]
       ''';
 
-      // Send pure text to avoid Vision API version conflicts
       final response = await model.generateContent([Content.text(prompt)]);
+      if (response.text == null) return [];
 
-      if (response.text == null || response.text!.isEmpty) return [];
+      String cleanedText = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
+      List<dynamic> aiResults = jsonDecode(cleanedText);
 
-      String cleanedText = response.text!
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
+      // 3. Filtering Logic to prevent duplicates and handle categories
+      List<Map<String, dynamic>> finalSuggestions = [];
 
-      debugPrint("AI Analyzer Result: $cleanedText");
-      return List<Map<String, dynamic>>.from(jsonDecode(cleanedText));
+      for (var item in aiResults) {
+        String title = (item['title'] ?? '').toString().toLowerCase().trim();
+        String category = (item['category'] ?? '').toString();
+        bool isDuplicate = false;
 
+        if (category == 'Skill') {
+          isDuplicate = existingSkills.any((s) => s.toString().toLowerCase().trim() == title);
+        } else if (category == 'Language') {
+          isDuplicate = existingLanguages.any((l) => l.toString().toLowerCase().trim() == title);
+        } else if (category == 'Education') {
+          isDuplicate = existingEducation.any((e) => e.toString().toLowerCase().trim() == title);
+        } else if (category == 'Experience') {
+          isDuplicate = existingExperience.any((ex) => ex.toString().toLowerCase().trim() == title);
+        }
+
+        if (!isDuplicate && title.isNotEmpty) {
+          finalSuggestions.add(Map<String, dynamic>.from(item));
+        }
+      }
+
+      return finalSuggestions;
     } catch (e) {
-      debugPrint("Profile Analyzer Error: $e");
+      debugPrint("SmartAnalyzerService Error: $e");
       return [];
     }
   }

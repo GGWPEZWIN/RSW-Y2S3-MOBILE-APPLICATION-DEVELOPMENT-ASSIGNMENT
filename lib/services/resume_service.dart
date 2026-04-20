@@ -30,7 +30,6 @@ class ResumeService {
       final pickedFile = result.files.single;
 
       // 2. CONSTRAINTS CHECK
-      // Check File Size (Limit to 5MB)
       if (pickedFile.size > 5 * 1024 * 1024) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -65,6 +64,7 @@ class ResumeService {
       });
 
       // 5. FETCH CURRENT DATA FOR COMPARISON
+      // Added 'languages' to the profile fetch
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final userData = userDoc.data() ?? {};
 
@@ -74,6 +74,9 @@ class ResumeService {
       final List<String> existingEdu = eduSnap.docs.map((d) => (d.data()['course'] ?? '').toString()).toList();
       final List<String> existingExp = expSnap.docs.map((d) => (d.data()['role'] ?? '').toString()).toList();
 
+      // Get languages from the main user document
+      final List<dynamic> existingLangs = userData['languages'] ?? [];
+
       // 6. ANALYZE
       final analyzer = SmartAnalyzerService();
       final suggestions = await analyzer.getMissingSuggestionsFromImage(
@@ -81,6 +84,7 @@ class ResumeService {
         existingSkills: userData['skills'] ?? [],
         existingEducation: existingEdu,
         existingExperience: existingExp,
+        existingLanguages: existingLangs, // Pass languages to the AI
       );
 
       return suggestions;
