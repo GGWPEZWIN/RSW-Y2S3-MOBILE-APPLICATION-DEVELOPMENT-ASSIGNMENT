@@ -76,11 +76,13 @@ class ApplicantModel {
 class ApplicantsListScreen extends StatelessWidget {
   final String? filterJobId;
   final String? filterJobTitle;
+  final String? employerId;
 
   const ApplicantsListScreen({
     super.key,
     this.filterJobId,
     this.filterJobTitle,
+    this.employerId,
   });
 
   static const Color _primaryBlue = Color(0xFF3B4FD8);
@@ -113,7 +115,17 @@ class ApplicantsListScreen extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('jobs').orderBy('createdAt', descending: true).snapshots(),
+        stream: employerId != null && employerId!.isNotEmpty
+            ? FirebaseFirestore.instance
+            .collection('jobs')
+            .where('employerId', isEqualTo: employerId)
+            .orderBy('createdAt', descending: true)
+            .snapshots()
+            : FirebaseFirestore.instance
+            .collection('jobs')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+
         builder: (context, jobSnap) {
           if (jobSnap.hasError) return Center(child: Text('Error: ${jobSnap.error}'));
           if (!jobSnap.hasData) return const Center(child: CircularProgressIndicator(color: _primaryBlue));
