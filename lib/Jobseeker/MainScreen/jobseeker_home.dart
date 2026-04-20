@@ -96,7 +96,6 @@ class _HomePageState extends State<HomePage> {
 
     if (mounted) {
       setState(() {
-        // We filter the docs: Only include jobIds where the status is NOT 'withdrawn'
         _appliedJobs = snap.docs
             .where((doc) {
           final data = doc.data();
@@ -245,14 +244,15 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             const SizedBox(height: 8),
+                            // ── UPDATED: Bigger greeting message ──────────
                             Row(children: [
                               Text(_getGreetingEmoji(),
-                                  style: const TextStyle(fontSize: 13)),
-                              const SizedBox(width: 5),
+                                  style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 6),
                               Text(
                                 '${_getGreeting()}, ${_getFirstName()}',
                                 style: const TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 20,           // ← was 13
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF555555),
                                 ),
@@ -261,74 +261,64 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      Column(
-                        children: [
-                          StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(FirebaseAuth.instance.currentUser?.uid)
-                                .collection('notifications')
-                                .where('isRead', isEqualTo: false)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              final unread = snapshot.hasData
-                                  ? snapshot.data!.docs.length
-                                  : 0;
-                              return Stack(
-                                children: [
-                                  IconButton(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                            const JobseekerNotificationsPage()),
-                                      ).then((_) {
-                                        if (mounted) setState(() {});
-                                      });
-                                    },
-                                    icon: const Icon(
-                                        Icons.notifications_none_rounded,
-                                        color: Colors.black,
-                                        size: 28),
-                                  ),
-                                  if (unread > 0)
-                                    Positioned(
-                                      right: 8,
-                                      top: 8,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFFEF4444),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                            minWidth: 16, minHeight: 16),
-                                        child: Center(
-                                          child: Text(
-                                            unread > 9 ? '9+' : '$unread',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
+                      // ── REMOVED: homedeco image icon ──────────────────
+                      // Only the notification bell remains
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(FirebaseAuth.instance.currentUser?.uid)
+                            .collection('notifications')
+                            .where('isRead', isEqualTo: false)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          final unread = snapshot.hasData
+                              ? snapshot.data!.docs.length
+                              : 0;
+                          return Stack(
+                            children: [
+                              IconButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                        const JobseekerNotificationsPage()),
+                                  ).then((_) {
+                                    if (mounted) setState(() {});
+                                  });
+                                },
+                                icon: const Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: Colors.black,
+                                    size: 28),
+                              ),
+                              if (unread > 0)
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFEF4444),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 16, minHeight: 16),
+                                    child: Center(
+                                      child: Text(
+                                        unread > 9 ? '9+' : '$unread',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
-                                ],
-                              );
-                            },
-                          ),
-                          Image.asset(
-                            'assets/icons/homedeco.png',
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                            const SizedBox(width: 80, height: 80),
-                          ),
-                        ],
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -510,7 +500,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── ✅ INTEGRATED: Switch between All Jobs & AI tab ───
+                    // ── Switch between All Jobs & AI tab ──────────────────
                     _selectedTab == 'New to you'
                         ? _buildAiSection()
                         : _buildAllJobsStream(),
@@ -553,7 +543,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── ✅ NEW: AI section with loading + empty states ────────────────────────
+  // ── AI section with loading + empty states ────────────────────────────────
   Widget _buildAiSection() {
     if (_isAiLoading) {
       return const Padding(
@@ -615,7 +605,7 @@ class _HomePageState extends State<HomePage> {
     return _buildAiList();
   }
 
-  // ── ✅ NEW: Extracted Firestore stream into its own method ────────────────
+  // ── Firestore stream for All Jobs ─────────────────────────────────────────
   Widget _buildAllJobsStream() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -642,7 +632,6 @@ class _HomePageState extends State<HomePage> {
           final exp = (d['expiryDate'] as Timestamp?)?.toDate();
           if (exp != null && exp.isBefore(now)) return false;
 
-          // ── Category filter ──────────────────────────────────────────
           if (_selectedCategory != 'All Jobs') {
             final category = (d['category'] ?? '').toString().toLowerCase();
             if (!category.contains(_selectedCategory.toLowerCase())) {
@@ -705,7 +694,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── ✅ FIXED: AI list now shown only when tab is "New to you" ─────────────
+  // ── AI recommendations list ───────────────────────────────────────────────
   Widget _buildAiList() {
     return ListView.builder(
       shrinkWrap: true,
@@ -791,11 +780,11 @@ class _HomePageState extends State<HomePage> {
   // ── Match badge gradient based on score ──────────────────────────────────
   List<Color> _matchGradient(double score) {
     if (score >= 0.75) {
-      return [const Color(0xFF16A34A), const Color(0xFF22C55E)]; // green
+      return [const Color(0xFF16A34A), const Color(0xFF22C55E)];
     } else if (score >= 0.5) {
-      return [const Color(0xFF2563EB), const Color(0xFF3B82F6)]; // blue
+      return [const Color(0xFF2563EB), const Color(0xFF3B82F6)];
     } else {
-      return [const Color(0xFFCA8A04), const Color(0xFFEAB308)]; // amber
+      return [const Color(0xFFCA8A04), const Color(0xFFEAB308)];
     }
   }
 
@@ -971,7 +960,7 @@ class _HomePageState extends State<HomePage> {
               const Spacer(),
               GestureDetector(
                 onTap: hasApplied
-                    ? null // Disable tap if already applied and NOT withdrawn
+                    ? null
                     : () async {
                   await Navigator.push(
                     context,
@@ -982,12 +971,12 @@ class _HomePageState extends State<HomePage> {
                   _loadSavedJobs();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 8),
                   decoration: BoxDecoration(
-                    // Change color based on current status
                     color: hasApplied
-                        ? const Color(0xFF2CB06A) // Green for active application
-                        : const Color(0xFFF0C040), // Yellow for "Apply" or "Re-apply"
+                        ? const Color(0xFF2CB06A)
+                        : const Color(0xFFF0C040),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
