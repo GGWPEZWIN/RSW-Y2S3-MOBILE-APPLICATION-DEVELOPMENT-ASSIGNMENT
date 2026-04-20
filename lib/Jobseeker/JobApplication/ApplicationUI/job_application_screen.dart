@@ -49,7 +49,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   //int    _currentIndex   = 2;
   String? _portfolioError;
 
-  // TODO: Replace with actual user skills from profile
   final List<String> _skills = [];
   bool _isExtractingSkills = false;
 
@@ -61,8 +60,11 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   Applicant _buildApplicant() {
+
+    final String combinedResume = "$_resumeFileName:$_resumePath";
+
     return ApplicantService.buildApplicant(
-      resumePath:      _resumePath,
+      resumePath:      combinedResume,
       portfolioUrl:    _portfolioController.text,
       coverLetter:     _coverLetterController.text,
       skills:          _skills,
@@ -82,20 +84,21 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   Future<void> _handleSubmit() async {
     final applicant = _buildApplicant();
-    final url = _portfolioController.text.trim();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
+    // URL Validation
+    final url = _portfolioController.text.trim();
     if (url.isNotEmpty && !Uri.tryParse(url)!.hasAbsolutePath) {
       setState(() => _portfolioError = 'Please enter a valid URL');
       return;
     }
 
+    // Form Validation
     if (!applicant.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Please upload a resume, write a cover letter, '
-                'and select at least one skill.',
-          ),
+          content: Text('Please upload a resume, write a cover letter, and select skills.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -104,33 +107,61 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     setState(() => _isSubmitting = true);
 
-    // submitApplicant now returns the real Firestore doc ID, or null on failure
-    final docId = await ApplicantService.submitApplicant(applicant);
-    final success = docId != null;
+    try {
+      final db = FirebaseFirestore.instance;
 
-    if (success) {
-      // Notify employer with the real Firestore applicationId
-      await _notifyEmployer(docId!);
-    }
+      // --- DUPLICATION CHECK ---
+      // Check if an application already exists for this user and this job
+      final existingQuery = await db.collection('applications')
+          .where('jobId', isEqualTo: widget.jobId)
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get();
 
-    setState(() => _isSubmitting = false);
+      String? finalDocId;
 
-    if (!mounted) return;
+      // Prepare the resume string (since applicant.resumePath is causing errors)
+      final String combinedResume = "$_resumeFileName:$_resumePath";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Application submitted successfully!'
-              : 'Submission failed. Please try again.',
-        ),
-        backgroundColor:
-        success ? const Color(0xFF0BA87E) : Colors.redAccent,
-      ),
-    );
+      if (existingQuery.docs.isNotEmpty) {
+        // UPDATE EXISTING: Reuse the document ID to prevent duplicate records
+        finalDocId = existingQuery.docs.first.id;
+        await db.collection('applications').doc(finalDocId).update({
+          'status': 'unprocessed',
+          'appliedAt': FieldValue.serverTimestamp(),
+          'resumePath': combinedResume, // Using the local combined string
+          'portfolioUrl': _portfolioController.text,
+          'coverLetter': _coverLetterController.text,
+          'skills': _skills,
+        });
+      } else {
+        // CREATE NEW: If no record exists, use your existing Service
+        finalDocId = await ApplicantService.submitApplicant(applicant);
+      }
 
-    if (success) {
-      Navigator.pop(context, true);
+      if (finalDocId != null) {
+        // Notify employer using the docId (works for both New and Updated docs)
+        await _notifyEmployer(finalDocId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Application submitted successfully!'),
+              backgroundColor: kAiGreen,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      debugPrint("Submission error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Submission failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -300,26 +331,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 ),
               ),
             ),
-            //NavBarWidget(
-            //  currentIndex: _currentIndex,
-            //  onTabSelected: (index) {
-            //    if (index == _currentIndex) return;
-            //    setState(() => _currentIndex = index);
-            //    if (index == 0) {
-            //      Navigator.of(context).popUntil((route) => route.isFirst);
-            //    } else if (index == 1) {
-            //      // TODO: Navigate to Saved Jobs screen
-            //    } else if (index == 3) {
-            //      Navigator.pushReplacement(
-            //        context,
-            //        MaterialPageRoute(
-            //          builder: (_) => ProfilePage(
-            //              user: FirebaseAuth.instance.currentUser),
-            //        ),
-            //      );
-            //    }
-            //  },
-            //),
           ],
         ),
       ),
@@ -414,34 +425,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
-  //Widget _buildPortfolioSection() {
-  //  return Column(
-  //    crossAxisAlignment: CrossAxisAlignment.start,
-  //    children: [
-  //      _buildSectionLabel('Portfolio URL'),
-  //      const SizedBox(height: 8),
-  //      Container(
-  //        decoration: BoxDecoration(
-  //          color: Colors.white,
-  //          borderRadius: BorderRadius.circular(12),
-  //          border: Border.all(color: kBorder),
-  //        ),
-  //        child: TextField(
-  //          controller: _portfolioController,
-  //          style: const TextStyle(fontSize: 14, color: kTextPrimary),
-  //          decoration: const InputDecoration(
-  //            hintText: 'https://portfolio.com',
-  //            hintStyle: TextStyle(fontSize: 14, color: kTextPlaceholder),
-  //            prefixIcon: Icon(Icons.link_rounded, color: kTextPlaceholder, size: 20),
-  //            border: InputBorder.none,
-  //            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-  //          ),
-  //        ),
-  //      ),
-  //    ],
-  //  );
-  //}
-
   Widget _buildPortfolioSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,29 +476,82 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel('Profile Skills', trailing: _buildAiVerifiedBadge()),
+        _buildSectionLabel(
+            'Profile Skills',
+            trailing: Row(
+              children: [
+                _buildAiVerifiedBadge(),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _showAddSkillDialog, // New Function
+                  child: const Text("+ Add", style: TextStyle(color: kBlue, fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
+              ],
+            )
+        ),
         const SizedBox(height: 10),
-
-        // ADD THIS LOADING CHECK:
         if (_isExtractingSkills)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(10.0),
-              child: CircularProgressIndicator(strokeWidth: 2, color: kAiGreen),
-            ),
-          )
+          const Center(child: CircularProgressIndicator(color: kAiGreen))
         else if (_skills.isEmpty)
-          const Text(
-            "No skills extracted. Try uploading a different resume image.",
-            style: TextStyle(fontSize: 12, color: kTextSecondary),
-          )
+          const Text("No skills extracted yet.", style: TextStyle(fontSize: 12, color: kTextSecondary))
         else
           Wrap(
             spacing: 8, runSpacing: 8,
-            children: _skills.map((s) => _buildSkillChip(s)).toList(),
+            children: _skills.map((s) => _buildEditableSkillChip(s)).toList(),
           ),
       ],
     );
+  }
+
+  void _showAddSkillDialog() async {
+    final TextEditingController skillCtrl = TextEditingController();
+
+    final String? newSkill = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Add Manual Skill',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary),
+          ),
+          content: TextField(
+            controller: skillCtrl,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'e.g. Project Management',
+              hintStyle: const TextStyle(color: kTextPlaceholder, fontSize: 14),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: kBlue, width: 1.5),
+              ),
+            ),
+            onSubmitted: (value) => Navigator.pop(context, value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: kTextSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, skillCtrl.text),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Add', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newSkill != null && newSkill.trim().isNotEmpty) {
+      setState(() {
+        _skills.add(newSkill.trim());
+      });
+    }
   }
 
   Widget _buildAiVerifiedBadge() {
@@ -536,14 +572,21 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
-  Widget _buildSkillChip(String label) {
+  Widget _buildEditableSkillChip(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration:
-      BoxDecoration(color: kBlue, borderRadius: BorderRadius.circular(20)),
-      child: Text(label,
-          style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: kBlue, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.white)),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () => setState(() => _skills.remove(label)),
+            child: const Icon(Icons.close, size: 14, color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 

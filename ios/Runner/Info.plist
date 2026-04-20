@@ -45,5 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<key>NSMicrophoneUsageDescription</key>
+    <string>JobBuddy needs mic access for interview practice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>JobBuddy uses speech recognition to transcribe your interview answers.</string>
 </dict>
 </plist>

@@ -373,10 +373,18 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
             Text(sLabel, style: TextStyle(color: sCol, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
             const Spacer(),
             GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ApplicationStatusScreen(
-                    applicationId: docId, applicationData: d),
-              )),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ApplicationStatusScreen(
+                        applicationId: docId,
+                        applicationData: d
+                    ),
+                  ),
+                );
+                setState(() {});
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                 decoration: BoxDecoration(

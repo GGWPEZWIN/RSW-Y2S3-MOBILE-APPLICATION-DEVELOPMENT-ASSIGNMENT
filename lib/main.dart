@@ -6,6 +6,8 @@ import 'login.dart';
 import 'services/google_sign_in_service.dart';
 import 'services/fcm_service.dart';
 import 'services/app_state_manager.dart';
+//import 'package:flutter_dotenv/flutter_dotenv.dart'; (I dont know what is this so i comment it first , later you uncomment)
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,13 +21,12 @@ void main() async {
   } catch (e) {
     debugPrint('Error initializing Firebase/FCM: $e');
   }
+  // Load .env file FIRST
+ // await dotenv.load(); (I dont know what is this so i comment it first , later you uncomment)
 
-  try {
-    await GoogleSignIn.instance.initialize();
-    debugPrint('GoogleSignIn initialized successfully');
-  } catch (e) {
-    debugPrint('Error initializing GoogleSignIn: $e');
-  }
+  await Firebase.initializeApp();
+
+  await GoogleSignInService.initialize(); // ✅ added
 
   runApp(
     ChangeNotifierProvider(

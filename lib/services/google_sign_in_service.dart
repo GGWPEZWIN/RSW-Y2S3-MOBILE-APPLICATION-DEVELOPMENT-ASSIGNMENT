@@ -3,7 +3,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Added this line
 
 class GoogleSignInService {
-  // Initialize once — must be called before any sign-in
   static Future<void> initialize() async {
     await GoogleSignIn.instance.initialize();
   }

@@ -76,11 +76,13 @@ class ApplicantModel {
 class ApplicantsListScreen extends StatelessWidget {
   final String? filterJobId;
   final String? filterJobTitle;
+  final String? employerId;
 
   const ApplicantsListScreen({
     super.key,
     this.filterJobId,
     this.filterJobTitle,
+    this.employerId,
   });
 
   static const Color _primaryBlue = Color(0xFF3B4FD8);
@@ -113,7 +115,17 @@ class ApplicantsListScreen extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('jobs').orderBy('createdAt', descending: true).snapshots(),
+        stream: employerId != null && employerId!.isNotEmpty
+            ? FirebaseFirestore.instance
+            .collection('jobs')
+            .where('employerId', isEqualTo: employerId)
+            .orderBy('createdAt', descending: true)
+            .snapshots()
+            : FirebaseFirestore.instance
+            .collection('jobs')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+
         builder: (context, jobSnap) {
           if (jobSnap.hasError) return Center(child: Text('Error: ${jobSnap.error}'));
           if (!jobSnap.hasData) return const Center(child: CircularProgressIndicator(color: _primaryBlue));
@@ -328,47 +340,46 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
   Future<void> _updateStatus(ApplicantModel a, String status) async {
     await FirebaseFirestore.instance.collection('applications').doc(a.id).update({'status': status});
 
-    // Notify Jobseeker
     if (a.userId.isNotEmpty) {
       String title = '';
       String body  = '';
       ApplicationStatus? fcmStatus;
 
+      // Add 'hired' to your check
       if (status == 'shortlisted') {
         fcmStatus = ApplicationStatus.shortlisted;
       } else if (status == 'declined') {
         fcmStatus = ApplicationStatus.rejected;
       } else if (status == 'interview') {
         fcmStatus = ApplicationStatus.interview;
+      } else if (status == 'hired') {
+        // Assuming you add 'hired' to your ApplicationStatus enum
+        title = "Congratulations! 🥳";
+        body = "You have been hired for the ${a.jobTitle} position!";
       }
 
-      if (fcmStatus != null) {
-        title = fcmStatus.notificationTitle(a.jobTitle);
-        body  = fcmStatus.notificationBody(a.candidateName, a.jobTitle);
+      if (fcmStatus != null || status == 'hired') {
+        title = title.isEmpty ? fcmStatus!.notificationTitle(a.jobTitle) : title;
+        body  = body.isEmpty ? fcmStatus!.notificationBody(a.candidateName, a.jobTitle) : body;
 
-        // In-app
+        // In-app Notification
         await FirebaseFirestore.instance
-            .collection('users')
-            .doc(a.userId)
-            .collection('notifications')
-            .add({
+            .collection('users').doc(a.userId)
+            .collection('notifications').add({
           'applicationId': a.id,
           'title': title,
           'body': body,
-          'type': fcmStatus.firestoreValue,
+          'type': status == 'hired' ? 'hired' : fcmStatus!.firestoreValue,
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // Push
+        // Push Notification
         await FCMService().sendPushNotification(
           recipientId: a.userId,
           title: title,
           body: body,
-          data: {
-            'type': fcmStatus.firestoreValue,
-            'applicationId': a.id,
-          },
+          data: {'type': status, 'applicationId': a.id},
         );
       }
     }
@@ -486,10 +497,11 @@ class _ApplicantsByJobScreenState extends State<ApplicantsByJobScreen> {
 
   Widget _buildFilterChips(Map<String, int> counts) {
     final filters = [
-      {'key': 'unprocessed', 'label': 'Unprocessed', 'count': counts['unprocessed'] ?? 0},
+      {'key': 'unprocessed', 'label': 'Unprocessed',   'count': counts['unprocessed']  ?? 0},
       {'key': 'under review', 'label': 'Under Review', 'count': counts['under review'] ?? 0},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'count': counts['shortlisted']  ?? 0},
       {'key': 'interview',    'label': 'Interview',    'count': counts['interview']    ?? 0},
+      {'key': 'hired',        'label': 'Hire Now',     'count': counts['hire']         ?? 0},
       {'key': 'declined',     'label': 'Declined',     'count': counts['declined']     ?? 0},
     ];
     return SizedBox(
@@ -696,6 +708,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     'under review': Color(0xFF9C27B0),
     'shortlisted': Color(0xFF1565C0),
     'interview':   Color(0xFF2E7D32),
+    'hired':       Color(0xFF16A34A),
     'declined':    Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
@@ -703,6 +716,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     'under review': Color(0xFFF3E5F5),
     'shortlisted': Color(0xFFE3F2FD),
     'interview':   Color(0xFFE8F5E9),
+    'hired':       Color(0xFFDCFCE7),
     'declined':    Color(0xFFFFEBEE),
   };
 
@@ -718,64 +732,47 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
+      {'key': 'hired',        'label': 'Hire Now',     'icon': Icons.check_circle_rounded, 'desc': 'Offer employment!'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
     ];
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // Allows sheet to take more space
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 40, height: 4,
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          const Text('Update Status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-          const SizedBox(height: 20),
-          ...statuses.map((s) {
-            final key      = s['key'] as String;
-            final isActive = _currentStatus == key;
-            final sColor   = _statusColor[key]!;
-            final sBg      = _statusBg[key]!;
-            return GestureDetector(
-              onTap: () async {
-                Navigator.pop(context);
-                await widget.onStatusUpdate(widget.applicant, key);
-                if (mounted) {
-                  setState(() => _currentStatus = key);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Status updated to ${key[0].toUpperCase()}${key.substring(1)}'),
-                    backgroundColor: _primaryBlue,
-                  ));
-                }
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isActive ? sBg : Colors.grey[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isActive ? sColor : Colors.grey[200]!, width: isActive ? 1.5 : 1),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        // Use ConstrainedBox to prevent the sheet from being too small/too big
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const Text('Update Status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              // Wrap with Expanded and ListView to fix Overflow
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: statuses.map((s) => ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: _statusBg[s['key']], borderRadius: BorderRadius.circular(8)),
+                      child: Icon(s['icon'] as IconData, color: _statusColor[s['key']], size: 20),
+                    ),
+                    title: Text(s['label'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(s['desc'] as String, style: const TextStyle(fontSize: 12)),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await widget.onStatusUpdate(widget.applicant, s['key'] as String);
+                      if (mounted) setState(() => _currentStatus = s['key'] as String);
+                    },
+                  )).toList(),
                 ),
-                child: Row(children: [
-                  Container(width: 36, height: 36,
-                      decoration: BoxDecoration(
-                          color: isActive ? sColor.withOpacity(0.15) : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Icon(s['icon'] as IconData, size: 18, color: isActive ? sColor : Colors.grey[500])),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(s['label'] as String,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                            color: isActive ? sColor : const Color(0xFF1A1A2E))),
-                    Text(s['desc'] as String, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-                  ])),
-                  if (isActive) Icon(Icons.check_circle_rounded, color: sColor, size: 20),
-                ]),
               ),
-            );
-          }),
-          const SizedBox(height: 8),
-        ]),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1033,18 +1030,20 @@ class _StatusSheet extends StatelessWidget {
   final ValueChanged<String> onSelected;
 
   static const Map<String, Color> _statusColor = {
-    'unprocessed': Color(0xFFEF6C00),
+    'unprocessed':  Color(0xFFEF6C00),
     'under review': Color(0xFF9C27B0),
-    'shortlisted': Color(0xFF1565C0),
-    'interview':   Color(0xFF2E7D32),
-    'declined':    Color(0xFFC62828),
+    'shortlisted':  Color(0xFF1565C0),
+    'interview':    Color(0xFF2E7D32),
+    'hired':        Color(0xFF16A34A),
+    'declined':     Color(0xFFC62828),
   };
   static const Map<String, Color> _statusBg = {
-    'unprocessed': Color(0xFFFFF3E0),
+    'unprocessed':  Color(0xFFFFF3E0),
     'under review': Color(0xFFF3E5F5),
-    'shortlisted': Color(0xFFE3F2FD),
-    'interview':   Color(0xFFE8F5E9),
-    'declined':    Color(0xFFFFEBEE),
+    'shortlisted':  Color(0xFFE3F2FD),
+    'interview':    Color(0xFFE8F5E9),
+    'hired':        Color(0xFF16A34A),
+    'declined':     Color(0xFFFFEBEE),
   };
 
   const _StatusSheet({required this.applicant, required this.onSelected});
@@ -1056,6 +1055,7 @@ class _StatusSheet extends StatelessWidget {
       {'key': 'under review', 'label': 'Under Review', 'icon': Icons.visibility_outlined, 'desc': 'Currently reviewing details'},
       {'key': 'shortlisted',  'label': 'Shortlisted',  'icon': Icons.star_outline_rounded,    'desc': 'Candidate looks promising'},
       {'key': 'interview',    'label': 'Interview',    'icon': Icons.video_call_outlined,      'desc': 'Schedule an interview'},
+      {'key': 'hired',        'label': 'Hire Now',     'icon': Icons.check_circle_rounded, 'desc': 'Finalize employment!'},
       {'key': 'declined',     'label': 'Declined',     'icon': Icons.cancel_outlined,          'desc': 'Not suitable for this role'},
     ];
     return Container(

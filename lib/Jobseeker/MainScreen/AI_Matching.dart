@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../JobApplication/ApplicationServices/C-B-F_Machine_Learning.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -52,12 +54,104 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
     ..repeat(reverse: true);
   int _navIndex = 0;
 
+  // Initialize your Service with your Gemini API Key
+  final RecommendationService _aiService = RecommendationService('AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0');
+
   @override
   void dispose() {
     _rotate.dispose();
     _float.dispose();
     super.dispose();
   }
+
+  // ── AI LOGIC ───────────────────────────────────────────────────────────────
+
+  Future<void> _runMatching() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // 1. Show processing dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _buildLoadingDialog(),
+    );
+
+    try {
+      // 2. Get User Data
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userData = userDoc.data() ?? {};
+
+      // 3. Get Jobs
+      final jobsSnap = await FirebaseFirestore.instance.collection('jobs').get();
+      final allJobs = jobsSnap.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+
+      // 4. Trigger ML Pipeline
+      final List<JobRecommendation> recommendations = await _aiService.recommendJobs(
+        userData: userData,
+        allJobs: allJobs,
+        k: 5, // Top 5 matches
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // 5. Success - Pass results to a results view
+      _handleMatchResults(recommendations);
+
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      debugPrint("Matching Error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Matching failed: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  void _handleMatchResults(List<JobRecommendation> results) {
+    // For now, let's show a success message with the top score.
+    // You can navigate to a new screen here to show the list!
+    if (results.isEmpty) return;
+
+    final bestScore = (results.first.similarityScore * 100).toStringAsFixed(1);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Top match found with $bestScore% similarity!'),
+        backgroundColor: _C.primary,
+      ),
+    );
+  }
+
+  Widget _buildLoadingDialog() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: _C.primary, strokeWidth: 3),
+            SizedBox(height: 20),
+            Text(
+              "ML Engine Analyzing...",
+              style: TextStyle(fontWeight: FontWeight.w700, color: _C.textDark, decoration: TextDecoration.none, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Running ML Model",
+              style: TextStyle(fontWeight: FontWeight.w400, color: _C.textSub, decoration: TextDecoration.none, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BUILD ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -70,15 +164,10 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               size: 18, color: _C.textDark),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
-        title: Text('AI Matching',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: _C.textDark)),
+        title: const Text('AI Matching',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _C.textDark)),
         bottom: const PreferredSize(
             preferredSize: Size.fromHeight(1),
             child: Divider(height: 1, color: _C.border)),
@@ -91,19 +180,15 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
               const SizedBox(height: 16),
               _HeroCard(rotate: _rotate, float: _float),
               const SizedBox(height: 20),
-              Text('How JobBuddy Works',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _C.textDark)),
+              const Text('How JobBuddy Works',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _C.textDark)),
               const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
-                  'Our AI-powered engine analyzes millions of data points to find your perfect career match.',
+                  'Our ML-powered engine analyzes millions of data points to find your perfect career match.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13, color: _C.textSub, height: 1.6),
+                  style: TextStyle(fontSize: 13, color: _C.textSub, height: 1.6),
                 ),
               ),
               const SizedBox(height: 24),
@@ -116,11 +201,8 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: _PrimaryButton(
             label: 'Start Matching Now',
-            trailing: const Icon(Icons.arrow_forward_rounded,
-                color: _C.white, size: 18),
-            onTap: () {
-              //TODO: implement the AI logic.
-            },
+            trailing: const Icon(Icons.arrow_forward_rounded, color: _C.white, size: 18),
+            onTap: _runMatching, // Trigger the logic!
           ),
         ),
         _BottomNav(

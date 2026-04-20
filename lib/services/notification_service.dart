@@ -35,8 +35,7 @@ class NotificationService {
     );
 
     await _notifications.initialize(
-      // Use 'settings:' instead of 'initializationSettings:'
-      settings: const InitializationSettings(
+      const InitializationSettings(
         android: androidSettings,
         iOS: iosSettings,
       ),
@@ -75,10 +74,10 @@ class NotificationService {
   }) async {
     await initialize();
     await _notifications.show(
-      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -100,24 +99,7 @@ class NotificationService {
     );
   }
 
-  // ─── Cross-device push: listen to push_notifications_queue ───────────────
-  //
-  // HOW IT WORKS (no Cloud Function / no server needed):
-  //
-  //   Sender   → FCMService().sendPushNotification(recipientId, title, body)
-  //            → writes {recipientId, title, body, status:'pending'} to Firestore
-  //
-  //   Recipient device → this listener (started at login) sees the new doc
-  //            → calls showNotification() → popup appears
-  //            → marks doc status:'delivered' so it never fires again
-  //
-  // KEY DESIGN:
-  //   • Query is ONLY on recipientId + status == 'pending'
-  //     No createdAt filter — avoids needing a composite index and avoids the
-  //     server-timestamp timing bug where client startTime > server write time.
-  //   • Uses DocumentChangeType.added so already-delivered docs are ignored.
-  //   • Marks 'delivered' before returning so even if the listener fires twice
-  //     (e.g. app restart), the doc is already gone from the query.
+  // ─── Cross‑device push listener ─────────────────────────────────────────
 
   void startListeningToFirestore(String uid) {
     _pushQueueSub?.cancel();
@@ -131,18 +113,11 @@ class NotificationService {
         .listen(
           (snap) async {
         for (final change in snap.docChanges) {
-          // Only react to new docs, not existing ones loaded at startup
           if (change.type != DocumentChangeType.added) continue;
-
-          final data  = change.doc.data() as Map<String, dynamic>? ?? {};
+          final data = change.doc.data() as Map<String, dynamic>? ?? {};
           final title = (data['title'] as String?) ?? 'JobBuddy';
-          final body  = (data['body']  as String?) ?? '';
-
-          // Mark delivered FIRST to prevent double-firing on reconnect
-          await change.doc.reference
-              .update({'status': 'delivered'}).catchError((_) {});
-
-          // Then show the popup
+          final body = (data['body'] as String?) ?? '';
+          await change.doc.reference.update({'status': 'delivered'});
           await showNotification(title: title, body: body);
         }
       },
@@ -155,7 +130,7 @@ class NotificationService {
     _pushQueueSub = null;
   }
 
-  // ─── Legacy methods kept so existing callers compile ─────────────────────
+  // ─── Legacy / helper methods ────────────────────────────────────────────
 
   Future<void> sendInterviewScheduledNotification({
     required String candidateName,
@@ -169,8 +144,8 @@ class NotificationService {
         ? 'Online — $meetingLink'
         : 'Location: $location';
     await showNotification(
-      title:   '📅 Interview Scheduled — $jobTitle',
-      body:    'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locText',
+      title: '📅 Interview Scheduled — $jobTitle',
+      body: 'Hi $candidateName! Your interview for $jobTitle is on $interviewDate at $interviewTime. $locText',
       payload: 'interview_scheduled',
     );
   }
@@ -182,16 +157,16 @@ class NotificationService {
     int minutesBefore = 60,
   }) async {
     await initialize();
-    final reminderTime =
-    interviewDateTime.subtract(Duration(minutes: minutesBefore));
+    final reminderTime = interviewDateTime.subtract(Duration(minutes: minutesBefore));
     if (reminderTime.isBefore(DateTime.now())) return;
 
+    // ✅ FIX: add the required parameter uiLocalNotificationDateInterpretation
     await _notifications.zonedSchedule(
-      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title: '⏰ Interview Reminder — $jobTitle',
-      body: 'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
-      scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
-      notificationDetails: NotificationDetails(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      '⏰ Interview Reminder — $jobTitle',
+      'Hi $candidateName! Your interview starts in $minutesBefore minutes. Good luck!',
+      tz.TZDateTime.from(reminderTime, tz.local),
+      NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -200,13 +175,18 @@ class NotificationService {
           icon: '@mipmap/ic_launcher',
         ),
         iOS: const DarwinNotificationDetails(
-            presentAlert: true, presentBadge: true, presentSound: true),
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'interview_reminder',
     );
   }
 
   Future<void> cancelAllNotifications() => _notifications.cancelAll();
-  Future<void> cancelNotification(int id) => _notifications.cancel(id: id);
+  Future<void> cancelNotification(int id) => _notifications.cancel(id);
 }

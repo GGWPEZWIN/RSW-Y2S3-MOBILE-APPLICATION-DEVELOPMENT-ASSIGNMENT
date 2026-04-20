@@ -25,10 +25,6 @@ class ApplicationStatusScreen extends StatefulWidget {
 class _ApplicationStatusScreenState extends State<ApplicationStatusScreen> {
   bool _isBusy = false;
 
-  String get _status => (widget.applicationData['status'] ?? 'unprocessed').toString().toLowerCase();
-  bool get _isWithdrawnOrCancelled => _status == 'withdrawn' || _status == 'cancelled';
-  bool get _isInterview => _status == 'interview';
-
   String _formatTimestamp(dynamic ts) {
     if (ts == null) return 'Unknown date';
     final dt = ts is Timestamp ? ts.toDate() : DateTime.now();
@@ -36,27 +32,110 @@ class _ApplicationStatusScreenState extends State<ApplicationStatusScreen> {
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
-  _StatusConfig get _statusConfig {
-    switch (_status) {
+  // Helper to get configuration based on live status
+  _StatusConfig _getStatusConfig(String status) {
+    switch (status) {
+      case 'hired':
+        return _StatusConfig(
+            icon: Icons.check_circle_rounded,
+            label: 'Hired',
+            message: 'Congratulations! You have been offered the position.',
+            color: const Color(0xFF16A34A),
+            bgColor: const Color(0xFFF0FDF4),
+            borderColor: const Color(0xFFBBF7D0));
       case 'shortlisted':
-        return _StatusConfig(icon: Icons.star_outline_rounded, label: 'Shortlisted', message: 'Congratulations! You have been shortlisted for this position.', color: const Color(0xFF16A34A), bgColor: const Color(0xFFF0FDF4), borderColor: const Color(0xFFBBF7D0));
+        return _StatusConfig(
+            icon: Icons.star_outline_rounded,
+            label: 'Shortlisted',
+            message: 'Congratulations! You have been shortlisted for this position.',
+            color: const Color(0xFF16A34A),
+            bgColor: const Color(0xFFF0FDF4),
+            borderColor: const Color(0xFFBBF7D0));
       case 'interview':
-        return _StatusConfig(icon: Icons.videocam_outlined, label: 'Interview Scheduled', message: 'An interview has been scheduled. Check the details below.', color: const Color(0xFF7C3AED), bgColor: const Color(0xFFF5F3FF), borderColor: const Color(0xFFDDD6FE));
+        return _StatusConfig(
+            icon: Icons.videocam_outlined,
+            label: 'Interview Scheduled',
+            message: 'An interview has been scheduled. Check the details below.',
+            color: const Color(0xFF7C3AED),
+            bgColor: const Color(0xFFF5F3FF),
+            borderColor: const Color(0xFFDDD6FE));
       case 'under review':
-        return _StatusConfig(icon: Icons.info_outline, label: 'Under Review', message: 'The hiring team is currently reviewing your profile.', color: const Color(0xFF2563EB), bgColor: const Color(0xFFEFF6FF), borderColor: const Color(0xFFBFDBFE));
+        return _StatusConfig(
+            icon: Icons.info_outline,
+            label: 'Under Review',
+            message: 'The hiring team is currently reviewing your profile.',
+            color: const Color(0xFF2563EB),
+            bgColor: const Color(0xFFEFF6FF),
+            borderColor: const Color(0xFFBFDBFE));
       case 'declined':
       case 'rejected':
-        return _StatusConfig(icon: Icons.cancel_outlined, label: 'Application Declined', message: 'Unfortunately your application was not successful this time.', color: const Color(0xFFDC2626), bgColor: const Color(0xFFFEF2F2), borderColor: const Color(0xFFFECACA));
+        return _StatusConfig(
+            icon: Icons.cancel_outlined,
+            label: 'Application Declined',
+            message: 'Unfortunately your application was not successful this time.',
+            color: const Color(0xFFDC2626),
+            bgColor: const Color(0xFFFEF2F2),
+            borderColor: const Color(0xFFFECACA));
       case 'withdrawn':
-        return _StatusConfig(icon: Icons.undo_rounded, label: 'Withdrawn', message: 'You have withdrawn this application.', color: const Color(0xFF64748B), bgColor: const Color(0xFFF8FAFC), borderColor: const Color(0xFFE2E8F0));
+        return _StatusConfig(
+            icon: Icons.undo_rounded,
+            label: 'Withdrawn',
+            message: 'You have withdrawn this application.',
+            color: const Color(0xFF64748B),
+            bgColor: const Color(0xFFF8FAFC),
+            borderColor: const Color(0xFFE2E8F0));
       case 'cancelled':
-        return _StatusConfig(icon: Icons.block_rounded, label: 'Cancelled', message: 'This application has been cancelled.', color: const Color(0xFFDC2626), bgColor: const Color(0xFFFEF2F2), borderColor: const Color(0xFFFECACA));
+        return _StatusConfig(
+            icon: Icons.block_rounded,
+            label: 'Cancelled',
+            message: 'This application has been cancelled.',
+            color: const Color(0xFFDC2626),
+            bgColor: const Color(0xFFFEF2F2),
+            borderColor: const Color(0xFFFECACA));
       case 'reschedule_pending':
-        return _StatusConfig(icon: Icons.schedule_rounded, label: 'Reschedule Pending', message: 'A reschedule request is pending approval.', color: const Color(0xFFD97706), bgColor: const Color(0xFFFFFBEB), borderColor: const Color(0xFFFDE68A));
+        return _StatusConfig(
+            icon: Icons.schedule_rounded,
+            label: 'Reschedule Pending',
+            message: 'A reschedule request is pending approval.',
+            color: const Color(0xFFD97706),
+            bgColor: const Color(0xFFFFFBEB),
+            borderColor: const Color(0xFFFDE68A));
       case 'reschedule_proposed':
-        return _StatusConfig(icon: Icons.event_repeat_rounded, label: 'Reschedule Proposed', message: 'A new interview time has been proposed. Please review it.', color: const Color(0xFF7C3AED), bgColor: const Color(0xFFF5F3FF), borderColor: const Color(0xFFDDD6FE));
+        return _StatusConfig(
+            icon: Icons.event_repeat_rounded,
+            label: 'Reschedule Proposed',
+            message: 'A new interview time has been proposed. Please review it.',
+            color: const Color(0xFF7C3AED),
+            bgColor: const Color(0xFFF5F3FF),
+            borderColor: const Color(0xFFDDD6FE));
       default:
-        return _StatusConfig(icon: Icons.hourglass_top_rounded, label: 'Pending Review', message: 'Your application has been submitted and is awaiting review.', color: const Color(0xFFD97706), bgColor: const Color(0xFFFFFBEB), borderColor: const Color(0xFFFDE68A));
+        return _StatusConfig(
+            icon: Icons.hourglass_top_rounded,
+            label: 'Pending Review',
+            message: 'Your application has been submitted and is awaiting review.',
+            color: const Color(0xFFD97706),
+            bgColor: const Color(0xFFFFFBEB),
+            borderColor: const Color(0xFFFDE68A));
+    }
+  }
+
+  void _handleEditApplication() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UpdateApplicationScreen(
+          applicationId: widget.applicationId,
+          applicationData: widget.applicationData,
+        ),
+      ),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        // This updates the UI on the 'Status' screen immediately
+        // after you click 'Save' on the 'Update' screen.
+        widget.applicationData.addAll(result);
+      });
     }
   }
 
@@ -89,111 +168,127 @@ class _ApplicationStatusScreenState extends State<ApplicationStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final d      = widget.applicationData;
-    final config = _statusConfig;
+    return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('applications')
+            .doc(widget.applicationId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Scaffold(body: Center(child: Text('Something went wrong')));
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: const BackButton(color: Colors.black),
-        centerTitle: true,
-        title: const Text('Application Status', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17)),
-      ),
-      body: _isBusy
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _JobCard(jobTitle: d['jobTitle'] ?? 'Unknown Job', company: d['company'] ?? '', appliedAt: _formatTimestamp(d['appliedAt'])),
-            const SizedBox(height: 12),
-            _StatusBanner(icon: config.icon, label: config.label, message: config.message, color: config.color, bgColor: config.bgColor, borderColor: config.borderColor),
-            const SizedBox(height: 24),
-            const Text('Tracking Timeline', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 16),
-            _TrackingTimeline(status: _status, applicationData: widget.applicationData),
-            const SizedBox(height: 32),
+          final liveData = snapshot.data!.data() as Map<String, dynamic>;
+          final liveStatus = (liveData['status'] ?? 'unprocessed').toString().toLowerCase();
+          final config = _getStatusConfig(liveStatus);
 
-            if (_status == 'unprocessed') ...[
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF135BEC), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  icon: const Icon(Icons.edit_note_rounded, size: 20),
-                  label: const Text('Edit Application', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                  onPressed: () async {
-                    final Map<String, dynamic>? updatedData = await Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateApplicationScreen(applicationId: widget.applicationId, applicationData: widget.applicationData)));
-                    if (updatedData != null && mounted) setState(() => widget.applicationData.addAll(updatedData));
-                  },
-                ),
+          final bool isInterview = liveStatus == 'interview' ||
+              liveStatus == 'reschedule_pending' ||
+              liveStatus == 'reschedule_proposed';
+          final bool isWithdrawnOrCancelled =
+              liveStatus == 'withdrawn' ||
+              liveStatus == 'cancelled' ||
+              liveStatus == 'hired' ||
+              liveStatus == 'declined' ||
+              liveStatus == 'rejected';
+
+          return Scaffold(
+            backgroundColor: Colors.white,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: const BackButton(color: Colors.black),
+              centerTitle: true,
+              title: const Text('Application Status',
+                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17)),
+            ),
+            body: _isBusy
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _JobCard(
+                      jobTitle: liveData['jobTitle'] ?? 'Unknown Job',
+                      company: liveData['company'] ?? '',
+                      appliedAt: _formatTimestamp(liveData['appliedAt'])),
+                  const SizedBox(height: 12),
+                  _StatusBanner(
+                      icon: config.icon,
+                      label: config.label,
+                      message: config.message,
+                      color: config.color,
+                      bgColor: config.bgColor,
+                      borderColor: config.borderColor),
+                  const SizedBox(height: 24),
+                  const Text('Tracking Timeline', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  const SizedBox(height: 16),
+                  _TrackingTimeline(status: liveStatus, applicationData: liveData),
+                  const SizedBox(height: 32),
+
+                  if (liveStatus == 'unprocessed') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF135BEC), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.edit_note_rounded, size: 20),
+                        label: const Text('Edit Application', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                        onPressed: _handleEditApplication,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (isInterview) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.remove_red_eye_outlined, color: Colors.white, size: 18),
+                        label: const Text('View Interview Info', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => ViewInterviewScreen(
+                                  applicationId: widget.applicationId,
+                                  initialData: liveData,
+                                ))),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (!isWithdrawnOrCancelled) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFE5E7EB)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
+                        label: const Text('Withdraw Application', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600, fontSize: 15)),
+                        onPressed: _handleWithdraw,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                ],
               ),
-              const SizedBox(height: 12),
-            ],
-            if (_isInterview) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)
-                      )
-                  ),
-                  icon: const Icon(
-                      Icons.remove_red_eye_outlined,
-                      color: Colors.white, size: 18
-                  ),
-                  label: const Text(
-                      'View Interview Info',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15
-                      )
-                  ),
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ViewInterviewScreen(
-                            applicationId: widget.applicationId,
-                            initialData: widget.applicationData,
-                          )
-                      )
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (!_isWithdrawnOrCancelled) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFE5E7EB)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
-                  label: const Text('Withdraw Application', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600, fontSize: 15)),
-                  onPressed: _handleWithdraw,
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-      bottomNavigationBar: NavBarWidget(
-        currentIndex: 2,
-        onTabSelected: (i) {
-          if (i == 2) return;
-          if (i == 0) {Navigator.popUntil(context, (route) => route.isFirst);}
-          else if (i == 1) {Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SavedJobsScreen()));}
-          else if (i == 3) {Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));}
-        },
-      ),
+            ),
+            bottomNavigationBar: NavBarWidget(
+              currentIndex: 2,
+              onTabSelected: (i) {
+                if (i == 2) return;
+                if (i == 0) {Navigator.popUntil(context, (route) => route.isFirst);}
+                else if (i == 1) {Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SavedJobsScreen()));}
+                else if (i == 3) {Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)));}
+              },
+            ),
+          );
+        }
     );
   }
 }
@@ -248,10 +343,14 @@ class _TrackingTimeline extends StatelessWidget {
       case 'under review': activeIndex = 1; break;
       case 'shortlisted':  activeIndex = 2; break;
       case 'interview':
-        case 'reschedule_pending':
-          case 'reschedule_proposed':
-            activeIndex = 3; break;
-      default: activeIndex = 4;
+      case 'reschedule_pending':
+      case 'reschedule_proposed':
+        activeIndex = 3; break;
+      case 'hired':
+      case 'declined':
+      case 'rejected':
+        activeIndex = 4; break;
+      default: activeIndex = 0;
     }
     final labels = [
       ('Application Submitted', 'Received: $appliedTime'),
@@ -268,7 +367,9 @@ class _TrackingTimeline extends StatelessWidget {
 
   String _finalDecisionLabel() {
     switch (status) {
-      case 'declined': case 'rejected': return 'Application declined';
+      case 'hired': return 'Position Offered';
+      case 'declined':
+      case 'rejected': return 'Application declined';
       case 'withdrawn': return 'You withdrew this application';
       case 'cancelled': return 'Application cancelled';
       default: return 'Pending';
