@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/job_model.dart';
 import './create_job_screen.dart';
 import '../../../Jobseeker/JobApplication/ApplicationUI/job_details_screen.dart';
@@ -14,6 +15,10 @@ class JobListScreen extends StatefulWidget {
 class _JobListScreenState extends State<JobListScreen> {
   static const Color _blue1 = Color(0xFF3B4FD8);
   static const Color _blue2 = Color(0xFF2A3BB8);
+
+  // ── Get current employer's uid ────────────────────────────────────────────
+  final String _currentUid =
+      FirebaseAuth.instance.currentUser?.uid ?? '';
 
   Future<void> _deleteJob(String jobId) async {
     await FirebaseFirestore.instance.collection('jobs').doc(jobId).delete();
@@ -60,12 +65,14 @@ class _JobListScreenState extends State<JobListScreen> {
                         backgroundColor: const Color(0xFFD1D5DB),
                         foregroundColor: Colors.black,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30)),
                       ),
                       child: const Text('No, keep it.',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
+                          style:
+                          TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -79,12 +86,14 @@ class _JobListScreenState extends State<JobListScreen> {
                         backgroundColor: const Color(0xFFFF2D55),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30)),
                       ),
                       child: const Text('Yes, Delete!',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
+                          style:
+                          TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ]),
@@ -113,7 +122,6 @@ class _JobListScreenState extends State<JobListScreen> {
     return 'Just now';
   }
 
-  // ── Compute status from publishDate & expiryDate ─────────────────────────
   Map<String, dynamic> _getJobStatus(Map<String, dynamic> data) {
     final now = DateTime.now();
     final publishDate = (data['publishDate'] as Timestamp?)?.toDate();
@@ -129,8 +137,7 @@ class _JobListScreenState extends State<JobListScreen> {
     if (publishDate != null && publishDate.isAfter(now)) {
       final d = publishDate;
       return {
-        'label':
-        'Scheduled · ${d.day}/${d.month}/${d.year}',
+        'label': 'Scheduled · ${d.day}/${d.month}/${d.year}',
         'color': const Color(0xFFE07B39),
         'bg': const Color(0xFFFFF3E0),
       };
@@ -166,6 +173,8 @@ class _JobListScreenState extends State<JobListScreen> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('jobs')
+        // ✅ FIX: Only fetch jobs posted by the current employer
+            .where('employerId', isEqualTo: _currentUid)
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -223,14 +232,17 @@ class _JobListScreenState extends State<JobListScreen> {
               final job = Job(
                 id: doc.id,
                 title: data['title'] ?? '',
+                companyId: data['companyId'] ?? '',
                 company: data['company'] ?? '',
                 location: data['location'] ?? '',
                 workType: data['workType'] ?? '',
                 workplace: data['workplace'] ?? '',
                 salary: data['salary'] ?? '',
                 postedTime: data['postedTime'] ?? '',
-                applicants: data['applicants']?.toString() ?? '0 applied',
-                createdAt: (data['createdAt'] as Timestamp?)?.toDate() ??
+                applicants:
+                data['applicants']?.toString() ?? '0 applied',
+                createdAt:
+                (data['createdAt'] as Timestamp?)?.toDate() ??
                     DateTime.now(),
               );
 
@@ -277,7 +289,6 @@ class _JobListScreenState extends State<JobListScreen> {
                   const SizedBox(width: 8),
                   if (job.workplace.isNotEmpty) _tag(job.workplace),
                   const Spacer(),
-                  // ── Status badge ──────────────────────────────────
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
@@ -295,7 +306,6 @@ class _JobListScreenState extends State<JobListScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Edit
                   GestureDetector(
                     onTap: () => _navigateToEditJob(job),
                     child: Container(
@@ -310,7 +320,6 @@ class _JobListScreenState extends State<JobListScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // Delete
                   GestureDetector(
                     onTap: () => _showDeleteDialog(context, job),
                     child: Container(
@@ -327,7 +336,6 @@ class _JobListScreenState extends State<JobListScreen> {
                 ]),
                 const SizedBox(height: 14),
 
-                // ── Company logo + title ──────────────────────────────
                 Row(children: [
                   Container(
                     width: 48,
@@ -369,7 +377,6 @@ class _JobListScreenState extends State<JobListScreen> {
                 ]),
                 const SizedBox(height: 12),
 
-                // Location
                 Row(children: [
                   const Icon(Icons.location_on_outlined,
                       size: 14, color: Colors.white70),
@@ -382,7 +389,6 @@ class _JobListScreenState extends State<JobListScreen> {
                 ]),
                 const SizedBox(height: 4),
 
-                // Salary
                 Row(children: [
                   const Icon(Icons.sell_outlined,
                       size: 14, color: Colors.white70),
@@ -394,7 +400,6 @@ class _JobListScreenState extends State<JobListScreen> {
                           fontWeight: FontWeight.w600)),
                 ]),
 
-                // Benefits bullets
                 if (benefitLines.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   ...benefitLines.map((b) {
@@ -411,7 +416,8 @@ class _JobListScreenState extends State<JobListScreen> {
                           Expanded(
                             child: Text(text,
                                 style: const TextStyle(
-                                    color: Colors.white70, fontSize: 13)),
+                                    color: Colors.white70,
+                                    fontSize: 13)),
                           ),
                         ],
                       ),
@@ -424,12 +430,12 @@ class _JobListScreenState extends State<JobListScreen> {
 
           Divider(color: Colors.white.withOpacity(0.2), height: 1),
 
-          // ── Bottom row ────────────────────────────────────────────
           Padding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 12),
             child: Row(children: [
-              const Icon(Icons.access_time, size: 14, color: Colors.white60),
+              const Icon(Icons.access_time,
+                  size: 14, color: Colors.white60),
               const SizedBox(width: 4),
               Text(_getTimeAgo(job.createdAt),
                   style: const TextStyle(
@@ -442,7 +448,6 @@ class _JobListScreenState extends State<JobListScreen> {
                   style: const TextStyle(
                       color: Colors.white60, fontSize: 12)),
               const Spacer(),
-              // View details (yellow)
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -473,7 +478,8 @@ class _JobListScreenState extends State<JobListScreen> {
 
   Widget _tag(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding:
+      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
