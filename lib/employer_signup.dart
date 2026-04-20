@@ -70,17 +70,13 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
     '5,000+ employees',
   ];
 
-  // ── Password regex ────────────────────────────────────────────────────────
-  final RegExp _pwRegex = RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,15}$');
-
   // ── Brand colours ─────────────────────────────────────────────────────────
-  static const Color _navy     = Color(0xFF0D1B3E);
-  static const Color _accent   = Color(0xFF3B52E8);
-  static const Color _bg       = Color(0xFFF4F6FB);
-  static const Color _border   = Color(0xFFDDE3EF);
-  static const Color _text     = Color(0xFF0D1B3E);
-  static const Color _subtext  = Color(0xFF6B7A99);
+  static const Color _navy    = Color(0xFF0D1B3E);
+  static const Color _accent  = Color(0xFF3B52E8);
+  static const Color _bg      = Color(0xFFF4F6FB);
+  static const Color _border  = Color(0xFFDDE3EF);
+  static const Color _text    = Color(0xFF0D1B3E);
+  static const Color _subtext = Color(0xFF6B7A99);
 
   @override
   void dispose() {
@@ -125,7 +121,7 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
           .set({
         'name':        _nameCtrl.text.trim(),
         'email':       _emailCtrl.text.trim(),
-        'role':        'employer',              // ✅ employer role
+        'role':        'employer',
         'companyName': _companyCtrl.text.trim(),
         'industry':    _selectedIndustry,
         'companySize': _selectedSize,
@@ -146,7 +142,7 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
     } on FirebaseAuthException catch (e) {
       String msg = 'Registration failed.';
       if (e.code == 'email-already-in-use') msg = 'This email is already registered.';
-      if (e.code == 'weak-password')        msg = 'Password must be at least 6 characters.';
+      if (e.code == 'weak-password')        msg = 'Password is too weak.';
       if (e.code == 'invalid-email')        msg = 'Invalid email address.';
       _snack(msg, error: true);
     } catch (e) {
@@ -163,18 +159,18 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(children: const [
-          Icon(Icons.mark_email_read_outlined, color: Color(0xFF22C55E), size: 28),
+          Icon(Icons.mark_email_read_outlined,
+              color: Color(0xFF22C55E), size: 28),
           SizedBox(width: 10),
-          Text('Check Your Email', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('Check Your Email',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'A verification email has been sent to:',
-              style: TextStyle(color: _subtext, fontSize: 13),
-            ),
+            Text('A verification email has been sent to:',
+                style: TextStyle(color: _subtext, fontSize: 13)),
             const SizedBox(height: 6),
             Text(
               _emailCtrl.text.trim(),
@@ -184,7 +180,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             const SizedBox(height: 14),
             const Text(
               'Please verify your email before signing in to your employer account.',
-              style: TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF475569)),
+              style: TextStyle(
+                  fontSize: 13, height: 1.5, color: Color(0xFF475569)),
             ),
           ],
         ),
@@ -226,7 +223,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
     ));
   }
 
-  InputDecoration _inputDec({required String hint, required IconData icon, Widget? suffix}) {
+  InputDecoration _inputDec(
+      {required String hint, required IconData icon, Widget? suffix}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: Color(0xFFADB8D0), fontSize: 14),
@@ -234,7 +232,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
       suffixIcon: suffix,
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      contentPadding:
+      const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _border)),
@@ -249,7 +248,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
           borderSide: const BorderSide(color: Colors.redAccent)),
       focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+          borderSide:
+          const BorderSide(color: Colors.redAccent, width: 1.5)),
     );
   }
 
@@ -294,7 +294,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                       }
                     },
                     child: Container(
-                      width: 36, height: 36,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -305,7 +306,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                   ),
                   const SizedBox(width: 14),
                   Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: _accent,
                       borderRadius: BorderRadius.circular(8),
@@ -316,10 +318,18 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                   const SizedBox(width: 10),
                   RichText(
                     text: const TextSpan(children: [
-                      TextSpan(text: 'JobBuddy ',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
-                      TextSpan(text: 'Employer',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w400, color: Color(0xFF9FADC8))),
+                      TextSpan(
+                          text: 'JobBuddy ',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white)),
+                      TextSpan(
+                          text: 'Employer',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF9FADC8))),
                     ]),
                   ),
                 ]),
@@ -328,8 +338,10 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                 Text(
                   _step == 0 ? 'Create Employer Account' : 'Company Details',
                   style: const TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w800,
-                      color: Colors.white, letterSpacing: -0.5),
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -375,7 +387,8 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
     final active = _step >= index;
     return Column(children: [
       Container(
-        width: 28, height: 28,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           color: active ? Colors.white : Colors.white.withOpacity(0.2),
           shape: BoxShape.circle,
@@ -387,15 +400,19 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: active ? _navy : Colors.white.withOpacity(0.5))),
+                  color: active
+                      ? _navy
+                      : Colors.white.withOpacity(0.5))),
         ),
       ),
       const SizedBox(height: 4),
       Text(label,
           style: TextStyle(
               fontSize: 11,
-              color: active ? Colors.white : Colors.white.withOpacity(0.4),
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
+              color:
+              active ? Colors.white : Colors.white.withOpacity(0.4),
+              fontWeight:
+              active ? FontWeight.w600 : FontWeight.w400)),
     ]);
   }
 
@@ -416,8 +433,11 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
           TextFormField(
             controller: _nameCtrl,
             textCapitalization: TextCapitalization.words,
-            decoration: _inputDec(hint: 'e.g. Ahmad Faris', icon: Icons.badge_outlined),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+            decoration: _inputDec(
+                hint: 'e.g. Ahmad Faris', icon: Icons.badge_outlined),
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Full name is required'
+                : null,
           ),
           const SizedBox(height: 18),
 
@@ -427,10 +447,12 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
           TextFormField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            decoration: _inputDec(hint: 'company@email.com', icon: Icons.email_outlined),
+            decoration: _inputDec(
+                hint: 'company@email.com', icon: Icons.email_outlined),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email is required';
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                  .hasMatch(v)) {
                 return 'Enter a valid email address';
               }
               return null;
@@ -452,24 +474,33 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             controller: _passwordCtrl,
             obscureText: _obscurePw,
             decoration: _inputDec(
-              hint: 'Min 8 chars, include A–Z, 0–9, @\$!%*?&',
+              hint: 'At least 8 characters',   // ← simpler hint
               icon: Icons.lock_outline_rounded,
               suffix: IconButton(
-                icon: Icon(_obscurePw
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                    color: _subtext, size: 20),
-                onPressed: () => setState(() => _obscurePw = !_obscurePw),
+                icon: Icon(
+                    _obscurePw
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: _subtext,
+                    size: 20),
+                onPressed: () =>
+                    setState(() => _obscurePw = !_obscurePw),
               ),
             ),
+            // ✅ Google-style: just 8 characters minimum, nothing else
             validator: (v) {
               if (v == null || v.isEmpty) return 'Password is required';
-              if (!_pwRegex.hasMatch(v)) {
-                return 'Must be 8–15 chars with uppercase, lowercase, number & special char';
-              }
+              if (v.length < 8) return 'Use 8 characters or more for your password';
               return null;
             },
           ),
+          const SizedBox(height: 6),
+          Row(children: const [
+            Icon(Icons.info_outline_rounded, size: 13, color: _subtext),
+            SizedBox(width: 5),
+            Text('Use 8 or more characters.',
+                style: TextStyle(fontSize: 11, color: _subtext)),
+          ]),
           const SizedBox(height: 18),
 
           // Confirm password
@@ -479,19 +510,22 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             controller: _confirmCtrl,
             obscureText: _obscureConfirm,
             decoration: _inputDec(
-              hint: 'Re-enter password',
+              hint: 'Re-enter your password',
               icon: Icons.lock_outline_rounded,
               suffix: IconButton(
-                icon: Icon(_obscureConfirm
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                    color: _subtext, size: 20),
-                onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                icon: Icon(
+                    _obscureConfirm
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: _subtext,
+                    size: 20),
+                onPressed: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
               ),
             ),
             validator: (v) {
-              if (v == null || v.isEmpty) return 'Please confirm password';
-              if (v != _passwordCtrl.text) return 'Passwords do not match';
+              if (v == null || v.isEmpty) return 'Please confirm your password';
+              if (v != _passwordCtrl.text) return 'Those passwords didn\'t match. Try again.';
               return null;
             },
           ),
@@ -513,13 +547,18 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                Text('Continue',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
-              ]),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Text('Continue',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_rounded,
+                        color: Colors.white, size: 18),
+                  ]),
             ),
           ),
           const SizedBox(height: 20),
@@ -529,14 +568,16 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             child: GestureDetector(
               onTap: () => Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const EmployerLoginScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const EmployerLoginScreen()),
               ),
               child: RichText(
                 text: const TextSpan(
                   text: 'Already have an account? ',
                   style: TextStyle(color: _subtext, fontSize: 14),
                   children: [
-                    TextSpan(text: 'Sign In',
+                    TextSpan(
+                        text: 'Sign In',
                         style: TextStyle(
                             color: _accent, fontWeight: FontWeight.bold)),
                   ],
@@ -569,8 +610,9 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             decoration: _inputDec(
                 hint: 'e.g. Jabil Circuit Sdn Bhd',
                 icon: Icons.business_outlined),
-            validator: (v) =>
-            (v == null || v.trim().isEmpty) ? 'Company name is required' : null,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Company name is required'
+                : null,
           ),
           const SizedBox(height: 18),
 
@@ -581,14 +623,17 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             value: _selectedIndustry,
             hint: const Text('Select your industry',
                 style: TextStyle(color: Color(0xFFADB8D0), fontSize: 14)),
-            decoration: _inputDec(
-                hint: '',
-                icon: Icons.category_outlined),
-            items: _industries.map((ind) =>
-                DropdownMenuItem(value: ind, child: Text(ind, style: const TextStyle(fontSize: 14))))
+            decoration:
+            _inputDec(hint: '', icon: Icons.category_outlined),
+            items: _industries
+                .map((ind) => DropdownMenuItem(
+                value: ind,
+                child: Text(ind,
+                    style: const TextStyle(fontSize: 14))))
                 .toList(),
             onChanged: (v) => setState(() => _selectedIndustry = v),
-            validator: (v) => v == null ? 'Please select industry' : null,
+            validator: (v) =>
+            v == null ? 'Please select industry' : null,
             borderRadius: BorderRadius.circular(12),
           ),
           const SizedBox(height: 18),
@@ -601,13 +646,16 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             hint: const Text('Select number of employees',
                 style: TextStyle(color: Color(0xFFADB8D0), fontSize: 14)),
             decoration: _inputDec(
-                hint: '',
-                icon: Icons.people_outline_rounded),
-            items: _companySizes.map((s) =>
-                DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 14))))
+                hint: '', icon: Icons.people_outline_rounded),
+            items: _companySizes
+                .map((s) => DropdownMenuItem(
+                value: s,
+                child: Text(s,
+                    style: const TextStyle(fontSize: 14))))
                 .toList(),
             onChanged: (v) => setState(() => _selectedSize = v),
-            validator: (v) => v == null ? 'Please select company size' : null,
+            validator: (v) =>
+            v == null ? 'Please select company size' : null,
             borderRadius: BorderRadius.circular(12),
           ),
           const SizedBox(height: 18),
@@ -621,8 +669,9 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             decoration: _inputDec(
                 hint: 'e.g. HR Manager, Talent Acquisition Lead',
                 icon: Icons.work_outline_rounded),
-            validator: (v) =>
-            (v == null || v.trim().isEmpty) ? 'Your position is required' : null,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Your position is required'
+                : null,
           ),
           const SizedBox(height: 28),
 
@@ -637,14 +686,17 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Icon(Icons.gavel_rounded, size: 15, color: Color(0xFF92710D)),
+                Icon(Icons.gavel_rounded,
+                    size: 15, color: Color(0xFF92710D)),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'By creating an account you agree to JobBuddy\'s Terms of Service '
                         'and confirm that you are authorised to post jobs on behalf of your company.',
                     style: TextStyle(
-                        fontSize: 12, color: Color(0xFF6B5200), height: 1.5),
+                        fontSize: 12,
+                        color: Color(0xFF6B5200),
+                        height: 1.5),
                   ),
                 ),
               ],
@@ -666,12 +718,15 @@ class _EmployerSignUpScreenState extends State<EmployerSignUpScreen> {
                     borderRadius: BorderRadius.circular(12)),
               ),
               child: _isLoading
-                  ? const SizedBox(width: 22, height: 22,
+                  ? const SizedBox(
+                  width: 22,
+                  height: 22,
                   child: CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2.5))
                   : const Text('Create Employer Account',
                   style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white)),
             ),
           ),
