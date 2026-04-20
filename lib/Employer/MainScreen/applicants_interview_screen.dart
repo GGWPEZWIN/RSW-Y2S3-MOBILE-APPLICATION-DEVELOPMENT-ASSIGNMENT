@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Interview/schedule_interview_page.dart'; // adjust path
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ApplicantsInterviewScreen extends StatelessWidget {
   const ApplicantsInterviewScreen({super.key});
@@ -25,6 +26,7 @@ class ApplicantsInterviewScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('applications')
+            .where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
             .where('status', isEqualTo: 'interview')
             .orderBy('appliedAt', descending: true)
             .snapshots(),
