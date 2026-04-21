@@ -18,6 +18,23 @@ class InterviewQuestion {
   const InterviewQuestion({required this.number, required this.question});
 }
 
+/// Holds the result of one completed question.
+class CompletedAnswer {
+  final int questionNumber;
+  final String question;
+  final String answer;
+  final String feedback;        // includes ⭐ Score line
+  final String sampleResponse;
+
+  const CompletedAnswer({
+    required this.questionNumber,
+    required this.question,
+    required this.answer,
+    required this.feedback,
+    required this.sampleResponse,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // OPENROUTER HELPER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +180,9 @@ class _InterviewPracticeSessionScreenState
 
   List<InterviewQuestion> _questions = [];
 
+  /// Tracks every question the user has completed (received feedback for).
+  final List<CompletedAnswer> _completedAnswers = [];
+
   bool _isMicTapLocked    = false;
   bool _isSubmitting      = false;
   bool _isWaitingForFinal = false;
@@ -189,6 +209,15 @@ class _InterviewPracticeSessionScreenState
   late Animation<double>   _pulseAnim;
 
   String get _apiKey => dotenv.env['OPENROUTER_API_KEY'] ?? '';
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+
+  /// How many questions have been fully answered (feedback received).
+  int get _answeredCount => _completedAnswers.length;
+
+  /// Whether there is a completed-answer entry for the current question index.
+  bool get _currentQuestionAnswered =>
+      _completedAnswers.any((a) => a.questionNumber == _currentQuestionIndex + 1);
 
   @override
   void initState() {
@@ -445,15 +474,30 @@ SCORE: <Score like 7/10 with one sentence justification.>
       final scoreMatch    = RegExp(r'SCORE:\s*(.*)',                            dotAll: true).firstMatch(text);
 
       if (mounted) {
-        final score = scoreMatch?.group(1)?.trim() ?? '';
+        final score        = scoreMatch?.group(1)?.trim() ?? '';
+        final feedbackText = (feedbackMatch?.group(1)?.trim() ?? 'No feedback available.') +
+            (score.isNotEmpty ? '\n\n⭐ Score: $score' : '');
+        final sampleText   = sampleMatch?.group(1)?.trim() ?? 'No sample response available.';
+
+        // ── Save to completed answers list ──
+        // Replace existing if already answered (re-submit scenario)
+        _completedAnswers.removeWhere(
+                (a) => a.questionNumber == _currentQuestionIndex + 1);
+        _completedAnswers.add(CompletedAnswer(
+          questionNumber: _currentQuestionIndex + 1,
+          question:       _questions[_currentQuestionIndex].question,
+          answer:         answer,
+          feedback:       feedbackText,
+          sampleResponse: sampleText,
+        ));
+
         setState(() {
-          _aiFeedback = (feedbackMatch?.group(1)?.trim() ?? 'No feedback available.') +
-              (score.isNotEmpty ? '\n\n⭐ Score: $score' : '');
-          _aiSampleResponse = sampleMatch?.group(1)?.trim() ?? 'No sample response available.';
-          _mode = 'feedback';
-          _endReviewActive = true;
+          _aiFeedback       = feedbackText;
+          _aiSampleResponse = sampleText;
+          _mode             = 'feedback';
+          _endReviewActive  = true;
           _feedbackExpanded = true;
-          _sampleExpanded = false;
+          _sampleExpanded   = false;
         });
       }
     } on TimeoutException {
@@ -478,7 +522,13 @@ SCORE: <Score like 7/10 with one sentence justification.>
   void _nextQuestion() {
     if (_mode == 'loading' || _questions.isEmpty) return;
     _countdownTimer?.cancel();
-    if (_currentQuestionIndex < _questions.length - 1) {
+
+    final isLast = _currentQuestionIndex >= _questions.length - 1;
+
+    if (isLast) {
+      // All questions done — go straight to review
+      _navigateToReview();
+    } else {
       setState(() {
         _currentQuestionIndex++;
         _mode = 'idle';
@@ -491,15 +541,91 @@ SCORE: <Score like 7/10 with one sentence justification.>
         _sampleExpanded = false;
         _isSubmitting = false;
       });
-    } else {
-      Navigator.pop(context);
     }
   }
 
-  void _endAndReview() {
-    if (_mode == 'loading') { _showSnack('Please wait for feedback before leaving'); return; }
-    Navigator.pop(context);
+  // ── End & Review logic ─────────────────────────────────────────────────────
+
+  Future<void> _endAndReview() async {
+    if (_mode == 'loading') {
+      _showSnack('Please wait for feedback before leaving');
+      return;
+    }
+
+    final total    = _questions.length;
+    final answered = _answeredCount;
+
+    if (answered == 0) {
+      // Case 1: user hasn't answered anything yet
+      await _showNoAnswersDialog();
+    } else if (answered < total) {
+      // Case 2: partial progress
+      await _showPartialProgressDialog(answered, total);
+    } else {
+      // Case 3: all done — go to review
+      _navigateToReview();
+    }
   }
+
+  Future<void> _showNoAnswersDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _InterviewDialog(
+        icon: Icons.help_outline_rounded,
+        iconColor: const Color(0xFF3B4FD8),
+        iconBg: const Color(0xFFEEF0FF),
+        title: 'End Practice?',
+        body: "You haven't answered any questions yet. Are you sure you want to end the practice session?",
+        primaryLabel: 'Yes, End Session',
+        primaryColor: const Color(0xFFE53935),
+        secondaryLabel: 'Continue Practising',
+        onPrimary: () {
+          Navigator.pop(ctx);
+          Navigator.pop(context); // go back, nothing to review
+        },
+        onSecondary: () => Navigator.pop(ctx),
+      ),
+    );
+  }
+
+  Future<void> _showPartialProgressDialog(int answered, int total) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _InterviewDialog(
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFF59E0B),
+        iconBg: const Color(0xFFFFFBEB),
+        title: 'Leave Early?',
+        body:
+        "You've completed $answered of $total questions. Your progress so far will be saved in the review, but unanswered questions will be skipped.",
+        primaryLabel: 'View My Progress',
+        primaryColor: const Color(0xFF3B4FD8),
+        secondaryLabel: 'Keep Going',
+        onPrimary: () {
+          Navigator.pop(ctx);
+          _navigateToReview();
+        },
+        onSecondary: () => Navigator.pop(ctx),
+      ),
+    );
+  }
+
+  void _navigateToReview() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InterviewReviewScreen(
+          completedAnswers: List.unmodifiable(_completedAnswers),
+          totalQuestions:   _questions.length,
+          jobData:          widget.savedJobData,
+        ),
+      ),
+    );
+  }
+
+  // ── Will-pop ───────────────────────────────────────────────────────────────
 
   Future<bool> _onWillPop() async {
     if (_mode == 'loading') { _showSnack('Please wait for feedback before leaving'); return false; }
@@ -559,30 +685,50 @@ SCORE: <Score like 7/10 with one sentence justification.>
           ? _buildGeneratingScreen()
           : Column(children: [
 
-        // End & Review button
+        // ── End & Review button ──────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           child: GestureDetector(
-            onTap: (_endReviewActive && _mode != 'loading') ? _endAndReview : null,
+            onTap: _mode != 'loading' ? _endAndReview : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               width: double.infinity, height: 48,
               decoration: BoxDecoration(
-                color: (_endReviewActive && _mode != 'loading')
-                    ? _red : const Color(0xFFF0F1F7),
+                // Always show the button as active so users can always tap it;
+                // colour shifts to red only after at least one answer is done.
+                color: _mode == 'loading'
+                    ? const Color(0xFFF0F1F7)
+                    : _answeredCount > 0
+                    ? _red
+                    : const Color(0xFFF0F1F7),
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Center(child: Text('End & Review', style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w700,
-                color: (_endReviewActive && _mode != 'loading')
-                    ? Colors.white : const Color(0xFF9CA3AF),
-              ))),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _answeredCount > 0
+                          ? 'End & Review (${_answeredCount}/${_questions.length})'
+                          : 'End & Review',
+                      style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700,
+                        color: _mode == 'loading'
+                            ? const Color(0xFF9CA3AF)
+                            : _answeredCount > 0
+                            ? Colors.white
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
         const SizedBox(height: 20),
 
-        // Question pill
+        // ── Question pill ────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
@@ -600,7 +746,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
         ),
         const SizedBox(height: 16),
 
-        // Main card
+        // ── Main card ────────────────────────────────────────────────
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -625,7 +771,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                           color: Colors.black87, height: 1.5)),
                 const SizedBox(height: 24),
 
-                // ── VOICE MODES ────────────────────────────────────────
+                // ── VOICE MODES ──────────────────────────────────────
                 if (_mode == 'idle' || _mode == 'listening' || _mode == 'stopped') ...[
                   if (_mode != 'idle') ...[
                     Text(_timerDisplay, style: TextStyle(
@@ -791,7 +937,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   ),
                 ],
 
-                // ── TYPING ─────────────────────────────────────────────
+                // ── TYPING ───────────────────────────────────────────
                 if (_mode == 'typing') ...[
                   Container(
                     decoration: BoxDecoration(
@@ -843,7 +989,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   ),
                 ],
 
-                // ── LOADING ────────────────────────────────────────────
+                // ── LOADING ──────────────────────────────────────────
                 if (_mode == 'loading') ...[
                   const SizedBox(height: 20),
                   const CircularProgressIndicator(color: _blue),
@@ -856,7 +1002,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 20),
                 ],
 
-                // ── FEEDBACK ───────────────────────────────────────────
+                // ── FEEDBACK ─────────────────────────────────────────
                 if (_mode == 'feedback') ...[
                   Container(
                     width: double.infinity,
@@ -891,7 +1037,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                       ),
                       child: Text(
                         _currentQuestionIndex < _questions.length - 1
-                            ? 'Next Question' : 'Finish Practice',
+                            ? 'Next Question' : 'View Full Review',
                         style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w700),
                       ),
@@ -1013,6 +1159,560 @@ SCORE: <Score like 7/10 with one sentence justification.>
               ),
           ]),
         ),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REUSABLE DIALOG WIDGET (Figma-style)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InterviewDialog extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String title;
+  final String body;
+  final String primaryLabel;
+  final Color primaryColor;
+  final String secondaryLabel;
+  final VoidCallback onPrimary;
+  final VoidCallback onSecondary;
+
+  const _InterviewDialog({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.body,
+    required this.primaryLabel,
+    required this.primaryColor,
+    required this.secondaryLabel,
+    required this.onPrimary,
+    required this.onSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+      child: Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon bubble
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: iconColor, size: 32),
+            ),
+            const SizedBox(height: 20),
+
+            // Title
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Body
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Primary CTA
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onPrimary,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text(
+                  primaryLabel,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Secondary CTA
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: onSecondary,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text(
+                  secondaryLabel,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REVIEW SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+
+class InterviewReviewScreen extends StatefulWidget {
+  final List<CompletedAnswer> completedAnswers;
+  final int totalQuestions;
+  final Map<String, dynamic> jobData;
+
+  const InterviewReviewScreen({
+    super.key,
+    required this.completedAnswers,
+    required this.totalQuestions,
+    required this.jobData,
+  });
+
+  @override
+  State<InterviewReviewScreen> createState() => _InterviewReviewScreenState();
+}
+
+class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
+  static const Color _blue  = Color(0xFF3B4FD8);
+  static const Color _green = Color(0xFF0BA87E);
+  static const Color _amber = Color(0xFFF59E0B);
+
+  // Track which cards are expanded
+  late final List<bool> _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = List.filled(widget.completedAnswers.length, false);
+  }
+
+  String get _jobTitle =>
+      widget.jobData['jobTitle'] as String? ??
+          widget.jobData['title'] as String? ?? 'Interview';
+
+  String get _company => widget.jobData['company'] as String? ?? '';
+
+  /// Extract just the score fraction (e.g. "7/10") from the feedback string.
+  String _extractScore(String feedback) {
+    final match = RegExp(r'(\d+/10)').firstMatch(feedback);
+    return match?.group(1) ?? '—';
+  }
+
+  /// Parse the numeric numerator of a "X/10" score string.
+  int _scoreInt(String score) {
+    final match = RegExp(r'^(\d+)').firstMatch(score);
+    return int.tryParse(match?.group(1) ?? '0') ?? 0;
+  }
+
+  Color _scoreColor(int s) {
+    if (s >= 8) return _green;
+    if (s >= 5) return _amber;
+    return const Color(0xFFE53935);
+  }
+
+  double get _averageScore {
+    if (widget.completedAnswers.isEmpty) return 0;
+    final scores = widget.completedAnswers
+        .map((a) => _scoreInt(_extractScore(a.feedback)))
+        .where((s) => s > 0);
+    if (scores.isEmpty) return 0;
+    return scores.reduce((a, b) => a + b) / scores.length;
+  }
+
+  String get _overallBadge {
+    final avg = _averageScore;
+    if (avg >= 8) return 'Excellent';
+    if (avg >= 6) return 'Good';
+    if (avg >= 4) return 'Fair';
+    return 'Needs Work';
+  }
+
+  Color get _overallBadgeColor {
+    final avg = _averageScore;
+    if (avg >= 8) return _green;
+    if (avg >= 6) return _blue;
+    if (avg >= 4) return _amber;
+    return const Color(0xFFE53935);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final answered  = widget.completedAnswers.length;
+    final total     = widget.totalQuestions;
+    final skipped   = total - answered;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, color: Colors.black),
+          onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+        ),
+        title: const Text('Practice Review',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: const Color(0xFFEEEEEE)),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+
+          // ── Summary header card ──────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 12, offset: const Offset(0, 4),
+              )],
+            ),
+            child: Column(children: [
+
+              // Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _overallBadgeColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(_overallBadge,
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                        color: _overallBadgeColor)),
+              ),
+              const SizedBox(height: 14),
+
+              Text(_jobTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800,
+                      color: Colors.black87)),
+              if (_company.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(_company,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+              ],
+              const SizedBox(height: 20),
+
+              // Stats row
+              Row(children: [
+                _statBox(
+                  label: 'Answered',
+                  value: '$answered/$total',
+                  color: _blue,
+                  icon: Icons.check_circle_outline_rounded,
+                ),
+                const SizedBox(width: 12),
+                _statBox(
+                  label: 'Avg Score',
+                  value: _averageScore > 0
+                      ? '${_averageScore.toStringAsFixed(1)}/10' : '—',
+                  color: _scoreColor(_averageScore.round()),
+                  icon: Icons.star_outline_rounded,
+                ),
+                const SizedBox(width: 12),
+                _statBox(
+                  label: 'Skipped',
+                  value: '$skipped',
+                  color: skipped == 0 ? _green : _amber,
+                  icon: Icons.skip_next_rounded,
+                ),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Section title ────────────────────────────────────────
+          if (answered > 0) ...[
+            const Text('Question Breakdown',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700,
+                    color: Colors.black87)),
+            const SizedBox(height: 12),
+
+            // ── Per-question cards ───────────────────────────────
+            ...widget.completedAnswers.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final ca  = entry.value;
+              final score    = _extractScore(ca.feedback);
+              final scoreInt = _scoreInt(score);
+              final expanded = _expanded[idx];
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 8, offset: const Offset(0, 2),
+                    )],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header row (always visible)
+                      InkWell(
+                        onTap: () => setState(
+                                () => _expanded[idx] = !_expanded[idx]),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(children: [
+                            // Q number bubble
+                            Container(
+                              width: 32, height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF0FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Text('Q${ca.questionNumber}',
+                                    style: const TextStyle(
+                                        fontSize: 12, fontWeight: FontWeight.w700,
+                                        color: Color(0xFF3B4FD8))),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Question text (truncated)
+                            Expanded(
+                              child: Text(ca.question,
+                                  maxLines: expanded ? 10 : 2,
+                                  overflow: expanded
+                                      ? TextOverflow.visible
+                                      : TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: Colors.black87, height: 1.4)),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Score badge
+                            if (scoreInt > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _scoreColor(scoreInt).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(score,
+                                    style: TextStyle(
+                                        fontSize: 12, fontWeight: FontWeight.w700,
+                                        color: _scoreColor(scoreInt))),
+                              ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              expanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              color: Colors.black38, size: 20,
+                            ),
+                          ]),
+                        ),
+                      ),
+
+                      // Expanded content
+                      if (expanded) ...[
+                        _divider(),
+                        _reviewSection(
+                          label: 'Your Answer',
+                          icon: Icons.person_outline_rounded,
+                          iconColor: _blue,
+                          text: ca.answer,
+                        ),
+                        _divider(),
+                        _reviewSection(
+                          label: 'Feedback',
+                          icon: Icons.star_outline_rounded,
+                          iconColor: const Color(0xFFF5C842),
+                          text: ca.feedback,
+                        ),
+                        _divider(),
+                        _reviewSection(
+                          label: 'Sample Response',
+                          icon: Icons.lightbulb_outline_rounded,
+                          iconColor: _green,
+                          text: ca.sampleResponse,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+
+          // ── Skipped questions notice ─────────────────────────────
+          if (skipped > 0) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: Color(0xFFF59E0B), size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '$skipped question${skipped > 1 ? 's were' : ' was'} skipped. '
+                        'Try another session to practise them.',
+                    style: const TextStyle(
+                        fontSize: 13, color: Color(0xFF92400E), height: 1.4),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+
+          const SizedBox(height: 28),
+
+          // ── Done button ──────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () =>
+                  Navigator.of(context).popUntil((r) => r.isFirst),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Done',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _statBox({
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) =>
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 11, color: color.withOpacity(0.7),
+                    fontWeight: FontWeight.w500)),
+          ]),
+        ),
+      );
+
+  Widget _divider() => Divider(
+    height: 1,
+    thickness: 1,
+    color: Colors.grey.shade100,
+    indent: 16,
+    endIndent: 16,
+  );
+
+  Widget _reviewSection({
+    required String label,
+    required IconData icon,
+    required Color iconColor,
+    required String text,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, size: 14, color: iconColor),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: iconColor)),
+          ]),
+          const SizedBox(height: 8),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 13, color: Color(0xFF4B5563), height: 1.6)),
+        ]),
       );
 }
 
