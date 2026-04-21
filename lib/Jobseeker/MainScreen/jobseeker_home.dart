@@ -10,6 +10,7 @@ import 'AI_Matching.dart';
 import 'jobseeker_profile.dart';
 import '../JobApplication/ApplicationUI/saved_job_list.dart';
 import '../JobApplication/ApplicationUI/applied_job_list.dart';
+import 'jobseeker_search.dart';
 
 class HomePage extends StatefulWidget {
   final User? user;
@@ -326,16 +327,25 @@ class _HomePageState extends State<HomePage> {
                       color: const Color(0xFFF0F1F7),
                       borderRadius: BorderRadius.circular(25),
                     ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search for jobs ......',
-                        hintStyle:
-                        TextStyle(color: Colors.grey[500], fontSize: 14),
-                        suffixIcon: Icon(Icons.search,
-                            color: Colors.grey[500], size: 22),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                    child:
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const JobSearchScreen()),
+                        );
+                      },
+                      child: AbsorbPointer(
+                        child: TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Search for jobs ......',
+                            hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                            suffixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 14),
+                          ),
+                        ),
                       ),
                     ),
                   ),

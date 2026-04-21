@@ -12,6 +12,7 @@ class Job {
   final String postedTime;
   final String applicants;
   final DateTime createdAt;
+  final String? industry;  // ✅ ADD THIS LINE
 
   // Additional fields from the create job form
   final String? description;
@@ -40,6 +41,7 @@ class Job {
     required this.postedTime,
     required this.applicants,
     required this.createdAt,
+    this.industry,  // ADD THIS LINE
     this.description,
     this.requirements,
     this.benefits,
@@ -67,6 +69,7 @@ class Job {
       'postedTime': postedTime,
       'applicants': applicants,
       'createdAt': createdAt,
+      if (industry != null) 'industry': industry,  // ✅ ADD THIS LINE
       if (description != null) 'description': description,
       if (requirements != null) 'requirements': requirements,
       if (benefits != null) 'benefits': benefits,
@@ -96,6 +99,7 @@ class Job {
       postedTime: map['postedTime'] ?? '',
       applicants: map['applicants'] ?? '',
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      industry: map['industry'],  // ✅ ADD THIS LINE
       description: map['description'],
       requirements: map['requirements'],
       benefits: map['benefits'],
@@ -124,6 +128,7 @@ class Job {
     String? postedTime,
     String? applicants,
     DateTime? createdAt,
+    String? industry,  // ADD THIS LINE
     String? description,
     String? requirements,
     String? benefits,
@@ -150,6 +155,7 @@ class Job {
       postedTime: postedTime ?? this.postedTime,
       applicants: applicants ?? this.applicants,
       createdAt: createdAt ?? this.createdAt,
+      industry: industry ?? this.industry,  // ✅ ADD THIS LINE
       description: description ?? this.description,
       requirements: requirements ?? this.requirements,
       benefits: benefits ?? this.benefits,
