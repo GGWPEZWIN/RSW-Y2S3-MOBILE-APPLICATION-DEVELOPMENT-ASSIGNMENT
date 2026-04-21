@@ -169,17 +169,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                         : <QueryDocumentSnapshot>[];
                     final totalApplicants = allApps.length;
 
-                    // ── Hired success rate ─────────────────────────────
-                    final hiredCount = allApps.where((doc) {
-                      final status =
-                      ((doc.data() as Map)['status'] ?? '')
-                          .toString()
-                          .toLowerCase();
-                      return status == 'hired' || status == 'accepted';
-                    }).length;
-                    final hireRate = totalApplicants > 0
-                        ? '${((hiredCount / totalApplicants) * 100).round()}%'
-                        : '0%';
+                    // ── Removed hired success rate ─────────────────────
+                    // No longer calculating hireRate
 
                     return StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -224,6 +215,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                             }).length
                                 : 0;
 
+                            // ✅ Only 5 stat cards (removed Hired Success)
                             final stats = [
                               {
                                 'value':     jobCount.toString(),
@@ -245,13 +237,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                                 'icon':      Icons.receipt_long_outlined,
                                 'bg':        const Color(0xFFFFF3E0),
                                 'iconColor': const Color(0xFFE07B39),
-                              },
-                              {
-                                'value':     hireRate,
-                                'label':     'Hired Success',
-                                'icon':      Icons.bar_chart_rounded,
-                                'bg':        const Color(0xFFE8FBF0),
-                                'iconColor': const Color(0xFF2CB06A),
                               },
                               {
                                 'value':     upcomingInterviews.toString(),
@@ -608,7 +593,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   }
 }
 
-// ── AllJobsListScreen ─────────────────────────────────────────────────────────
+// ── AllJobsListScreen (unchanged) ───────────────────────────────────────────
 
 class AllJobsListScreen extends StatelessWidget {
   final String employerId;
