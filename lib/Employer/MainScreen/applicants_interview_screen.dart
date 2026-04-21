@@ -26,7 +26,7 @@ class ApplicantsInterviewScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('applications')
-            .where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
+            //.where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
             .where('status', isEqualTo: 'interview')
             .orderBy('appliedAt', descending: true)
             .snapshots(),

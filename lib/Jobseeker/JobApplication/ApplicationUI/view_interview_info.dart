@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class ViewInterviewScreen extends StatefulWidget {
   final String applicationId;
@@ -35,6 +37,19 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
     super.dispose();
   }
 
+  LatLng? _parseCoordinates(String? coordString) {
+    if (coordString == null || !coordString.contains(',')) return null;
+    try {
+      final parts = coordString.split(',');
+      return LatLng(
+        double.parse(parts[0].trim()),
+        double.parse(parts[1].trim()),
+      );
+    } catch (e) {
+      debugPrint("Map Coordinate Error: $e");
+      return null;
+    }
+  }
   // Helper to pick Date
   Future<void> _pickDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -60,16 +75,28 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Fetch the application document to get the candidate's name
+    // Helper to parse the coordinate string "3.145615, 101.677969" from Firebase
+    LatLng? _parseCoordinates(String? coordString) {
+      if (coordString == null || !coordString.contains(',')) return null;
+      try {
+        final parts = coordString.split(',');
+        return LatLng(
+          double.parse(parts[0].trim()),
+          double.parse(parts[1].trim()),
+        );
+      } catch (e) {
+        debugPrint("Map Error: $e");
+        return null;
+      }
+    }
+
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('applications').doc(widget.applicationId).get(),
       builder: (context, appSnapshot) {
-        // Get the name from the application collection fallback
         final String applicationName = appSnapshot.data?.get('candidateName')
             ?? appSnapshot.data?.get('applicantName')
             ?? 'Candidate';
 
-        // 2. Listen to the interview document for date/time/status updates
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('interviews').doc(widget.applicationId).snapshots(),
           builder: (context, snapshot) {
@@ -78,12 +105,15 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
               d = snapshot.data!.data() as Map<String, dynamic>;
             }
 
-            // Combine names: Priority to Interview doc, then Application doc, then 'Candidate'
             final String displayName = d['candidateName'] ?? d['applicantName'] ?? applicationName;
-
             final interviewTs = d['interviewTimestamp'];
             final currentStatus = d['status'] ?? 'scheduled';
             final bool isEditable = currentStatus == 'scheduled' || currentStatus == 'reschedule_proposed';
+
+            // Location extraction
+            final String locationType = d['locationType'] ?? 'TBC';
+            final String? locationDetail = d['locationDetail']; // The "lat, long" string
+            final LatLng? coordinates = _parseCoordinates(locationDetail);
 
             return Scaffold(
               backgroundColor: Colors.white,
@@ -100,21 +130,73 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Now shows the real name from the application collection!
                     _PrototypeField(label: 'Candidate Name', value: displayName),
                     const SizedBox(height: 20),
                     _PrototypeField(label: 'Interview Date', value: _formatTsDate(interviewTs)),
                     const SizedBox(height: 20),
                     _PrototypeField(label: 'Interview Time', value: _formatTsTime(interviewTs)),
                     const SizedBox(height: 20),
-                    _PrototypeField(label: 'Interview Location', value: d['locationType'] ?? 'TBC'),
+                    _PrototypeField(label: 'Interview Location', value: locationType),
 
-                    // Rest of your UI code...
+                    // ── MAP SECTION ──
+                    if (locationType == 'On-site' && coordinates != null) ...[
+                      const SizedBox(height: 12),
+                      const Text('Interview Venue', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 220,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: coordinates,
+                              initialZoom: 15,
+                              interactionOptions: const InteractionOptions(
+                                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                              ),
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.your.app',
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: coordinates,
+                                    width: 50,
+                                    height: 50,
+                                    child: const Icon(Icons.location_on, color: Colors.red, size: 45),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Venue: $locationDetail",
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+
                     const SizedBox(height: 24),
                     const Divider(),
                     const SizedBox(height: 16),
 
-                    // Propose New Date & Time section
+                    // Propose Reschedule Section
                     const Text('Propose New Date & Time', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
                     const SizedBox(height: 12),
                     Row(
@@ -138,29 +220,24 @@ class _ViewInterviewScreenState extends State<ViewInterviewScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    const Text('Reject Reason', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                    const Text('Reason', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _reasonController,
                       enabled: isEditable,
                       decoration: InputDecoration(
-                        hintText: "Why are you rescheduling?",
+                        hintText: "Reason for rescheduling...",
                         filled: true,
-                        fillColor: Colors.white, // Pure white background
+                        fillColor: Colors.grey.shade50,
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFB39DDB), width: 1.5),
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFB39DDB)),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFFB39DDB), width: 2.0),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF673AB7), width: 2),
                         ),
                       ),
-                      style: const TextStyle(color: Colors.black, fontSize: 15),
                     ),
                     const SizedBox(height: 32),
 
