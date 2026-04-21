@@ -1,7 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
 import '../../edit_profile.dart';
 import '../../services/resume_service.dart';
 import '../../settings_page.dart';
@@ -12,12 +12,10 @@ import '../Profile/edit_experience_page.dart';
 import '../Profile/edit_skills_page.dart';
 import '../Widgets/nav_bar_widget.dart';
 import 'jobseeker_home.dart';
-// If you have a state manager for themes/language:
-import '../../services/app_state_manager.dart';
 
 class ProfilePage extends StatefulWidget {
   final User? user;
-  const ProfilePage({Key? key, this.user}) : super(key: key);
+  const ProfilePage({super.key, this.user});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -26,9 +24,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   static const Color kPrimaryBlue = Color(0xFF2563EB);
   static const Color kTextSecondary = Color(0xFF64748B);
-  static const Color kBorderColor = Color(0xFFE2E8F0);
 
-  List<Map<String, dynamic>> _aiSuggestions = [];
   bool _isAnalyzing = false;
 
   // --- DELETE LOGIC ---
@@ -45,7 +41,43 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- AUTOMATIC UPDATE LOGIC (FOR SKILLS & LANGUAGES) ---
+  // --- VIEW RESUME LOGIC (NEW) ---
+  void _viewResume(String base64String) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            title: const Text("Resume View", style: TextStyle(color: Colors.white)),
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              boundaryMargin: const EdgeInsets.all(20),
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(
+                base64Decode(base64String),
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Center(
+                  child: Text("Could not display resume image", style: TextStyle(color: Colors.white)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- AUTOMATIC UPDATE LOGIC ---
   Future<void> _autoUpdateProfile(List<String> newSkills, List<String> newLanguages) async {
     if (newSkills.isEmpty && newLanguages.isEmpty) return;
     try {
@@ -54,34 +86,49 @@ class _ProfilePageState extends State<ProfilePage> {
       if (newSkills.isNotEmpty) updates['skills'] = FieldValue.arrayUnion(newSkills);
       if (newLanguages.isNotEmpty) updates['languages'] = FieldValue.arrayUnion(newLanguages);
       await docRef.update(updates);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("AI updated your skills & languages!"), backgroundColor: Color(0xFF0BA87E), behavior: SnackBarBehavior.floating),
-        );
-      }
     } catch (e) {
       debugPrint("Auto update failed: $e");
     }
   }
 
+  // --- SAVE SUGGESTIONS TO FIRESTORE ---
+  Future<void> _saveSuggestionsToFirestore(List<Map<String, dynamic>> suggestions) async {
+    final batch = FirebaseFirestore.instance.batch();
+    final collection = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.user?.uid)
+        .collection('ai_suggestions');
+
+    for (var item in suggestions) {
+      final docRef = collection.doc();
+      batch.set(docRef, {
+        ...item,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
   // --- AI SAVE LOGIC ---
-  Future<void> _addItemFromAI(Map<String, dynamic> item, String collectionPath) async {
+  Future<void> _addItemFromAI(Map<String, dynamic> item, String suggestionId, String targetPath) async {
     try {
       Map<String, dynamic> data = {'timestamp': FieldValue.serverTimestamp()};
-      if (collectionPath == 'education_history') {
+      if (targetPath == 'education_history') {
         data['course'] = item['title'] ?? "Course Name";
         data['institution'] = item['subtitle'] ?? "Not Specified";
-        data['year'] = (item['details'] != null) ? item['details'] : "-";
+        data['year'] = item['details'] ?? "-";
       } else {
         data['role'] = item['title'] ?? "Job Role";
         data['company'] = item['subtitle'] ?? "Not Specified";
-        data['duration'] = (item['details'] != null) ? item['details'] : "-";
+        data['duration'] = item['details'] ?? "-";
         data['description'] = item['details'] ?? "Added via AI analysis";
       }
-      await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).collection(collectionPath).add(data);
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).collection(targetPath).add(data);
+      await _deleteEntry('ai_suggestions', suggestionId);
+
       if (mounted) {
-        setState(() => _aiSuggestions.remove(item));
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${item['title']} added!"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Added successfully!"), backgroundColor: Colors.green));
       }
     } catch (e) {
       debugPrint("AI Add error: $e");
@@ -91,8 +138,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         automaticallyImplyLeading: false,
         title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
@@ -113,16 +163,16 @@ class _ProfilePageState extends State<ProfilePage> {
               final userData = snapshot.data?.data() as Map<String, dynamic>?;
               final List<dynamic> currentSkills = userData?['skills'] ?? [];
               final List<dynamic> currentLanguages = userData?['languages'] ?? [];
-              final String photoUrl = userData?['photoUrl'] ?? widget.user?.photoURL ?? "";
+              final String? photoData = userData?['photoUrl'];
               final String? resumeUrl = userData?['resumeUrl'];
-              final String resumeName = userData?['resumeFileName'] ?? "Resume.png";
+              final String resumeName = userData?['resumeFileName'] ?? "My Resume";
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(userData, photoUrl),
+                    _buildHeader(userData, photoData),
                     const SizedBox(height: 24),
                     const Text("Improve your job matches", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const Divider(thickness: 1, height: 24),
@@ -134,7 +184,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     _buildDynamicList(context, 'education_history', Icons.school_outlined, (data, id) {
                       Navigator.push(context, MaterialPageRoute(builder: (c) => EditEducationPage(user: widget.user!, educationData: data, docId: id)));
                     }),
-                    ..._aiSuggestions.where((i) => i['category'].toString().toLowerCase().contains('edu')).map((item) => _buildAICard(item, 'education_history')).toList(),
+                    _buildAISuggestionList('education'),
 
                     const SizedBox(height: 24),
 
@@ -145,19 +195,16 @@ class _ProfilePageState extends State<ProfilePage> {
                     _buildDynamicList(context, 'experience_history', Icons.work_outline, (data, id) {
                       Navigator.push(context, MaterialPageRoute(builder: (c) => EditExperiencePage(user: widget.user!, experienceData: data, docId: id)));
                     }),
-                    ..._aiSuggestions.where((i) => i['category'].toString().toLowerCase().contains('exp')).map((item) => _buildAICard(item, 'experience_history')).toList(),
+                    _buildAISuggestionList('experience'),
 
                     const SizedBox(height: 24),
 
-                    // 3. SKILLS
+                    // 3. SKILLS & LANGUAGES
                     _buildSectionHeader("Skills", onAction: "Edit", onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: currentSkills, currentLanguages: currentLanguages)));
                     }),
                     Wrap(spacing: 8, runSpacing: 4, children: currentSkills.map((s) => _buildChip(s.toString())).toList()),
-
-                    const SizedBox(height: 24),
-
-                    // 4. LANGUAGES
+                    const SizedBox(height: 16),
                     _buildSectionHeader("Languages", onAction: "Edit", onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (c) => EditSkillsPage(user: widget.user!, currentSkills: currentSkills, currentLanguages: currentLanguages)));
                     }),
@@ -165,7 +212,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 24),
 
-                    // 5. RESUME
+                    // 5. RESUME (UPDATED WITH CLICK TO VIEW)
                     _buildSectionHeader("Resume", onAction: "Upload", onTap: () async {
                       final results = await ResumeService().uploadResume(context, (isLoading) => setState(() => _isAnalyzing = isLoading));
                       if (results.isNotEmpty) {
@@ -173,19 +220,27 @@ class _ProfilePageState extends State<ProfilePage> {
                         List<String> autoSkills = [], autoLangs = [];
                         for (var item in results) {
                           String cat = item['category'].toString().toLowerCase();
-                          String title = item['title'].toString().trim();
-                          if (cat.contains('skill')) autoSkills.add(title);
-                          else if (cat.contains('lang')) autoLangs.add(title);
+                          if (cat.contains('skill')) autoSkills.add(item['title']);
+                          else if (cat.contains('lang')) autoLangs.add(item['title']);
                           else manualList.add(item);
                         }
                         await _autoUpdateProfile(autoSkills, autoLangs);
-                        setState(() => _aiSuggestions = manualList);
+                        await _saveSuggestionsToFirestore(manualList);
                       }
                     }),
-                    if (resumeUrl != null)
-                      _buildContentCard(context, title: resumeName, subtitle: "AI Processed Resume", icon: Icons.description_outlined, onDelete: () async {
-                        await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).update({'resumeUrl': FieldValue.delete()});
-                      })
+                    if (resumeUrl != null && resumeUrl.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => _viewResume(resumeUrl),
+                        child: _buildContentCard(
+                            context,
+                            title: resumeName,
+                            subtitle: "Tap to view full resume",
+                            icon: Icons.description_outlined,
+                            onDelete: () async {
+                              await FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).update({'resumeUrl': FieldValue.delete()});
+                            }
+                        ),
+                      )
                     else
                       const Text("No resume uploaded.", style: TextStyle(color: kTextSecondary, fontSize: 13)),
 
@@ -210,31 +265,72 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildLoadingOverlay() {
+  // --- STREAM BUILDER FOR AI SUGGESTIONS ---
+  Widget _buildAISuggestionList(String categoryFilter) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user?.uid)
+          .collection('ai_suggestions')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final docs = snapshot.data!.docs.where((doc) {
+          final cat = (doc.data() as Map<String, dynamic>)['category'].toString().toLowerCase();
+          return cat.contains(categoryFilter);
+        }).toList();
+
+        return Column(
+          children: docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final targetPath = categoryFilter == 'education' ? 'education_history' : 'experience_history';
+            return _buildAICard(data, doc.id, targetPath);
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildAICard(Map<String, dynamic> item, String docId, String targetPath) {
     return Container(
-      color: Colors.black45,
-      child: Center(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [CircularProgressIndicator(), SizedBox(height: 16), Text("AI Scanning Resume...")],
-            ),
-          ),
-        ),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: kPrimaryBlue)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("AI SUGGESTION", style: TextStyle(color: kPrimaryBlue, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(item['title'] ?? "Untitled", style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(item['subtitle'] ?? "", style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: () => _deleteEntry('ai_suggestions', docId), child: const Text("Cancel")),
+              ElevatedButton(onPressed: () => _addItemFromAI(item, docId, targetPath), child: const Text("Add")),
+            ],
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(Map<String, dynamic>? userData, String photoUrl) {
+  Widget _buildHeader(Map<String, dynamic>? userData, String? photoData) {
+    ImageProvider? imageProvider;
+    if (photoData != null && photoData.isNotEmpty) {
+      if (photoData.startsWith('http')) imageProvider = NetworkImage(photoData);
+      else {
+        try { imageProvider = MemoryImage(base64Decode(photoData)); } catch (e) { imageProvider = null; }
+      }
+    }
+
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => EditProfilePage(user: widget.user!))),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           children: [
-            CircleAvatar(radius: 40, backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null, child: photoUrl.isEmpty ? const Icon(Icons.person, size: 40) : null),
+            CircleAvatar(radius: 40, backgroundColor: const Color(0xFFF1F5F9), backgroundImage: imageProvider, child: imageProvider == null ? const Icon(Icons.person, size: 40, color: kPrimaryBlue) : null),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -255,36 +351,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildHeaderInfoRow(IconData icon, String text) {
-    return Row(children: [Icon(icon, size: 14, color: kPrimaryBlue), const SizedBox(width: 8), Text(text, style: const TextStyle(color: kTextSecondary, fontSize: 12))]);
-  }
-
-  Widget _buildAICard(Map<String, dynamic> item, String path) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: kPrimaryBlue)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("AI SUGGESTION", style: TextStyle(color: kPrimaryBlue, fontSize: 10, fontWeight: FontWeight.bold)),
-          Text(item['title'] ?? "Untitled", style: const TextStyle(fontWeight: FontWeight.bold)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(onPressed: () => setState(() => _aiSuggestions.remove(item)), child: const Text("Cancel")),
-              ElevatedButton(onPressed: () => _addItemFromAI(item, path), child: const Text("Add")),
-            ],
-          )
-        ],
-      ),
-    );
+    return Row(children: [Icon(icon, size: 14, color: kPrimaryBlue), const SizedBox(width: 8), Expanded(child: Text(text, style: const TextStyle(color: kTextSecondary, fontSize: 12), overflow: TextOverflow.ellipsis, maxLines: 1))]);
   }
 
   Widget _buildDynamicList(BuildContext context, String path, IconData icon, Function(Map<String, dynamic>, String) onEdit) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).collection(path).orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Text("No records.", style: TextStyle(color: kTextSecondary, fontSize: 12));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Padding(padding: EdgeInsets.only(top: 8), child: Text("No records.", style: TextStyle(color: kTextSecondary, fontSize: 12)));
         return Column(children: snapshot.data!.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return _buildContentCard(context, title: data['course'] ?? data['role'] ?? "No Title", subtitle: data['institution'] ?? data['company'] ?? "", icon: icon, onEdit: () => onEdit(data, doc.id), onDelete: () => _deleteEntry(path, doc.id));
@@ -298,16 +372,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildContentCard(BuildContext context, {required String title, required String subtitle, required IconData icon, VoidCallback? onEdit, required VoidCallback onDelete}) {
-    return ListTile(
-      leading: Icon(icon, color: kPrimaryBlue),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle),
-      trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: onDelete),
-      onTap: onEdit,
-    );
+    return ListTile(leading: Icon(icon, color: kPrimaryBlue), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)), trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: onDelete), onTap: onEdit);
   }
 
   Widget _buildChip(String label, {bool isLanguage = false}) {
     return Chip(label: Text(label, style: const TextStyle(fontSize: 12)), backgroundColor: isLanguage ? const Color(0xFFEFF6FF) : const Color(0xFFF1F5F9));
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(color: Colors.black45, child: Center(child: Card(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: const [CircularProgressIndicator(), SizedBox(height: 16), Text("AI Scanning Resume...")])))));
   }
 }
