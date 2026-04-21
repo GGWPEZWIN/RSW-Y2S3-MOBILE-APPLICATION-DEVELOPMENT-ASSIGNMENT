@@ -27,7 +27,7 @@ class ApplicantsInterviewScreen extends StatelessWidget {
         // 1. Get all applications with 'interview' status
         stream: FirebaseFirestore.instance
             .collection('applications')
-            .where('status', isEqualTo: 'interview')
+            .where('status', whereIn: ['interview', 'reschedule_pending', 'reschedule_proposed'])
             .orderBy('appliedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
