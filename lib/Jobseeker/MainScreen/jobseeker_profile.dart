@@ -271,7 +271,7 @@ class _ProfilePageState extends State<ProfilePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(onPressed: () => setState(() => _aiSuggestions.remove(item)), child: const Text("Dismiss")),
+              TextButton(onPressed: () => setState(() => _aiSuggestions.remove(item)), child: const Text("Cancel")),
               ElevatedButton(onPressed: () => _addItemFromAI(item, path), child: const Text("Add")),
             ],
           )
