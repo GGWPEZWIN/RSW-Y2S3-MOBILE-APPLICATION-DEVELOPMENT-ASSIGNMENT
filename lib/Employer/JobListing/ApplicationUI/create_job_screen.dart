@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../models/job_model.dart';
+import 'select_jobtitle.dart';
 
 class CreateJobPage extends StatefulWidget {
   final Job? jobToEdit;
@@ -18,12 +19,25 @@ class CreateJobPage extends StatefulWidget {
 class _CreateJobPageState extends State<CreateJobPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
+  bool _isSavingAttempted = false;
 
   // ── Step control ──────────────────────────────────────────────────────────
   int _currentStep = 0;
   final List<String> _stepLabels = ['Classify', 'Write', 'Manage'];
 
   bool get isEditing => widget.jobToEdit != null;
+
+  // ── Dynamic Industry Data ────────────────────────────────────────────────
+  List<Map<String, dynamic>> _industries = [];
+  String _industrySearchQuery = '';
+  bool _isLoadingIndustries = false;
+  TextEditingController _industrySearchController = TextEditingController();
+  FocusNode _industryFocusNode = FocusNode();
+  bool _showIndustryDropdown = false;
+
+  String _selectedIndustry = '';
+  List<String> _jobTitleSuggestions = [];
+  bool _hasSelectedIndustry = false;
 
   // ── Step 1 ────────────────────────────────────────────────────────────────
   late TextEditingController _jobTitleController;
@@ -49,7 +63,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
   late TextEditingController _benefitsController;
   late TextEditingController _vacanciesController;
 
-  // ✅ FIX: multi-select for experience and education
   final Set<String> _selectedExperiences = {'Fresh Graduate'};
   final Set<String> _selectedEducations  = {'Diploma'};
 
@@ -170,6 +183,18 @@ class _CreateJobPageState extends State<CreateJobPage> {
   static const Color _hintColor    = Color(0xFFAAAAAA);
   static const Color _helperColor  = Color(0xFF888888);
 
+  String get _apiKey => dotenv.env['OPENROUTER_API_KEY'] ?? '';
+
+  List<Map<String, dynamic>> get _filteredIndustries {
+    if (_industrySearchQuery.isEmpty) return _industries;
+    final query = _industrySearchQuery.toLowerCase();
+    return _industries.where((industry) {
+      final name = industry['name'].toString().toLowerCase();
+      final keywords = List<String>.from(industry['keywords'] ?? []);
+      return name.contains(query) || keywords.any((k) => k.contains(query));
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -184,10 +209,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
     _applicationUrlController   = TextEditingController();
     _applicationEmailController = TextEditingController();
 
-    // Listen for location changes to trigger autocomplete
     _locationController.addListener(_onLocationChanged);
-
-    // Hide suggestions when location field loses focus
     _locationFocus.addListener(() {
       if (!_locationFocus.hasFocus) {
         Future.delayed(const Duration(milliseconds: 200), () {
@@ -196,12 +218,26 @@ class _CreateJobPageState extends State<CreateJobPage> {
       }
     });
 
+    _industryFocusNode.addListener(() {
+      if (!_industryFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) setState(() => _showIndustryDropdown = false);
+        });
+      } else {
+        setState(() => _showIndustryDropdown = true);
+      }
+    });
+
+    _loadIndustries();
+
     if (isEditing) {
       final job = widget.jobToEdit!;
       _jobTitleController.text = job.title;
       _locationController.text = job.location;
       _selectedWorkplace       = job.workplace;
       _selectedWorkType        = job.workType;
+      _hasSelectedIndustry = true;
+      _selectedIndustry = job.industry ?? 'Technology / IT';
       final clean = job.salary.replaceAll(RegExp(r'[^0-9\s-]'), '');
       final parts = clean.split('-');
       if (parts.length == 2) {
@@ -215,6 +251,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
   void dispose() {
     _debounce?.cancel();
     _locationFocus.dispose();
+    _industryFocusNode.dispose();
     _jobTitleController.dispose();
     _locationController.dispose();
     _minPayController.dispose();
@@ -225,11 +262,62 @@ class _CreateJobPageState extends State<CreateJobPage> {
     _vacanciesController.dispose();
     _applicationUrlController.dispose();
     _applicationEmailController.dispose();
+    _industrySearchController.dispose();
     super.dispose();
   }
 
-  // ── Google Places Autocomplete ────────────────────────────────────────────
+  // ── Load Industries from Firestore ────────────────────────────────────────
+  Future<void> _loadIndustries() async {
+    setState(() => _isLoadingIndustries = true);
 
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_data')
+          .doc('industries')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final industriesMap = data?['industries'] as Map<String, dynamic>? ?? {};
+
+        setState(() {
+          _industries = industriesMap.entries.map((entry) => {
+            'name': entry.key,
+            'keywords': List<String>.from(entry.value['searchKeywords'] ?? []),
+            'jobTitles': List<String>.from(entry.value['jobTitles'] ?? []),
+          }).toList();
+          _isLoadingIndustries = false;
+        });
+      } else {
+        _useFallbackIndustries();
+      }
+    } catch (e) {
+      debugPrint('Error loading industries: $e');
+      _useFallbackIndustries();
+    }
+  }
+
+  void _useFallbackIndustries() {
+    setState(() {
+      _industries = [
+        {'name': 'Technology & IT', 'keywords': ['tech', 'software'], 'jobTitles': ['Software Engineer', 'Developer', 'IT Support', 'Frontend Developer', 'Backend Developer']},
+        {'name': 'Sales & Marketing', 'keywords': ['sales', 'marketing'], 'jobTitles': ['Sales Executive', 'Marketing Manager', 'Business Development', 'Account Manager']},
+        {'name': 'Finance & Accounting', 'keywords': ['finance', 'accounting'], 'jobTitles': ['Accountant', 'Financial Analyst', 'Auditor', 'Tax Consultant']},
+        {'name': 'Healthcare', 'keywords': ['health', 'medical'], 'jobTitles': ['Nurse', 'Doctor', 'Pharmacist', 'Medical Assistant']},
+        {'name': 'Education', 'keywords': ['education', 'teaching'], 'jobTitles': ['Teacher', 'Lecturer', 'Tutor', 'Education Consultant']},
+        {'name': 'Hospitality', 'keywords': ['hotel', 'restaurant'], 'jobTitles': ['Hotel Manager', 'Chef', 'Restaurant Manager', 'Event Coordinator']},
+        {'name': 'Retail', 'keywords': ['retail', 'store'], 'jobTitles': ['Store Manager', 'Sales Associate', 'Retail Buyer', 'Visual Merchandiser']},
+        {'name': 'Manufacturing', 'keywords': ['manufacturing', 'production'], 'jobTitles': ['Production Manager', 'Quality Control', 'Manufacturing Engineer']},
+        {'name': 'Construction', 'keywords': ['construction', 'building'], 'jobTitles': ['Project Manager', 'Site Supervisor', 'Civil Engineer', 'Architect']},
+        {'name': 'Creative & Design', 'keywords': ['design', 'creative'], 'jobTitles': ['Graphic Designer', 'UI/UX Designer', 'Art Director', 'Video Editor']},
+        {'name': 'Administration', 'keywords': ['admin', 'office'], 'jobTitles': ['Admin Assistant', 'Office Manager', 'Executive Assistant', 'Receptionist']},
+        {'name': 'Customer Service', 'keywords': ['customer', 'support'], 'jobTitles': ['Customer Service Rep', 'Support Specialist', 'Call Center Agent', 'Client Success']},
+      ];
+      _isLoadingIndustries = false;
+    });
+  }
+
+  // ── Google Places Autocomplete ────────────────────────────────────────────
   void _onLocationChanged() {
     final query = _locationController.text.trim();
     if (query.isEmpty) {
@@ -240,7 +328,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       return;
     }
 
-    // Debounce 400ms so we don't call on every keystroke
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () {
       if (query.length >= 2) _fetchPlaceSuggestions(query);
@@ -254,7 +341,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     try {
       final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
       if (apiKey.isEmpty) {
-        // Fallback: show Malaysian city suggestions manually
         _showFallbackSuggestions(query);
         return;
       }
@@ -263,7 +349,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
         'https://maps.googleapis.com/maps/api/place/autocomplete/json'
             '?input=${Uri.encodeComponent(query)}'
             '&types=(cities)'
-            '&components=country:my'  // restrict to Malaysia; remove to allow worldwide
+            '&components=country:my'
             '&key=$apiKey',
       );
 
@@ -283,14 +369,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
         }
       }
     } catch (_) {
-      // On error, show fallback
       _showFallbackSuggestions(query);
     } finally {
       if (mounted) setState(() => _isLoadingPlaces = false);
     }
   }
 
-  // Fallback suggestions if no API key or network error
   void _showFallbackSuggestions(String query) {
     final allCities = [
       'Kuala Lumpur', 'Petaling Jaya', 'Shah Alam', 'Subang Jaya',
@@ -327,7 +411,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     _locationFocus.unfocus();
   }
 
-  // ── Append suggestion ─────────────────────────────────────────────────────
   void _appendSuggestion(TextEditingController ctrl, String chip) {
     final current = ctrl.text.trim();
     if (current.isEmpty) {
@@ -342,15 +425,11 @@ class _CreateJobPageState extends State<CreateJobPage> {
     setState(() {});
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
   Future<void> _saveJob() async {
+    setState(() => _isSavingAttempted = true);
+
     if (!_formKey.currentState!.validate()) return;
 
-    // ✅ Extra validation for fields not covered by TextFormField validators
-    if (_locationController.text.trim().isEmpty) {
-      _showError('Please enter a location');
-      return;
-    }
     if (_selectedExperiences.isEmpty) {
       _showError('Please select at least one experience level');
       return;
@@ -412,6 +491,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
         'applicants':        isEditing ? widget.jobToEdit!.applicants : '0 applied',
         'createdAt':         isEditing ? widget.jobToEdit!.createdAt : now,
         'employerId':        user?.uid ?? '',
+        'industry':          _selectedIndustry,
       };
 
       if (isEditing && widget.jobToEdit!.id != null) {
@@ -441,9 +521,12 @@ class _CreateJobPageState extends State<CreateJobPage> {
     }
   }
 
-  // ── Step validation ───────────────────────────────────────────────────────
   bool _validateStep(int step) {
     if (step == 0) {
+      if (!_hasSelectedIndustry) {
+        _showError('Please select an industry first');
+        return false;
+      }
       if (_jobTitleController.text.trim().isEmpty) {
         _showError('Please enter a job title'); return false;
       }
@@ -512,10 +595,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     FocusScope.of(context).unfocus();
     if (_currentStep > 0) setState(() => _currentStep--);
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // WIDGET HELPERS
-  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildStepper() {
     return Padding(
@@ -589,7 +668,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     alignLabelWithHint: true,
   );
 
-  // ✅ FIX: Single-select chips (original behaviour kept for workplace/worktype/pay)
   Widget _chips({
     required List<String> options,
     required String selected,
@@ -617,7 +695,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
     }).toList());
   }
 
-  // ✅ FIX: Multi-select chips with deselect support for experience & education
   Widget _multiChips({
     required List<String> options,
     required Set<String> selected,
@@ -631,10 +708,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
           onTap: () {
             setState(() {
               if (active) {
-                // ✅ Allow deselect only if more than 1 selected (keep at least 1 if required)
-                if (!required || selected.length > 1) {
-                  selected.remove(opt);
-                }
+                selected.remove(opt);
               } else {
                 selected.add(opt);
               }
@@ -663,7 +737,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
           ),
         );
       }).toList()),
-      if (required && selected.isEmpty)
+      if (required && selected.isEmpty && _isSavingAttempted)
         const Padding(
           padding: EdgeInsets.only(top: 6),
           child: Text('Please select at least one option',
@@ -799,30 +873,320 @@ class _CreateJobPageState extends State<CreateJobPage> {
     );
   }
 
+  Future<void> _openJobTitlePage(Map<String, dynamic> industry) async {
+    setState(() {
+      _selectedIndustry    = industry['name'] as String;
+      _jobTitleSuggestions = List<String>.from(industry['jobTitles'] ?? []);
+      _industrySearchController.text = industry['name'] as String;
+      _industrySearchQuery = '';
+      _showIndustryDropdown = false;
+    });
+
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SelectJobTitlePage(
+          industryName:    industry['name'] as String,
+          suggestedTitles: List<String>.from(industry['jobTitles'] ?? []),
+          initialTitle:    _jobTitleController.text.isNotEmpty
+              ? _jobTitleController.text
+              : null,
+        ),
+      ),
+    );
+
+    if (result != null && result.trim().isNotEmpty) {
+      setState(() {
+        _jobTitleController.text = result;
+        _hasSelectedIndustry = true; // ← this triggers the stepped form
+      });
+    } else {
+      // user pressed back → reset
+      setState(() {
+        _hasSelectedIndustry = false;
+        _selectedIndustry = '';
+        _industrySearchController.clear();
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 0 — INDUSTRY SELECTION (Searchable Dropdown)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildIndustrySelection() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 24),
+
+      // Header Card
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [_primaryBlue.withOpacity(0.05), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _primaryBlue.withOpacity(0.2)),
+        ),
+        child: Column(children: [
+          const Icon(Icons.business_center_rounded, size: 48, color: _primaryBlue),
+          const SizedBox(height: 12),
+          const Text('Select Your Industry',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Search and select your industry from the dropdown',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+        ]),
+      ),
+      const SizedBox(height: 24),
+
+      // Searchable Industry Dropdown
+      _label('Industry', required: true),
+      const SizedBox(height: 8),
+      Column(
+        children: [
+          TextField(
+            controller: _industrySearchController,
+            focusNode: _industryFocusNode,
+            onChanged: (value) {
+              setState(() {
+                _industrySearchQuery = value;
+                _showIndustryDropdown = true;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Type to search industry...',
+              hintStyle: const TextStyle(color: _hintColor, fontSize: 13),
+              prefixIcon: const Icon(Icons.search_rounded, color: _primaryBlue),
+              suffixIcon: _industrySearchQuery.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () {
+                  _industrySearchController.clear();
+                  setState(() {
+                    _industrySearchQuery = '';
+                    _selectedIndustry = '';
+                    _hasSelectedIndustry = false;
+                  });
+                },
+              )
+                  : null,
+              filled: true,
+              fillColor: _fillColor,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryBlue, width: 1.5)),
+            ),
+          ),
+
+          // Dropdown List
+          if (_showIndustryDropdown && _filteredIndustries.isNotEmpty && !_isLoadingIndustries)
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              constraints: const BoxConstraints(maxHeight: 250),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _filteredIndustries.length,
+                itemBuilder: (context, index) {
+                  final industry = _filteredIndustries[index];
+                  return InkWell(
+                   onTap: () => _openJobTitlePage(industry),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(_getIndustryIcon(industry['name']!), size: 18, color: _primaryBlue),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              industry['name']!,
+                              style: const TextStyle(fontSize: 14, color: _labelColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          if (_isLoadingIndustries)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+      _hint('Start typing to search for your industry'),
+
+      const SizedBox(height: 24),
+
+      // Show job title input after industry is selected
+      if (_selectedIndustry.isNotEmpty) ...[
+        const Divider(),
+        const SizedBox(height: 16),
+
+        // Selected Industry Display
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _primaryBlue.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_rounded, size: 18, color: _primaryBlue),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Selected: $_selectedIndustry',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        _label('Job Title', required: true, showInfo: true),
+        const SizedBox(height: 8),
+
+        // Custom job title input
+        TextFormField(
+          controller: _jobTitleController,
+          decoration: InputDecoration(
+            hintText: 'Enter a professional job title',
+            hintStyle: const TextStyle(color: _hintColor, fontSize: 13),
+            prefixIcon: const Icon(Icons.edit_note_rounded, color: _primaryBlue),
+            filled: true,
+            fillColor: _fillColor,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryBlue, width: 1.5)),
+          ),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'Job title is required';
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+
+        // Suggested job titles chips
+        if (_jobTitleSuggestions.isNotEmpty) ...[
+          _hint('Suggested job titles — tap to select'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _jobTitleSuggestions.map((title) {
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _jobTitleController.text = title;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F2FF),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _primaryBlue.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.work_outline_rounded, size: 14, color: _primaryBlue),
+                      const SizedBox(width: 6),
+                      Text(title, style: TextStyle(fontSize: 12, color: _primaryBlue, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        const SizedBox(height: 24),
+
+        // Continue Button
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _jobTitleController.text.trim().isNotEmpty && _hasSelectedIndustry
+                ? _nextStep
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryBlue,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('Continue to Job Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
+    ]);
+  }
+
+  IconData _getIndustryIcon(String industry) {
+    if (industry.contains('Technology') || industry.contains('IT')) return Icons.computer_rounded;
+    if (industry.contains('Sales') || industry.contains('Marketing')) return Icons.trending_up_rounded;
+    if (industry.contains('Finance') || industry.contains('Accounting')) return Icons.attach_money_rounded;
+    if (industry.contains('Healthcare')) return Icons.local_hospital_rounded;
+    if (industry.contains('Education')) return Icons.school_rounded;
+    if (industry.contains('Hospitality')) return Icons.restaurant_rounded;
+    if (industry.contains('Retail')) return Icons.shopping_bag_rounded;
+    if (industry.contains('Manufacturing')) return Icons.factory_rounded;
+    if (industry.contains('Construction')) return Icons.build_rounded;
+    if (industry.contains('Creative') || industry.contains('Design')) return Icons.brush_rounded;
+    if (industry.contains('Administration')) return Icons.document_scanner_rounded;
+    if (industry.contains('Customer')) return Icons.support_agent_rounded;
+    return Icons.business_center_rounded;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 1 — CLASSIFY
   // ─────────────────────────────────────────────────────────────────────────
-
   Widget _buildClassify() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 24),
 
-      // ── Job Title ──────────────────────────────────────────────────────
-      _label('Job Title', showInfo: true, required: true),
+      _label('Job Title', required: true),
       TextFormField(
         controller: _jobTitleController,
         decoration: _dec(
-          hint: 'Enter a simple job title (e.g. Sales Assistant)',
-          prefix: Padding(padding: const EdgeInsets.all(12),
-              child: Icon(Icons.work_outline_rounded, size: 20, color: Colors.grey[400])),
+          hint: 'Enter a professional job title',
+          prefix: const Padding(padding: EdgeInsets.all(12),
+              child: Icon(Icons.work_outline_rounded, size: 20, color: Colors.grey)),
         ),
         validator: (v) => (v == null || v.trim().isEmpty) ? 'Job title is required' : null,
       ),
       const SizedBox(height: 20),
 
-      // ── Location with Google Places ────────────────────────────────────
-      _label('Location', showInfo: true, required: true),
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _label('Location', required: true),
+      Column(children: [
         TextFormField(
           controller: _locationController,
           focusNode: _locationFocus,
@@ -838,8 +1202,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
           ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Location is required' : null,
         ),
-
-        // ✅ Place suggestions dropdown
         if (_showPlaceSuggestions && _placeSuggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
@@ -847,10 +1209,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: _borderColor),
-              boxShadow: [BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8, offset: const Offset(0, 4),
-              )],
             ),
             child: Column(
               children: _placeSuggestions.take(5).map((place) {
@@ -861,10 +1219,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
                     child: Row(children: [
                       const Icon(Icons.location_on_outlined, size: 16, color: _primaryBlue),
                       const SizedBox(width: 10),
-                      Expanded(child: Text(
-                        place['description']!,
-                        style: const TextStyle(fontSize: 13, color: _labelColor),
-                      )),
+                      Expanded(child: Text(place['description']!)),
                     ]),
                   ),
                 );
@@ -872,16 +1227,13 @@ class _CreateJobPageState extends State<CreateJobPage> {
             ),
           ),
       ]),
-      _hint('Start typing to search for a location'),
       const SizedBox(height: 16),
 
-      // ── Workplace ──────────────────────────────────────────────────────
       _label('Workplace Option'),
       _dropdown(_selectedWorkplace, ['On-site', 'Remote', 'Hybrid'],
               (v) => setState(() => _selectedWorkplace = v)),
       const SizedBox(height: 16),
 
-      // ── Work type ──────────────────────────────────────────────────────
       _label('Work type', required: true),
       _chips(
         options: _workTypeOptions,
@@ -890,7 +1242,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       ),
       const SizedBox(height: 20),
 
-      // ── Pay type ───────────────────────────────────────────────────────
       _label('Pay type', required: true),
       _chips(
         options: _payTypeOptions,
@@ -899,10 +1250,9 @@ class _CreateJobPageState extends State<CreateJobPage> {
       ),
       const SizedBox(height: 20),
 
-      // ── Pay Range ──────────────────────────────────────────────────────
-      _label('Pay Range', showInfo: true, required: true),
+      _label('Pay Range', required: true),
       const Text('Enter a range. If exact, enter the same value in both fields.',
-          style: TextStyle(fontSize: 12, color: _helperColor, height: 1.4)),
+          style: TextStyle(fontSize: 12, color: _helperColor)),
       const SizedBox(height: 14),
 
       _label('Currency'),
@@ -916,7 +1266,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
         keyboardType: TextInputType.number,
         decoration: _dec(hint: 'Enter minimum pay'),
         validator: (v) {
-          if (v == null || v.trim().isEmpty) return 'Minimum pay is required';
+          if (v == null || v.trim().isEmpty) return 'Required';
           if (double.tryParse(v.trim()) == null) return 'Must be a valid number';
           if (double.parse(v.trim()) < 0) return 'Pay cannot be negative';
           return null;
@@ -930,54 +1280,54 @@ class _CreateJobPageState extends State<CreateJobPage> {
         keyboardType: TextInputType.number,
         decoration: _dec(hint: 'Enter maximum pay'),
         validator: (v) {
-          if (v == null || v.trim().isEmpty) return 'Maximum pay is required';
-          if (double.tryParse(v.trim()) == null) return 'Must be a valid number';
-          final max = double.parse(v.trim());
-          final min = double.tryParse(_minPayController.text.trim()) ?? 0;
+          if (v == null || v.trim().isEmpty) return 'Required';
+          final minStr = _minPayController.text.trim();
+          final min = double.tryParse(minStr);
+          final max = double.tryParse(v.trim());
+          if (max == null) return 'Must be a valid number';
+          if (min != null && max < min) return 'Cannot be less than minimum pay';
           if (max < 0) return 'Pay cannot be negative';
-          if (max < min) return 'Maximum pay cannot be less than minimum pay';
           return null;
         },
       ),
       const SizedBox(height: 20),
 
-      // ── Show pay on ad ─────────────────────────────────────────────────
       _label('Pay shown on ad'),
       Row(children: ['Yes', 'No'].map((opt) {
         final active = _showPayOnAd == opt;
-        return Expanded(child: GestureDetector(
-          onTap: () => setState(() => _showPayOnAd = opt),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            margin: EdgeInsets.only(right: opt == 'Yes' ? 10 : 0),
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(
-              color: active ? _primaryBlue : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: active ? _primaryBlue : _borderColor, width: 1.5),
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _showPayOnAd = opt),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: EdgeInsets.only(right: opt == 'Yes' ? 10 : 0),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(
+                color: active ? _primaryBlue : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: active ? _primaryBlue : _borderColor, width: 1.5),
+              ),
+              child: Center(
+                child: Text(opt, style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: active ? Colors.white : const Color(0xFF444444),
+                )),
+              ),
             ),
-            child: Center(child: Text(opt, style: TextStyle(
-              fontSize: 14,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              color: active ? Colors.white : const Color(0xFF444444),
-            ))),
           ),
-        ));
+        );
       }).toList()),
     ]);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 2 — WRITE
-  // ─────────────────────────────────────────────────────────────────────────
-
+  // ── STEP 2 — WRITE ────────────────────────────────────────────────────────
   Widget _buildWrite() {
     final descSuggestions = _descSuggestions[_selectedWorkType] ?? _descSuggestions['Full-time']!;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 24),
 
-      // ── Job Description ────────────────────────────────────────────────
       _label('Job Description', showInfo: true, required: true),
       TextFormField(
         controller: _descriptionController,
@@ -988,7 +1338,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       _suggestionRow(descSuggestions, _descriptionController),
       const SizedBox(height: 24),
 
-      // ── Requirements ──────────────────────────────────────────────────
       _label('Requirements & Skills', required: true),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1023,7 +1372,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       _suggestionRow(_reqSuggestions[_reqCategory]!, _requirementsController),
       const SizedBox(height: 24),
 
-      // ── Benefits ──────────────────────────────────────────────────────
       _label('Benefits'),
       TextFormField(
         controller: _benefitsController,
@@ -1033,7 +1381,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       _suggestionRow(_benefitsSuggestions, _benefitsController),
       const SizedBox(height: 24),
 
-      // ── Vacancies ─────────────────────────────────────────────────────
       _label('Number of Vacancies'),
       Row(children: [
         GestureDetector(
@@ -1082,7 +1429,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       ]),
       const SizedBox(height: 20),
 
-      // ── Experience Level (multi-select, deselectable) ──────────────────
       _label('Experience Level', required: true),
       _hint('Select all that apply — tap again to deselect'),
       _multiChips(
@@ -1093,7 +1439,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
       ),
       const SizedBox(height: 20),
 
-      // ── Education Level (multi-select, deselectable) ───────────────────
       _label('Minimum Education', required: true),
       _hint('Select all that apply — tap again to deselect'),
       _multiChips(
@@ -1105,10 +1450,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
     ]);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 3 — MANAGE
-  // ─────────────────────────────────────────────────────────────────────────
-
+  // ── STEP 3 — MANAGE ───────────────────────────────────────────────────────
   Widget _buildManage() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 24),
@@ -1207,7 +1549,6 @@ class _CreateJobPageState extends State<CreateJobPage> {
         const SizedBox(height: 16),
       ],
 
-      // Summary card
       Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1218,6 +1559,7 @@ class _CreateJobPageState extends State<CreateJobPage> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Ad Summary', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _labelColor)),
           const SizedBox(height: 12),
+          _summaryRow('Industry',    _selectedIndustry),
           _summaryRow('Job Title',   _jobTitleController.text.isEmpty  ? '—' : _jobTitleController.text),
           _summaryRow('Location',    _locationController.text.isEmpty   ? '—' : _locationController.text),
           _summaryRow('Work Type',   _selectedWorkType),
@@ -1240,12 +1582,32 @@ class _CreateJobPageState extends State<CreateJobPage> {
     ]),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
+    // Show industry selection first if no industry selected yet
+    if (!_hasSelectedIndustry && !isEditing) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Create a job ad',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _buildIndustrySelection(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
