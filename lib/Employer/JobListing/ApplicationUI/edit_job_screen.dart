@@ -1,7 +1,4 @@
 // lib/Employer/CreateJob/edit_job.dart
-//
-// EDIT an existing job posting
-// Loads existing job data, shows form, saves with .update()
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,7 +24,6 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = true;
 
-  // FIX: Cache industries here so the picker sheet never re-fetches
   List<Map<String, dynamic>> _cachedCategories = [];
   bool _isFetchingCategories = false;
 
@@ -36,7 +32,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     super.initState();
     initFormFields();
     _prefillFormWithExistingData();
-    _preloadCategories(); // load once in background on page open
+    _preloadCategories();
   }
 
   @override
@@ -45,32 +41,24 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     super.dispose();
   }
 
-  // Pre-fetch categories as soon as EditJobPage opens so they're ready
-  // before the user ever taps "Change". No more spinner on sheet open.
   Future<void> _preloadCategories() async {
     if (_cachedCategories.isNotEmpty) return;
-    setState(() => _isFetchingCategories = true);
+    if (mounted) setState(() => _isFetchingCategories = true);
     try {
       final doc = await FirebaseFirestore.instance
           .collection('app_data')
           .doc('industries')
           .get();
       if (doc.exists) {
-        final map =
-            (doc.data() as Map<String, dynamic>?)?['industries']
-            as Map<String, dynamic>? ??
-                {};
-        _cachedCategories = map.entries
-            .map((e) => {
+        final map = (doc.data() as Map<String, dynamic>?)?['industries']
+        as Map<String, dynamic>? ?? {};
+        _cachedCategories = map.entries.map((e) => {
           'name': e.key,
-          'jobTitles':
-          List<String>.from(e.value['jobTitles'] ?? []),
-        })
-            .toList();
+          'jobTitles': List<String>.from(e.value['jobTitles'] ?? []),
+        }).toList();
       }
-    } catch (_) {
-      // Silently fail — sheet will show empty list gracefully
-    } finally {
+    } catch (_) {}
+    finally {
       if (mounted) setState(() => _isFetchingCategories = false);
     }
   }
@@ -79,36 +67,33 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     final job = widget.jobData;
 
     final salary = job['salary']?.toString() ?? '';
-    final salaryParts =
-    salary.replaceAll(RegExp(r'[A-Za-z]'), '').split('-');
+    final salaryParts = salary.replaceAll(RegExp(r'[A-Za-z]'), '').split('-');
     final minPay = salaryParts.isNotEmpty ? salaryParts[0].trim() : '';
     final maxPay = salaryParts.length > 1 ? salaryParts[1].trim() : '';
 
     final experiences = (job['experienceLevel']?.toString() ?? '')
-        .split(',')
-        .map((e) => e.trim())
-        .toSet();
+        .split(',').map((e) => e.trim()).toSet();
     final educations = (job['educationLevel']?.toString() ?? '')
-        .split(',')
-        .map((e) => e.trim())
-        .toSet();
+        .split(',').map((e) => e.trim()).toSet();
 
     setState(() {
-      jobTitleCtrl.text      = job['title']?.toString() ?? '';
-      locationCtrl.text      = job['location']?.toString() ?? '';
-      selectedWorkplace      = job['workplace']?.toString() ?? 'On-site';
-      selectedWorkType       = job['workType']?.toString() ?? 'Full-time';
-      selectedPayType        = job['payType']?.toString() ?? 'Monthly';
-      selectedCurrency       =
-          _extractCurrency(job['salary']?.toString() ?? '') ?? 'MYR';
-      minPayCtrl.text        = minPay;
-      maxPayCtrl.text        = maxPay;
-      showPayOnAd            = job['showPayOnAd']?.toString() ?? 'Yes';
-      selectedIndustry       = job['industry']?.toString() ?? '';
-      descriptionCtrl.text   = job['description']?.toString() ?? '';
-      requirementsCtrl.text  = job['requirements']?.toString() ?? '';
-      benefitsCtrl.text      = job['benefits']?.toString() ?? '';
-      vacanciesCtrl.text     = (job['vacancies'] ?? 1).toString();
+      jobTitleCtrl.text     = job['title']?.toString() ?? '';
+      locationCtrl.text     = job['location']?.toString() ?? '';
+      selectedWorkplace     = job['workplace']?.toString() ?? 'On-site';
+      selectedWorkType      = job['workType']?.toString() ?? 'Full-time';
+      selectedPayType       = job['payType']?.toString() ?? 'Monthly';
+      selectedCurrency      = _extractCurrency(job['salary']?.toString() ?? '') ?? 'MYR';
+      minPayCtrl.text       = minPay;
+      maxPayCtrl.text       = maxPay;
+      showPayOnAd           = job['showPayOnAd']?.toString() ?? 'Yes';
+
+      // FIX 3: Firestore stores it as 'industry' — read that field correctly
+      selectedIndustry      = job['industry']?.toString() ?? '';
+
+      descriptionCtrl.text  = job['description']?.toString() ?? '';
+      requirementsCtrl.text = job['requirements']?.toString() ?? '';
+      benefitsCtrl.text     = job['benefits']?.toString() ?? '';
+      vacanciesCtrl.text    = (job['vacancies'] ?? 1).toString();
 
       if (experiences.isNotEmpty) {
         selectedExperiences.clear();
@@ -119,9 +104,9 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         selectedEducations.addAll(educations);
       }
 
-      publishDate            = (job['publishDate'] as Timestamp?)?.toDate();
-      expiryDate             = (job['expiryDate'] as Timestamp?)?.toDate();
-      applicationMethod      = job['applicationMethod']?.toString() ?? 'In-app';
+      publishDate               = (job['publishDate'] as Timestamp?)?.toDate();
+      expiryDate                = (job['expiryDate'] as Timestamp?)?.toDate();
+      applicationMethod         = job['applicationMethod']?.toString() ?? 'In-app';
       applicationEmailCtrl.text = job['applicationEmail']?.toString() ?? '';
       applicationUrlCtrl.text   = job['applicationUrl']?.toString() ?? '';
 
@@ -135,21 +120,33 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 
   Future<void> _changeCategory() async {
-    await showModalBottomSheet<String>(
+    // FIX 2: If categories haven't loaded yet, wait for them before opening sheet
+    if (_isFetchingCategories) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading categories, please wait...')),
+      );
+      return;
+    }
+
+    // If cache is empty (fetch failed silently), try once more
+    if (_cachedCategories.isEmpty) {
+      await _preloadCategories();
+    }
+
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => _CategoryPickerSheet(
-        currentCategory: selectedIndustry,
-        // FIX: Pass the already-loaded list — no Firestore call inside sheet
+        currentCategory:     selectedIndustry,
         preloadedCategories: _cachedCategories,
-        isLoading: _isFetchingCategories,
-        onCategorySelected: (categoryName, jobTitle) {
+        isLoading:           false, // already waited above
+        onCategorySelected:  (categoryName, jobTitle) {
           setState(() {
-            selectedIndustry   = categoryName;
-            jobTitleCtrl.text  = jobTitle;
+            selectedIndustry  = categoryName;
+            jobTitleCtrl.text = jobTitle;
           });
           Navigator.pop(context);
         },
@@ -173,14 +170,12 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final jobData = buildJobDataMap(
-        companyName:
-        widget.jobData['company']?.toString() ?? 'Your Company',
-        companyId:
-        widget.jobData['companyId']?.toString() ?? user?.uid ?? '',
-        employerId: user?.uid ?? '',
-        isEditing: true,
-        createdAt: widget.jobData['createdAt'],
-        applicants: widget.jobData['applicants'] ?? '0 applied',
+        companyName: widget.jobData['company']?.toString() ?? 'Your Company',
+        companyId:   widget.jobData['companyId']?.toString() ?? user?.uid ?? '',
+        employerId:  user?.uid ?? '',
+        isEditing:   true,
+        createdAt:   widget.jobData['createdAt'],
+        applicants:  widget.jobData['applicants'] ?? '0 applied',
       );
 
       await FirebaseFirestore.instance
@@ -190,9 +185,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Job updated!'),
-                backgroundColor: Colors.green));
+            const SnackBar(content: Text('Job updated!'), backgroundColor: Colors.green));
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -208,6 +201,8 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 
   Widget _buildChangeCategoryBanner() {
+    // FIX 3: Shows the actual saved category name, never "Not set" if it exists
+    final displayName = selectedIndustry.isNotEmpty ? selectedIndustry : 'Not set';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -216,27 +211,24 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         border: Border.all(color: SharedJobForm.kBlue.withValues(alpha: 0.2)),
       ),
       child: Row(children: [
-        const Icon(Icons.business_center_rounded,
-            size: 20, color: SharedJobForm.kBlue),
+        const Icon(Icons.business_center_rounded, size: 20, color: SharedJobForm.kBlue),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Category & Job Title',
-                    style: TextStyle(
-                        fontSize: 12, color: SharedJobForm.kHelper)),
-                Text(
-                  selectedIndustry.isEmpty ? 'Not set' : selectedIndustry,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Category & Job Title',
+                style: TextStyle(fontSize: 12, color: SharedJobForm.kHelper)),
+            Text(displayName,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ]),
         ),
         TextButton.icon(
           onPressed: _changeCategory,
-          icon: const Icon(Icons.edit, size: 16),
-          label: const Text('Change'),
+          icon: _isFetchingCategories
+              ? const SizedBox(
+              width: 14, height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.edit, size: 16),
+          label: Text(_isFetchingCategories ? 'Loading...' : 'Change'),
           style: TextButton.styleFrom(foregroundColor: SharedJobForm.kBlue),
         ),
       ]),
@@ -246,9 +238,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -261,41 +251,32 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Edit Job',
-            style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.black)),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black)),
       ),
       body: isSaving
           ? const Center(
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Updating job...',
-                    style: TextStyle(color: Colors.grey, fontSize: 14)),
-              ]))
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Updating job...', style: TextStyle(color: Colors.grey, fontSize: 14)),
+          ]))
           : Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                buildStepper(),
-                const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                if (currentStep == 0)
-                  buildClassifyStep(
-                      extraTop: _buildChangeCategoryBanner()),
-                if (currentStep == 1) buildWriteStep(),
-                if (currentStep == 2) buildManageStep(),
-                buildNavButtons(
-                  saveLabel: 'Save Changes',
-                  onSave: _updateJob,
-                  formKey: _formKey,
-                ),
-              ]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            buildStepper(),
+            const Divider(height: 1, color: Color(0xFFEEEEEE)),
+            if (currentStep == 0)
+              buildClassifyStep(extraTop: _buildChangeCategoryBanner()),
+            if (currentStep == 1) buildWriteStep(),
+            if (currentStep == 2) buildManageStep(),
+            buildNavButtons(
+              saveLabel: 'Save Changes',
+              onSave:    _updateJob,
+              formKey:   _formKey,
+            ),
+          ]),
         ),
       ),
     );
@@ -303,8 +284,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Category picker bottom sheet
-// Receives pre-loaded categories from the parent — no Firestore calls here.
+// Category picker bottom sheet — receives pre-loaded list, no Firestore calls
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CategoryPickerSheet extends StatefulWidget {
@@ -346,13 +326,10 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
         return Container(
           padding: const EdgeInsets.all(20),
           child: Column(children: [
-            // Handle bar
             Container(
               width: 40, height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+                  color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 16),
             const Text('Change Category',
@@ -363,43 +340,34 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
               decoration: InputDecoration(
                 hintText: 'Search category...',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 16),
             Expanded(
               child: widget.isLoading
                   ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 12),
-                    Text('Loading categories...',
-                        style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              )
+                    Text('Loading categories...', style: TextStyle(color: Colors.grey)),
+                  ]))
                   : _filtered.isEmpty
                   ? Center(
-                child: Text(
-                  _searchQuery.isEmpty
-                      ? 'No categories available'
-                      : 'No results for "$_searchQuery"',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              )
+                  child: Text(
+                    _searchQuery.isEmpty
+                        ? 'No categories available'
+                        : 'No results for "$_searchQuery"',
+                    style: const TextStyle(color: Colors.grey),
+                  ))
                   : ListView.builder(
                 controller: scrollController,
                 itemCount: _filtered.length,
                 itemBuilder: (_, i) {
                   final cat = _filtered[i];
-                  final isSelected =
-                      cat['name'] == widget.currentCategory;
+                  final isSelected = cat['name'] == widget.currentCategory;
                   return ListTile(
-                    leading: const Icon(
-                        Icons.business_center_rounded),
+                    leading: const Icon(Icons.business_center_rounded),
                     title: Text(cat['name'] as String),
                     trailing: isSelected
                         ? const Icon(Icons.check_circle_rounded,
@@ -412,14 +380,12 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
                           builder: (_) => SelectJobTitlePage(
                             industryName: cat['name'] as String,
                             suggestedTitles:
-                            List<String>.from(
-                                cat['jobTitles'] ?? []),
+                            List<String>.from(cat['jobTitles'] ?? []),
                           ),
                         ),
                       );
                       if (title != null && title.isNotEmpty) {
-                        widget.onCategorySelected(
-                            cat['name'] as String, title);
+                        widget.onCategorySelected(cat['name'] as String, title);
                       }
                     },
                   );
