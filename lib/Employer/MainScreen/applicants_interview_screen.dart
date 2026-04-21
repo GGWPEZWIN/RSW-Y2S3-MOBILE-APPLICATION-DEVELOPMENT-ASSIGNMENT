@@ -24,42 +24,87 @@ class ApplicantsInterviewScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // 1. Get all applications with 'interview' status
         stream: FirebaseFirestore.instance
             .collection('applications')
-            //.where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
             .where('status', isEqualTo: 'interview')
             .orderBy('appliedAt', descending: true)
             .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: kBlue));
           }
 
-          // This will tell you EXACTLY why it's empty (e.g., "The query requires an index")
-          if (snap.hasError) {
-            return Center(child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text('Error: ${snap.error}', textAlign: TextAlign.center),
-            ));
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          if (!snap.hasData || snap.data!.docs.isEmpty) {
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return _emptyState();
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            itemCount: snap.data!.docs.length,
-            itemBuilder: (context, i) {
-              final doc = snap.data!.docs[i];
-              return _InterviewCard(
-                  applicationId: doc.id,
-                  appData: doc.data() as Map<String, dynamic>);
+          // 2. We use a FutureBuilder to filter the list based on the Job's employerId
+          return FutureBuilder<List<QueryDocumentSnapshot>>(
+            future: _getFilteredApplications(snapshot.data!.docs),
+            builder: (context, filteredSnapshot) {
+              if (filteredSnapshot.connectionState == ConnectionState.waiting) {
+                // Show a subtle loader or previous state while filtering
+                return const Center(child: CircularProgressIndicator(color: kBlue));
+              }
+
+              final filteredDocs = filteredSnapshot.data ?? [];
+
+              if (filteredDocs.isEmpty) {
+                return _emptyState();
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                itemCount: filteredDocs.length,
+                itemBuilder: (context, i) {
+                  final doc = filteredDocs[i];
+                  return _InterviewCard(
+                    applicationId: doc.id,
+                    appData: doc.data() as Map<String, dynamic>,
+                  );
+                },
+              );
             },
           );
         },
       ),
     );
+  }
+
+  Future<List<QueryDocumentSnapshot>> _getFilteredApplications(List<QueryDocumentSnapshot> docs) async {
+    List<QueryDocumentSnapshot> verifiedDocs = [];
+    final String currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    // Use Future.wait to fetch all job docs in parallel for better speed
+    await Future.wait(docs.map((doc) async {
+      final data = doc.data() as Map<String, dynamic>;
+      final String jobId = data['jobId'] ?? '';
+
+      if (jobId.isNotEmpty) {
+        final jobDoc = await FirebaseFirestore.instance.collection('jobs').doc(jobId).get();
+
+        if (jobDoc.exists) {
+          final String employerId = jobDoc.get('employerId') ?? '';
+          if (employerId == currentUid) {
+            verifiedDocs.add(doc);
+          }
+        }
+      }
+    }));
+
+    // Re-sort because Future.wait might return them out of order
+    verifiedDocs.sort((a, b) {
+      Timestamp t1 = a.get('appliedAt') ?? Timestamp.now();
+      Timestamp t2 = b.get('appliedAt') ?? Timestamp.now();
+      return t2.compareTo(t1); // Descending
+    });
+
+    return verifiedDocs;
   }
 
   Widget _emptyState() => Center(
