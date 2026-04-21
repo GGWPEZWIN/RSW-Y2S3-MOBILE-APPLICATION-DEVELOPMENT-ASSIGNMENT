@@ -27,11 +27,16 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = true;
 
+  // FIX: Cache industries here so the picker sheet never re-fetches
+  List<Map<String, dynamic>> _cachedCategories = [];
+  bool _isFetchingCategories = false;
+
   @override
   void initState() {
     super.initState();
     initFormFields();
     _prefillFormWithExistingData();
+    _preloadCategories(); // load once in background on page open
   }
 
   @override
@@ -40,17 +45,45 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     super.dispose();
   }
 
+  // Pre-fetch categories as soon as EditJobPage opens so they're ready
+  // before the user ever taps "Change". No more spinner on sheet open.
+  Future<void> _preloadCategories() async {
+    if (_cachedCategories.isNotEmpty) return;
+    setState(() => _isFetchingCategories = true);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_data')
+          .doc('industries')
+          .get();
+      if (doc.exists) {
+        final map =
+            (doc.data() as Map<String, dynamic>?)?['industries']
+            as Map<String, dynamic>? ??
+                {};
+        _cachedCategories = map.entries
+            .map((e) => {
+          'name': e.key,
+          'jobTitles':
+          List<String>.from(e.value['jobTitles'] ?? []),
+        })
+            .toList();
+      }
+    } catch (_) {
+      // Silently fail — sheet will show empty list gracefully
+    } finally {
+      if (mounted) setState(() => _isFetchingCategories = false);
+    }
+  }
+
   void _prefillFormWithExistingData() {
     final job = widget.jobData;
 
-    // Parse salary (format: "MYR1000 - MYR5000")
     final salary = job['salary']?.toString() ?? '';
     final salaryParts =
     salary.replaceAll(RegExp(r'[A-Za-z]'), '').split('-');
     final minPay = salaryParts.isNotEmpty ? salaryParts[0].trim() : '';
     final maxPay = salaryParts.length > 1 ? salaryParts[1].trim() : '';
 
-    // Parse comma-separated values
     final experiences = (job['experienceLevel']?.toString() ?? '')
         .split(',')
         .map((e) => e.trim())
@@ -61,26 +94,22 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         .toSet();
 
     setState(() {
-      // Basic info
-      jobTitleCtrl.text = job['title']?.toString() ?? '';
-      locationCtrl.text = job['location']?.toString() ?? '';
-      selectedWorkplace = job['workplace']?.toString() ?? 'On-site';
-      selectedWorkType = job['workType']?.toString() ?? 'Full-time';
-      selectedPayType = job['payType']?.toString() ?? 'Monthly';
-      selectedCurrency =
+      jobTitleCtrl.text      = job['title']?.toString() ?? '';
+      locationCtrl.text      = job['location']?.toString() ?? '';
+      selectedWorkplace      = job['workplace']?.toString() ?? 'On-site';
+      selectedWorkType       = job['workType']?.toString() ?? 'Full-time';
+      selectedPayType        = job['payType']?.toString() ?? 'Monthly';
+      selectedCurrency       =
           _extractCurrency(job['salary']?.toString() ?? '') ?? 'MYR';
-      minPayCtrl.text = minPay;
-      maxPayCtrl.text = maxPay;
-      showPayOnAd = job['showPayOnAd']?.toString() ?? 'Yes';
-      selectedIndustry = job['industry']?.toString() ?? '';
+      minPayCtrl.text        = minPay;
+      maxPayCtrl.text        = maxPay;
+      showPayOnAd            = job['showPayOnAd']?.toString() ?? 'Yes';
+      selectedIndustry       = job['industry']?.toString() ?? '';
+      descriptionCtrl.text   = job['description']?.toString() ?? '';
+      requirementsCtrl.text  = job['requirements']?.toString() ?? '';
+      benefitsCtrl.text      = job['benefits']?.toString() ?? '';
+      vacanciesCtrl.text     = (job['vacancies'] ?? 1).toString();
 
-      // Description & requirements
-      descriptionCtrl.text = job['description']?.toString() ?? '';
-      requirementsCtrl.text = job['requirements']?.toString() ?? '';
-      benefitsCtrl.text = job['benefits']?.toString() ?? '';
-      vacanciesCtrl.text = (job['vacancies'] ?? 1).toString();
-
-      // Multi-select fields
       if (experiences.isNotEmpty) {
         selectedExperiences.clear();
         selectedExperiences.addAll(experiences);
@@ -90,14 +119,11 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         selectedEducations.addAll(educations);
       }
 
-      // Dates
-      publishDate = (job['publishDate'] as Timestamp?)?.toDate();
-      expiryDate = (job['expiryDate'] as Timestamp?)?.toDate();
-
-      // Application method
-      applicationMethod = job['applicationMethod']?.toString() ?? 'In-app';
+      publishDate            = (job['publishDate'] as Timestamp?)?.toDate();
+      expiryDate             = (job['expiryDate'] as Timestamp?)?.toDate();
+      applicationMethod      = job['applicationMethod']?.toString() ?? 'In-app';
       applicationEmailCtrl.text = job['applicationEmail']?.toString() ?? '';
-      applicationUrlCtrl.text = job['applicationUrl']?.toString() ?? '';
+      applicationUrlCtrl.text   = job['applicationUrl']?.toString() ?? '';
 
       _isLoading = false;
     });
@@ -108,19 +134,22 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     return match?.group(0);
   }
 
-  Future<void> _changeIndustryAndTitle() async {
+  Future<void> _changeCategory() async {
     await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _IndustryPickerSheet(
-        currentIndustry: selectedIndustry,
-        onIndustrySelected: (industryName, jobTitle) {
+      builder: (context) => _CategoryPickerSheet(
+        currentCategory: selectedIndustry,
+        // FIX: Pass the already-loaded list — no Firestore call inside sheet
+        preloadedCategories: _cachedCategories,
+        isLoading: _isFetchingCategories,
+        onCategorySelected: (categoryName, jobTitle) {
           setState(() {
-            selectedIndustry = industryName;
-            jobTitleCtrl.text = jobTitle;
+            selectedIndustry   = categoryName;
+            jobTitleCtrl.text  = jobTitle;
           });
           Navigator.pop(context);
         },
@@ -178,37 +207,37 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
-  Widget _buildChangeIndustryBanner() {
+  Widget _buildChangeCategoryBanner() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: SharedJobForm.kBlue.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border:
-        Border.all(color: SharedJobForm.kBlue.withValues(alpha: 0.2)),
+        border: Border.all(color: SharedJobForm.kBlue.withValues(alpha: 0.2)),
       ),
       child: Row(children: [
         const Icon(Icons.business_center_rounded,
             size: 20, color: SharedJobForm.kBlue),
         const SizedBox(width: 12),
         Expanded(
-          child:
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Industry & Job Title',
-                style: TextStyle(
-                    fontSize: 12, color: SharedJobForm.kHelper)),
-            Text(
-                selectedIndustry.isEmpty ? 'Not set' : selectedIndustry,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Category & Job Title',
+                    style: TextStyle(
+                        fontSize: 12, color: SharedJobForm.kHelper)),
+                Text(
+                  selectedIndustry.isEmpty ? 'Not set' : selectedIndustry,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ]),
         ),
         TextButton.icon(
-          onPressed: _changeIndustryAndTitle,
+          onPressed: _changeCategory,
           icon: const Icon(Icons.edit, size: 16),
           label: const Text('Change'),
-          style: TextButton.styleFrom(
-              foregroundColor: SharedJobForm.kBlue),
+          style: TextButton.styleFrom(foregroundColor: SharedJobForm.kBlue),
         ),
       ]),
     );
@@ -245,8 +274,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
                 Text('Updating job...',
-                    style:
-                    TextStyle(color: Colors.grey, fontSize: 14)),
+                    style: TextStyle(color: Colors.grey, fontSize: 14)),
               ]))
           : Form(
         key: _formKey,
@@ -256,11 +284,10 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 buildStepper(),
-                const Divider(
-                    height: 1, color: Color(0xFFEEEEEE)),
+                const Divider(height: 1, color: Color(0xFFEEEEEE)),
                 if (currentStep == 0)
                   buildClassifyStep(
-                      extraTop: _buildChangeIndustryBanner()),
+                      extraTop: _buildChangeCategoryBanner()),
                 if (currentStep == 1) buildWriteStep(),
                 if (currentStep == 2) buildManageStep(),
                 buildNavButtons(
@@ -275,66 +302,36 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 }
 
-// Bottom sheet for picking industry & title (used only in edit mode)
-class _IndustryPickerSheet extends StatefulWidget {
-  final String currentIndustry;
-  final Function(String industryName, String jobTitle) onIndustrySelected;
+// ─────────────────────────────────────────────────────────────────────────────
+// Category picker bottom sheet
+// Receives pre-loaded categories from the parent — no Firestore calls here.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _IndustryPickerSheet({
-    required this.currentIndustry,
-    required this.onIndustrySelected,
+class _CategoryPickerSheet extends StatefulWidget {
+  final String currentCategory;
+  final List<Map<String, dynamic>> preloadedCategories;
+  final bool isLoading;
+  final Function(String categoryName, String jobTitle) onCategorySelected;
+
+  const _CategoryPickerSheet({
+    required this.currentCategory,
+    required this.preloadedCategories,
+    required this.isLoading,
+    required this.onCategorySelected,
   });
 
   @override
-  State<_IndustryPickerSheet> createState() =>
-      _IndustryPickerSheetState();
+  State<_CategoryPickerSheet> createState() => _CategoryPickerSheetState();
 }
 
-class _IndustryPickerSheetState extends State<_IndustryPickerSheet> {
-  List<Map<String, dynamic>> _industries = [];
+class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
   String _searchQuery = '';
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadIndustries();
-  }
-
-  Future<void> _loadIndustries() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('app_data')
-          .doc('industries')
-          .get();
-      if (doc.exists) {
-        final map =
-            (doc.data() as Map<String, dynamic>?)?['industries']
-            as Map<String, dynamic>? ??
-                {};
-        setState(() {
-          _industries = map.entries
-              .map((e) => {
-            'name': e.key,
-            'jobTitles':
-            List<String>.from(e.value['jobTitles'] ?? []),
-          })
-              .toList();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-    }
-  }
 
   List<Map<String, dynamic>> get _filtered {
-    if (_searchQuery.isEmpty) return _industries;
-    return _industries
-        .where((i) => i['name']
-        .toString()
-        .toLowerCase()
-        .contains(_searchQuery.toLowerCase()))
+    if (_searchQuery.isEmpty) return widget.preloadedCategories;
+    final q = _searchQuery.toLowerCase();
+    return widget.preloadedCategories
+        .where((i) => i['name'].toString().toLowerCase().contains(q))
         .toList();
   }
 
@@ -349,9 +346,9 @@ class _IndustryPickerSheetState extends State<_IndustryPickerSheet> {
         return Container(
           padding: const EdgeInsets.all(20),
           child: Column(children: [
+            // Handle bar
             Container(
-              width: 40,
-              height: 4,
+              width: 40, height: 4,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
@@ -359,13 +356,12 @@ class _IndustryPickerSheetState extends State<_IndustryPickerSheet> {
             ),
             const SizedBox(height: 16),
             const Text('Change Category',
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
               onChanged: (v) => setState(() => _searchQuery = v),
               decoration: InputDecoration(
-                hintText: 'Search industry...',
+                hintText: 'Search category...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -373,35 +369,57 @@ class _IndustryPickerSheetState extends State<_IndustryPickerSheet> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+              child: widget.isLoading
+                  ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Loading categories...',
+                        style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              )
+                  : _filtered.isEmpty
+                  ? Center(
+                child: Text(
+                  _searchQuery.isEmpty
+                      ? 'No categories available'
+                      : 'No results for "$_searchQuery"',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              )
                   : ListView.builder(
                 controller: scrollController,
                 itemCount: _filtered.length,
                 itemBuilder: (_, i) {
-                  final ind = _filtered[i];
+                  final cat = _filtered[i];
+                  final isSelected =
+                      cat['name'] == widget.currentCategory;
                   return ListTile(
-                    leading:
-                    const Icon(Icons.business_center),
-                    title: Text(ind['name']),
+                    leading: const Icon(
+                        Icons.business_center_rounded),
+                    title: Text(cat['name'] as String),
+                    trailing: isSelected
+                        ? const Icon(Icons.check_circle_rounded,
+                        color: Color(0xFF3B4FD8))
+                        : const Icon(Icons.chevron_right),
                     onTap: () async {
-                      // Push to job title picker
-                      final title =
-                      await Navigator.push<String>(
+                      final title = await Navigator.push<String>(
                         context,
                         MaterialPageRoute(
                           builder: (_) => SelectJobTitlePage(
-                            industryName: ind['name'],
+                            industryName: cat['name'] as String,
                             suggestedTitles:
                             List<String>.from(
-                                ind['jobTitles'] ?? []),
+                                cat['jobTitles'] ?? []),
                           ),
                         ),
                       );
-                      if (title != null &&
-                          title.isNotEmpty) {
-                        widget.onIndustrySelected(
-                            ind['name'], title);
+                      if (title != null && title.isNotEmpty) {
+                        widget.onCategorySelected(
+                            cat['name'] as String, title);
                       }
                     },
                   );

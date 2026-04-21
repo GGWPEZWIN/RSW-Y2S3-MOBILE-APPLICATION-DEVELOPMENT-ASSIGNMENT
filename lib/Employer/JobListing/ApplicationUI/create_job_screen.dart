@@ -1,7 +1,7 @@
 // lib/Employer/CreateJob/create_job.dart
 //
 // CREATE a new job posting
-// Step 1: Pick industry → Step 2: Pick job title → Step 3: Fill form → Save
+// Step 1: Pick category → Step 2: Pick job title → Step 3: Fill form → Save
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,22 +19,22 @@ class CreateJobPage extends StatefulWidget {
 class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
   final _formKey = GlobalKey<FormState>();
 
-  // Industry selection screen state
-  List<Map<String, dynamic>> _industries = [];
-  String _industrySearchQuery = '';
-  bool _isLoadingIndustries = false;
+  // Category selection screen state
+  List<Map<String, dynamic>> _categories = [];
+  String _categorySearchQuery = '';
+  bool _isLoadingCategories = false;
   bool _showDropdown = false;
-  bool _hasSelectedIndustry = false;
+  bool _hasSelectedCategory = false;
 
-  final TextEditingController _industrySearchCtrl = TextEditingController();
-  final FocusNode _industryFocus = FocusNode();
+  final TextEditingController _categorySearchCtrl = TextEditingController();
+  final FocusNode _categoryFocus = FocusNode();
 
-  List<Map<String, dynamic>> get _filteredIndustries {
-    if (_industrySearchQuery.isEmpty) return _industries;
-    final q = _industrySearchQuery.toLowerCase();
-    return _industries.where((ind) {
-      final name = ind['name'].toString().toLowerCase();
-      final keywords = List<String>.from(ind['keywords'] ?? []);
+  List<Map<String, dynamic>> get _filteredCategories {
+    if (_categorySearchQuery.isEmpty) return _categories;
+    final q = _categorySearchQuery.toLowerCase();
+    return _categories.where((cat) {
+      final name = cat['name'].toString().toLowerCase();
+      final keywords = List<String>.from(cat['keywords'] ?? []);
       return name.contains(q) || keywords.any((k) => k.contains(q));
     }).toList();
   }
@@ -42,11 +42,11 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
   @override
   void initState() {
     super.initState();
-    initFormFields(); // from SharedJobForm
-    _loadIndustries();
+    initFormFields();
+    _loadCategories();
 
-    _industryFocus.addListener(() {
-      if (!_industryFocus.hasFocus) {
+    _categoryFocus.addListener(() {
+      if (!_categoryFocus.hasFocus) {
         Future.delayed(const Duration(milliseconds: 200), () {
           if (mounted) setState(() => _showDropdown = false);
         });
@@ -58,85 +58,90 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
 
   @override
   void dispose() {
-    _industrySearchCtrl.dispose();
-    _industryFocus.dispose();
-    cleanupFormFields(); // from SharedJobForm
+    _categorySearchCtrl.dispose();
+    _categoryFocus.dispose();
+    cleanupFormFields();
     super.dispose();
   }
 
-  Future<void> _loadIndustries() async {
-    setState(() => _isLoadingIndustries = true);
+  Future<void> _loadCategories() async {
+    setState(() => _isLoadingCategories = true);
     try {
       final doc = await FirebaseFirestore.instance
           .collection('app_data')
           .doc('industries')
           .get();
       if (doc.exists) {
-        final map = (doc.data() as Map<String, dynamic>?)?['industries']
-        as Map<String, dynamic>? ??
-            {};
+        final map =
+            (doc.data() as Map<String, dynamic>?)?['industries']
+            as Map<String, dynamic>? ??
+                {};
         setState(() {
-          _industries = map.entries
+          _categories = map.entries
               .map((e) => {
             'name': e.key,
-            'keywords': List<String>.from(e.value['searchKeywords'] ?? []),
-            'jobTitles': List<String>.from(e.value['jobTitles'] ?? []),
+            'keywords':
+            List<String>.from(e.value['searchKeywords'] ?? []),
+            'jobTitles':
+            List<String>.from(e.value['jobTitles'] ?? []),
           })
               .toList();
-          _isLoadingIndustries = false;
+          _isLoadingCategories = false;
         });
       } else {
-        _useFallbackIndustries();
+        _useFallbackCategories();
       }
     } catch (e) {
-      _useFallbackIndustries();
+      _useFallbackCategories();
     }
   }
 
-  void _useFallbackIndustries() {
+  void _useFallbackCategories() {
     setState(() {
-      _industries = [
-        {'name': 'Technology & IT', 'keywords': ['tech', 'software'], 'jobTitles': ['Software Engineer', 'Developer']},
-        {'name': 'Sales & Marketing', 'keywords': ['sales', 'marketing'], 'jobTitles': ['Sales Executive', 'Marketing Manager']},
-        {'name': 'Finance & Accounting', 'keywords': ['finance', 'account'], 'jobTitles': ['Accountant', 'Financial Analyst']},
-        {'name': 'Healthcare', 'keywords': ['health', 'medical'], 'jobTitles': ['Nurse', 'Doctor']},
-        {'name': 'Education', 'keywords': ['education', 'teach'], 'jobTitles': ['Teacher', 'Lecturer']},
+      _categories = [
+        {'name': 'Technology & IT',      'keywords': ['tech', 'software'],  'jobTitles': ['Software Engineer', 'Developer']},
+        {'name': 'Sales & Marketing',    'keywords': ['sales', 'marketing'],'jobTitles': ['Sales Executive', 'Marketing Manager']},
+        {'name': 'Finance & Accounting', 'keywords': ['finance', 'account'],'jobTitles': ['Accountant', 'Financial Analyst']},
+        {'name': 'Healthcare',           'keywords': ['health', 'medical'], 'jobTitles': ['Nurse', 'Doctor']},
+        {'name': 'Education',            'keywords': ['education', 'teach'],'jobTitles': ['Teacher', 'Lecturer']},
       ];
-      _isLoadingIndustries = false;
+      _isLoadingCategories = false;
     });
   }
 
-  Future<void> _pickJobTitle(Map<String, dynamic> industry) async {
+  Future<void> _pickJobTitle(Map<String, dynamic> category) async {
     setState(() {
-      selectedIndustry = industry['name'] as String;
-      _industrySearchCtrl.text = industry['name'] as String;
-      _industrySearchQuery = '';
-      _showDropdown = false;
+      selectedIndustry       = category['name'] as String;
+      _categorySearchCtrl.text = category['name'] as String;
+      _categorySearchQuery   = '';
+      _showDropdown          = false;
     });
 
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (_) => SelectJobTitlePage(
-          industryName: industry['name'] as String,
-          suggestedTitles: List<String>.from(industry['jobTitles'] ?? []),
-          initialTitle: jobTitleCtrl.text.isNotEmpty ? jobTitleCtrl.text : null,
+          industryName: category['name'] as String,
+          suggestedTitles:
+          List<String>.from(category['jobTitles'] ?? []),
+          initialTitle:
+          jobTitleCtrl.text.isNotEmpty ? jobTitleCtrl.text : null,
         ),
       ),
     );
 
     if (result != null && result.trim().isNotEmpty) {
       setState(() {
-        jobTitleCtrl.text = result;
-        _hasSelectedIndustry = true;
+        jobTitleCtrl.text    = result;
+        _hasSelectedCategory = true;
       });
     } else {
-      // User went back - reset industry
+      // User went back — reset category
       setState(() {
-        _hasSelectedIndustry = false;
-        selectedIndustry = '';
-        _industrySearchCtrl.clear();
-        _industrySearchQuery = '';
+        _hasSelectedCategory = false;
+        selectedIndustry     = '';
+        _categorySearchCtrl.clear();
+        _categorySearchQuery = '';
       });
     }
   }
@@ -157,7 +162,7 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
     try {
       final user = FirebaseAuth.instance.currentUser;
       String companyName = 'Your Company';
-      String companyId = user?.uid ?? 'unknown';
+      String companyId   = user?.uid ?? 'unknown';
 
       if (user != null) {
         final doc = await FirebaseFirestore.instance
@@ -169,26 +174,26 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
           companyName = data['companyName']?.toString().trim() ??
               data['name']?.toString().trim() ??
               companyName;
-          companyId = data['companyId']?.toString().trim() ?? companyId;
+          companyId =
+              data['companyId']?.toString().trim() ?? companyId;
         }
       }
 
       final jobData = buildJobDataMap(
         companyName: companyName,
-        companyId: companyId,
-        employerId: user?.uid ?? '',
-        isEditing: false,
-        createdAt: DateTime.now(),
-        applicants: '0 applied',
+        companyId:   companyId,
+        employerId:  user?.uid ?? '',
+        isEditing:   false,
+        createdAt:   DateTime.now(),
+        applicants:  '0 applied',
       );
 
       await FirebaseFirestore.instance.collection('jobs').add(jobData);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Job posted!'),
-                backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Job posted!'),
+            backgroundColor: Colors.green));
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -203,8 +208,9 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
         SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
-  // UI for industry selection screen
-  Widget _buildIndustryScreen() {
+  // ── Category selection screen ──────────────────────────────────────────────
+
+  Widget _buildCategoryScreen() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -214,9 +220,11 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
         buildLabel('Category', required: true),
         const SizedBox(height: 8),
         _buildSearchTextField(),
-        if (_showDropdown && _filteredIndustries.isNotEmpty && !_isLoadingIndustries)
+        if (_showDropdown &&
+            _filteredCategories.isNotEmpty &&
+            !_isLoadingCategories)
           _buildDropdownList(),
-        if (_isLoadingIndustries) _buildLoadingIndicator(),
+        if (_isLoadingCategories) _buildLoadingIndicator(),
         buildHint('Start typing to search for your category'),
         const SizedBox(height: 32),
       ]),
@@ -236,7 +244,8 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: SharedJobForm.kBlue.withValues(alpha: 0.2)),
+        border:
+        Border.all(color: SharedJobForm.kBlue.withValues(alpha: 0.2)),
       ),
       child: Column(children: [
         const Icon(Icons.business_center_rounded,
@@ -256,25 +265,27 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
 
   Widget _buildSearchTextField() {
     return TextField(
-      controller: _industrySearchCtrl,
-      focusNode: _industryFocus,
+      controller: _categorySearchCtrl,
+      focusNode: _categoryFocus,
       onChanged: (v) => setState(() {
-        _industrySearchQuery = v;
+        _categorySearchQuery = v;
         _showDropdown = true;
       }),
       decoration: InputDecoration(
         hintText: 'Type to search category...',
-        hintStyle: const TextStyle(color: SharedJobForm.kHint, fontSize: 13),
-        prefixIcon: const Icon(Icons.search_rounded, color: SharedJobForm.kBlue),
-        suffixIcon: _industrySearchQuery.isNotEmpty
+        hintStyle:
+        const TextStyle(color: SharedJobForm.kHint, fontSize: 13),
+        prefixIcon:
+        const Icon(Icons.search_rounded, color: SharedJobForm.kBlue),
+        suffixIcon: _categorySearchQuery.isNotEmpty
             ? IconButton(
             icon: const Icon(Icons.clear, size: 18),
             onPressed: () {
-              _industrySearchCtrl.clear();
+              _categorySearchCtrl.clear();
               setState(() {
-                _industrySearchQuery = '';
-                selectedIndustry = '';
-                _hasSelectedIndustry = false;
+                _categorySearchQuery = '';
+                selectedIndustry     = '';
+                _hasSelectedCategory = false;
               });
             })
             : null,
@@ -282,14 +293,16 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
         fillColor: SharedJobForm.kFill,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: SharedJobForm.kBorder)),
+            borderSide:
+            const BorderSide(color: SharedJobForm.kBorder)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: SharedJobForm.kBorder)),
+            borderSide:
+            const BorderSide(color: SharedJobForm.kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:
-            const BorderSide(color: SharedJobForm.kBlue, width: 1.5)),
+            borderSide: const BorderSide(
+                color: SharedJobForm.kBlue, width: 1.5)),
       ),
     );
   }
@@ -311,22 +324,23 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
       ),
       child: ListView.builder(
         shrinkWrap: true,
-        itemCount: _filteredIndustries.length,
+        itemCount: _filteredCategories.length,
         itemBuilder: (_, i) {
-          final ind = _filteredIndustries[i];
+          final cat = _filteredCategories[i];
           return InkWell(
-            onTap: () => _pickJobTitle(ind),
+            onTap: () => _pickJobTitle(cat),
             child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
               child: Row(children: [
-                Icon(_getIndustryIcon(ind['name'] as String),
+                Icon(_getCategoryIcon(cat['name'] as String),
                     size: 18, color: SharedJobForm.kBlue),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: Text(ind['name'] as String,
+                    child: Text(cat['name'] as String,
                         style: const TextStyle(
-                            fontSize: 14, color: SharedJobForm.kLabel))),
+                            fontSize: 14,
+                            color: SharedJobForm.kLabel))),
                 const Icon(Icons.chevron_right_rounded,
                     size: 18, color: SharedJobForm.kInactiveGrey),
               ]),
@@ -348,19 +362,19 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
     );
   }
 
-  IconData _getIndustryIcon(String industry) {
-    if (industry.contains('Technology')) return Icons.computer_rounded;
-    if (industry.contains('Sales')) return Icons.trending_up_rounded;
-    if (industry.contains('Finance')) return Icons.attach_money_rounded;
-    if (industry.contains('Healthcare')) return Icons.local_hospital_rounded;
-    if (industry.contains('Education')) return Icons.school_rounded;
+  IconData _getCategoryIcon(String category) {
+    if (category.contains('Technology')) return Icons.computer_rounded;
+    if (category.contains('Sales'))      return Icons.trending_up_rounded;
+    if (category.contains('Finance'))    return Icons.attach_money_rounded;
+    if (category.contains('Healthcare')) return Icons.local_hospital_rounded;
+    if (category.contains('Education'))  return Icons.school_rounded;
     return Icons.business_center_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Screen 1: Pick industry first
-    if (!_hasSelectedIndustry) {
+    // Screen 1: Pick category first
+    if (!_hasSelectedCategory) {
       return Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -375,7 +389,7 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
                   fontWeight: FontWeight.w800,
                   color: Colors.black)),
         ),
-        body: _buildIndustryScreen(),
+        body: _buildCategoryScreen(),
       );
     }
 
@@ -391,12 +405,12 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
             if (currentStep > 0) {
               goToPrevStep();
             } else {
-              // Go back to industry selection
+              // Go back to category selection
               setState(() {
-                _hasSelectedIndustry = false;
-                selectedIndustry = '';
-                _industrySearchCtrl.clear();
-                _industrySearchQuery = '';
+                _hasSelectedCategory = false;
+                selectedIndustry     = '';
+                _categorySearchCtrl.clear();
+                _categorySearchQuery = '';
               });
             }
           },
@@ -415,25 +429,28 @@ class _CreateJobPageState extends State<CreateJobPage> with SharedJobForm {
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
                 Text('Posting job...',
-                    style: TextStyle(color: Colors.grey, fontSize: 14)),
+                    style:
+                    TextStyle(color: Colors.grey, fontSize: 14)),
               ]))
           : Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child:
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            buildStepper(),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
-            if (currentStep == 0) buildClassifyStep(),
-            if (currentStep == 1) buildWriteStep(),
-            if (currentStep == 2) buildManageStep(),
-            buildNavButtons(
-              saveLabel: 'Post Job',
-              onSave: _saveJobToFirebase,
-              formKey: _formKey,
-            ),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                buildStepper(),
+                const Divider(
+                    height: 1, color: Color(0xFFEEEEEE)),
+                if (currentStep == 0) buildClassifyStep(),
+                if (currentStep == 1) buildWriteStep(),
+                if (currentStep == 2) buildManageStep(),
+                buildNavButtons(
+                  saveLabel: 'Post Job',
+                  onSave:    _saveJobToFirebase,
+                  formKey:   _formKey,
+                ),
+              ]),
         ),
       ),
     );
