@@ -344,8 +344,12 @@ class _JobListScreenState extends State<JobListScreen> {
             Row(children: [
               const Icon(Icons.location_on_outlined, size: 14, color: Colors.white70),
               const SizedBox(width: 4),
-              Expanded(child: Text(job.location,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13))),
+              Expanded(
+                child: Text(
+                  job.location,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
             ]),
             const SizedBox(height: 4),
             Row(children: [

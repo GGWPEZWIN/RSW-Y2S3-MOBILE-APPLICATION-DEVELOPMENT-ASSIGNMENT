@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../Employer/models/job_model.dart';
+import '../JobApplication/ApplicationUI/job_details_screen.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -427,36 +430,186 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
 // ------------------------------------------------------------
 // Results Screen – displays job cards from search
 // ------------------------------------------------------------
-class JobResultsScreen extends StatelessWidget {
+class JobResultsScreen extends StatefulWidget {
   final List<QueryDocumentSnapshot> jobs;
 
   const JobResultsScreen({super.key, required this.jobs});
 
   @override
+  State<JobResultsScreen> createState() => _JobResultsScreenState();
+}
+
+class _JobResultsScreenState extends State<JobResultsScreen> {
+  // Sets to track state locally in results
+  Set<String> _appliedJobs = {};
+  Set<String> _savedJobs = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // You could fetch the latest saved/applied jobs here if needed
+  }
+
+  String _getTimeAgo(DateTime? dt) {
+    if (dt == null) return 'Recently';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    return 'Just now';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F5FA),
       appBar: AppBar(
-        title: const Text('Search Results'),
+        title: const Text('Search Results', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
+        elevation: 0,
         foregroundColor: Colors.black,
       ),
-      body: jobs.isEmpty
-          ? const Center(child: Text('No jobs found'))
+      body: widget.jobs.isEmpty
+          ? const Center(child: Text('No results found.'))
           : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: jobs.length,
+        padding: const EdgeInsets.all(20),
+        itemCount: widget.jobs.length,
         itemBuilder: (context, index) {
-          final job = jobs[index].data() as Map<String, dynamic>;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              title: Text(job['title'] ?? 'No title'),
-              subtitle: Text('${job['workType'] ?? ''} • ${job['location'] ?? ''}'),
-              trailing: Text(job['salaryRange'] ?? ''),
-            ),
+          final doc = widget.jobs[index];
+          final data = doc.data() as Map<String, dynamic>;
+
+          // Map Firebase data to Job Model
+          final job = Job(
+            id: doc.id,
+            title: data['title'] ?? 'Untitled',
+            companyId: data['companyId'] ?? '',
+            company: data['company'] ?? 'Company',
+            location: data['location'] ?? '',
+            workType: data['workType'] ?? 'Full-time',
+            workplace: data['workplace'] ?? 'On-site',
+            salary: data['salary'] ?? 'N/A',
+            postedTime: '',
+            applicants: '${data['applicants'] ?? 0} applied',
+            createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          );
+
+          // Extract benefits
+          final benefits = (data['benefits'] ?? '').toString()
+              .split('\n')
+              .where((l) => l.trim().isNotEmpty)
+              .take(2)
+              .toList();
+
+          return _jobCard(
+              context,
+              job,
+              benefits,
+              _appliedJobs.contains(job.id),
+              _savedJobs.contains(job.id),
+              data
           );
         },
       ),
+    );
+  }
+
+  Widget _jobCard(BuildContext context, Job job, List<String> benefits, bool hasApplied, bool isSaved, Map<String, dynamic> fullData) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3B4FD8), // The signature Blue
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  _tag(job.workType),
+                  const SizedBox(width: 8),
+                  _tag(job.workplace),
+                  const Spacer(),
+                  const Icon(Icons.bookmark_border_rounded, color: Colors.white, size: 18),
+                ]),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    child: Center(
+                      child: Text(job.company[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF3B4FD8))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(job.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(job.company, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                Row(children: [
+                  const Icon(Icons.location_on_outlined, size: 14, color: Colors.white70),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      job.location,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Icon(Icons.payments_outlined, size: 14, color: Colors.white70),
+                  const SizedBox(width: 4),
+                  Text(job.salary, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.access_time, size: 13, color: Colors.white60),
+              const SizedBox(width: 4),
+              Text(_getTimeAgo(job.createdAt), style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobDetailsPage(job: job))),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  child: const Text('View Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tag(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87)),
     );
   }
 }

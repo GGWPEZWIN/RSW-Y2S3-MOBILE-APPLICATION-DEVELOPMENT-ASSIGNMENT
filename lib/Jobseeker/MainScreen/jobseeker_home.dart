@@ -890,13 +890,13 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 12),
 
                 Row(children: [
-                  const Icon(Icons.location_on_outlined,
-                      size: 14, color: Colors.white70),
+                  const Icon(Icons.location_on_outlined, size: 14, color: Colors.white70),
                   const SizedBox(width: 4),
                   Expanded(
-                    child: Text(job.location,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12)),
+                    child: Text(
+                      job.location,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
                   ),
                 ]),
                 const SizedBox(height: 4),
