@@ -270,7 +270,11 @@ class _InterviewPracticeSessionScreenState
     try {
       _speechAvailable = await _speech.initialize(
         onStatus: (s) {
-          if ((s == 'done' || s == 'notListening') && _mode == 'listening') {
+          // FIX: Only stop on 'notListening', NOT on 'done'.
+          // 'done' fires naturally mid-session on Android when the engine
+          // resets between utterances — treating it as a stop was causing
+          // recordings to cut off unexpectedly while the user was still speaking.
+          if (s == 'notListening' && _mode == 'listening') {
             _stopRecordingAndShowStopped();
           }
         },
@@ -324,6 +328,7 @@ class _InterviewPracticeSessionScreenState
     if (_mode == 'idle') {
       await _startListening();
     } else if (_mode == 'listening') {
+      // User explicitly chose to stop — trigger stop
       _stopRecordingAndShowStopped();
     }
   }
@@ -338,8 +343,13 @@ class _InterviewPracticeSessionScreenState
     try {
       await _speech.listen(
         onResult: _onSpeechResult,
-        listenFor: const Duration(seconds: 60),
-        pauseFor: const Duration(seconds: 8),
+        // FIX: Increased listenFor to match the 2-minute countdown timer
+        listenFor: const Duration(seconds: 120),
+        // FIX: Increased pauseFor so the engine does NOT auto-stop on natural
+        // pauses mid-sentence. Recording now only stops when:
+        //   a) the user taps the mic button to stop, or
+        //   b) the 2-minute countdown timer runs out.
+        pauseFor: const Duration(seconds: 120),
         partialResults: true,
       );
     } catch (_) {
@@ -694,8 +704,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
               duration: const Duration(milliseconds: 300),
               width: double.infinity, height: 48,
               decoration: BoxDecoration(
-                // Always show the button as active so users can always tap it;
-                // colour shifts to red only after at least one answer is done.
                 color: _mode == 'loading'
                     ? const Color(0xFFF0F1F7)
                     : _answeredCount > 0
@@ -891,11 +899,17 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     ),
                   ],
 
-                  // Retry / Submit (stopped mode)
+                  // ── FIX: Retry / Submit row with flex weights ────────
+                  // Previously both buttons had equal Expanded weight, which
+                  // forced the long "Submit for AI Feedback" label to wrap
+                  // across two lines and made the button look too tall.
+                  // Now Retry gets flex:1 and Submit gets flex:2 so there
+                  // is enough horizontal space for the label on one line.
                   if (_mode == 'stopped') ...[
                     const SizedBox(height: 20),
                     Row(children: [
                       Expanded(
+                        flex: 1,
                         child: OutlinedButton(
                           onPressed: _retryRecording,
                           style: OutlinedButton.styleFrom(
@@ -911,6 +925,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                       ),
                       const SizedBox(width: 12),
                       Expanded(
+                        flex: 2,
                         child: ElevatedButton(
                           onPressed: _submitForFeedback,
                           style: ElevatedButton.styleFrom(
@@ -920,8 +935,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text('Submit for AI Feedback',
-                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          child: const Text(
+                            'Get Feedback',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ]),
