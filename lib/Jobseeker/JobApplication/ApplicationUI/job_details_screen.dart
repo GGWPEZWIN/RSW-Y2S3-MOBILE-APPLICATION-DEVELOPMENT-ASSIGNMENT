@@ -1,14 +1,18 @@
+import 'package:assignment/Jobseeker/JobApplication/ApplicationUI/saved_job_list.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
-import '../ApplicationServices/apply_job_service.dart';
-import 'jobseeker_notification_page.dart';
-import 'saved_job_list.dart';
+import '../../../Employer/JobListing/ApplicationUI/edit_job_screen.dart';
+import '../../JobApplication/ApplicationServices/apply_job_service.dart';
+import '../../MainScreen/jobseeker_profile.dart';
+import '../../Widgets/nav_bar_widget.dart';
 import 'applied_job_list.dart';
+import 'job_application_screen.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Job job;
+
   const JobDetailsPage({super.key, required this.job});
 
   @override
@@ -16,168 +20,237 @@ class JobDetailsPage extends StatefulWidget {
 }
 
 class _JobDetailsPageState extends State<JobDetailsPage> {
-  bool _isLoading = true;
-  bool _isEmployer = false;
-  bool _hasApplied = false;
-  bool _isSaved = false;
+  int _currentIndex = 0;
+  bool _isSaved      = false;
+  bool _isEmployer   = false;
+  bool _isLoading    = true;
+  bool _hasApplied   = false;
+  bool _isApplying   = false;
+  bool _isSaving     = false;
   String? _userCompanyId;
-  Map<String, dynamic>? _jobData;
+  int _applicantCount = 0;
+
+  String _fetchedEducation  = '';
+  String _fetchedExperience = '';
+
+  static const Color _blue  = Color(0xFF2563EB);
+  static const Color _green = Color(0xFF0BA87E);
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
-    _loadJobData();
+    _loadApplicantCount();
   }
 
-  Future<void> _loadJobData() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('jobs')
-          .doc(widget.job.id)
-          .get();
-      if (doc.exists) {
-        setState(() {
-          _jobData = doc.data() as Map<String, dynamic>;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading job data: $e');
+  Future<void> _loadApplicantCount() async {
+    final count = await ApplyJobService.getApplicantCount(widget.job.id!);
+    if (mounted) {
+      setState(() => _applicantCount = count);
     }
+  }
+
+  static Future<bool> hasApplied(String jobId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('applications')
+        .where('jobId', isEqualTo: jobId)
+        .where('userId', isEqualTo: user.uid)
+        .where('status', isNotEqualTo: 'withdrawn')
+        .get();
+
+    return snap.docs.isNotEmpty;
   }
 
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDocFuture = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
 
-      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
-
-      final role = (userDoc.data() as Map<String, dynamic>?)?['role'] as String?;
-
-      // Check if user has already applied
-      final appSnap = await FirebaseFirestore.instance
+      final appQueryFuture = FirebaseFirestore.instance
           .collection('applications')
-          .where('userId', isEqualTo: user.uid)
           .where('jobId', isEqualTo: widget.job.id)
+          .where('userId', isEqualTo: user.uid)
+          .where('status', isNotEqualTo: 'withdrawn')
           .get();
 
-      // Check if job is saved
-      final savedDoc = await FirebaseFirestore.instance
+      final savedDocFuture = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('savedJobs')
           .doc(widget.job.id)
           .get();
 
+      final results =
+      await Future.wait([userDocFuture, appQueryFuture, savedDocFuture]);
+
+      final userDoc  = results[0] as DocumentSnapshot;
+      final appSnap  = results[1] as QuerySnapshot;
+      final savedDoc = results[2] as DocumentSnapshot;
+
+      final companyId =
+      (userDoc.data() as Map<String, dynamic>?)?['companyId'];
+
       if (mounted) {
         setState(() {
-          _isEmployer = role == 'employer' && companyId != null && companyId.isNotEmpty;
-          _userCompanyId = _isEmployer ? companyId : null;
-          _hasApplied = appSnap.docs.isNotEmpty;
-          _isSaved = savedDoc.exists;
-          _isLoading = false;
+          _isEmployer    = companyId != null;
+          _userCompanyId = companyId as String?;
+          _hasApplied    = appSnap.docs.isNotEmpty;
+          _isSaved       = savedDoc.exists;
+          _isLoading     = false;
         });
       }
     } catch (e) {
-      debugPrint('Error loading user data: $e');
+      debugPrint("Error loading user data: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _toggleSave() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showSnackBar('Please login to save jobs', isError: true);
-      return;
+  Future<void> _handleApply() async {
+    if (_hasApplied || _isApplying) return;
+
+    setState(() => _isApplying = true);
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JobApplicationScreen(
+          jobId:     widget.job.id!,
+          jobTitle:  widget.job.title,
+          company:   widget.job.company,
+          companyId: widget.job.companyId,
+          job:       widget.job,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      await _loadUserData();
+      await _loadApplicantCount();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Application submitted!'),
+          backgroundColor: _green,
+        ),
+      );
     }
 
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isApplying = false);
+  }
+
+  Future<void> _toggleSave() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _isSaving = true);
 
     try {
-      final ref = FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('savedJobs')
           .doc(widget.job.id);
 
       if (_isSaved) {
-        await ref.delete();
-        setState(() => _isSaved = false);
-        _showSnackBar('Job removed from saved', isError: false);
+        await docRef.delete();
+        if (mounted) setState(() => _isSaved = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job removed from saved')),
+        );
       } else {
-        await ref.set({
-          'jobId': widget.job.id,
-          'jobTitle': widget.job.title,
-          'company': widget.job.company,
-          'location': widget.job.location,
-          'workType': widget.job.workType,
-          'workplace': widget.job.workplace,
-          'salary': widget.job.salary,
-          'savedAt': FieldValue.serverTimestamp(),
+        final jobSnap = await FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(widget.job.id)
+            .get();
+        final fullData = jobSnap.data() as Map<String, dynamic>? ?? {};
+
+        await docRef.set({
+          'jobId':           widget.job.id,
+          'jobTitle':        widget.job.title,
+          'company':         widget.job.company,
+          'location':        widget.job.location,
+          'workType':        widget.job.workType,
+          'workplace':       widget.job.workplace,
+          'salary':          widget.job.salary,
+          'description':     fullData['description']     ?? '',
+          'requirements':    fullData['requirements']    ?? '',
+          'benefits':        fullData['benefits']        ?? '',
+          'educationLevel':  _fetchedEducation,
+          'experienceLevel': _fetchedExperience,
+          'savedAt':         FieldValue.serverTimestamp(),
         });
-        setState(() => _isSaved = true);
-        _showSnackBar('Job saved!', isError: false);
+
+        if (mounted) setState(() => _isSaved = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Job saved! Practice interviews in Saved Jobs.'),
+            backgroundColor: _blue,
+          ),
+        );
       }
     } catch (e) {
-      _showSnackBar('Error: $e', isError: true);
+      debugPrint("Error saving job: $e");
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<void> _applyForJob() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showSnackBar('Please login to apply', isError: true);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
+  Future<void> _handleEditJob() async {
     try {
-      final success = await ApplyJobService.applyForJob(jobId: widget.job.id!);
-      if (success) {
-        setState(() => _hasApplied = true);
-        _showSnackBar('Applied successfully!', isError: false);
-      } else {
-        _showSnackBar('Failed to apply. Please try again.', isError: true);
-      }
+      final doc = await FirebaseFirestore.instance
+          .collection('jobs')
+          .doc(widget.job.id)
+          .get();
+      final fullData = doc.data() as Map<String, dynamic>? ?? {};
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EditJobPage(
+            jobId:   widget.job.id!,
+            jobData: fullData,
+          ),
+        ),
+      );
     } catch (e) {
-      _showSnackBar('Error: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load job data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  void _showSnackBar(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.redAccent : Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  String _getTimeAgo(DateTime? dateTime) {
+    if (dateTime == null) return 'Recently';
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 0)    return '${diff.inDays}d ago';
+    if (diff.inHours > 0)   return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final job       = widget.job;
+    final isOwnJob  = _userCompanyId != null && job.companyId == _userCompanyId;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -185,233 +258,559 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          widget.job.title,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+        title: const Text(
+          'Job Details',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
         actions: [
-          // Save button
           IconButton(
-            onPressed: _isEmployer ? null : _toggleSave,
-            icon: Icon(
-              _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-              color: _isSaved ? const Color(0xFFF5C842) : Colors.grey,
-            ),
+            icon: const Icon(Icons.share_outlined, color: Colors.black),
+            onPressed: () {},
           ),
         ],
       ),
+
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Job header
+
+            // ── White top card ────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3B4FD8), Color(0xFF2A3BB8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
+              color: Colors.white,
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                children: [
+                  // Company logo
+                  Container(
+                    width: 72, height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1B4332),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        job.company.isNotEmpty
+                            ? job.company[0].toUpperCase()
+                            : 'J',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Job title
+                  Text(
+                    job.title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── FIX: Company + location overflow ─────────────────────
+                  // Previously a Row with no overflow protection.
+                  // Now using Wrap so a long address wraps to the next line
+                  // instead of overflowing off screen.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          job.company,
+                          style: const TextStyle(
+                              color: _blue,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15),
+                        ),
+                        const Text(
+                          '•',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
+                        ),
+                        Text(
+                          job.location,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Color(0xFF64748B), fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Info cards
+                  Row(children: [
+                    _infoCard('SALARY',    job.salary),
+                    _infoCard('JOB TYPE',  job.workType),
+                    _infoCard('WORKPLACE', job.workplace),
+                  ]),
+                ],
               ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Body ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.job.title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.job.company,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_outlined, size: 16, color: Colors.white.withOpacity(0.7)),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.job.location,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.work_outline_rounded, size: 16, color: Colors.white.withOpacity(0.7)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.job.workType} · ${widget.job.workplace}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.payments_outlined, size: 16, color: Colors.white.withOpacity(0.7)),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.job.salary,
+
+                  // Meta row
+                  Row(children: [
+                    const Icon(Icons.access_time,
+                        size: 15, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(_getTimeAgo(job.createdAt),
                         style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                            color: Color(0xFF64748B), fontSize: 13)),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.people_outline,
+                        size: 15, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text('$_applicantCount applied',
+                        style: const TextStyle(
+                            color: Color(0xFF64748B), fontSize: 13)),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  _sectionTitle('Job Description'),
+                  const SizedBox(height: 10),
+
+                  // Fetch full job data
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('jobs')
+                        .doc(job.id)
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+
+                      String description       = 'No description provided.';
+                      String requirements      = '';
+                      String benefits          = '';
+                      String experience        = '';
+                      String education         = '';
+                      String applicationMethod = 'In-app';
+
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final data = snapshot.data!.data()
+                        as Map<String, dynamic>;
+                        description =
+                            data['description'] ?? 'No description provided.';
+                        requirements =
+                            data['requirements']    ?? '';
+                        benefits     = data['benefits']         ?? '';
+                        experience   = data['experienceLevel']  ?? '';
+                        education    = data['educationLevel']   ?? '';
+                        applicationMethod =
+                            data['applicationMethod'] ?? 'In-app';
+
+                        _fetchedEducation  = education;
+                        _fetchedExperience = experience;
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(description,
+                              style: const TextStyle(
+                                  color: Color(0xFF475569),
+                                  fontSize: 14,
+                                  height: 1.6)),
+                          const SizedBox(height: 24),
+
+                          if (experience.isNotEmpty ||
+                              education.isNotEmpty) ...[
+                            Wrap(
+                              spacing: 10, runSpacing: 8,
+                              children: [
+                                if (experience.isNotEmpty)
+                                  _badgeChip(
+                                      Icons.trending_up_rounded, experience),
+                                if (education.isNotEmpty)
+                                  _badgeChip(
+                                      Icons.school_outlined, education),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+
+                          if (requirements.isNotEmpty) ...[
+                            _sectionTitle('Requirements'),
+                            const SizedBox(height: 10),
+                            _bulletSection(requirements),
+                            const SizedBox(height: 24),
+                          ],
+
+                          if (benefits.isNotEmpty) ...[
+                            _sectionTitle('Benefits'),
+                            const SizedBox(height: 10),
+                            _benefitsSection(benefits),
+                            const SizedBox(height: 24),
+                          ],
+
+                          if (applicationMethod == 'In-app') ...[
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: const Color(0xFFBFDBFE)),
+                              ),
+                              child: const Row(children: [
+                                Icon(Icons.info_outline_rounded,
+                                    size: 18, color: _blue),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                      'Apply directly through the JobBuddy app.',
+                                      style: TextStyle(
+                                          fontSize: 13, color: _blue)),
+                                ),
+                              ]),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+
+                          _sectionTitle('Office Location'),
+                          const SizedBox(height: 10),
+                          Container(
+                            height: 150,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.grey[300],
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.location_on,
+                                        color: Colors.grey[600], size: 18),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        job.location,
+                                        style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: 13),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 20),
+            // ── Action buttons ────────────────────────────────────────────
+            if (!_isLoading && !_isEmployer) ...[
+              // Job Seeker: Save + Apply
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: Row(children: [
 
-            // Job Description
-            const Text(
-              'Job Description',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                  // Save button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _toggleSave,
+                      icon: Icon(
+                        _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                        size: 18,
+                      ),
+                      label: Text(_isSaved ? 'Saved' : 'Save'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                        _isSaved ? const Color(0xFF1D4ED8) : _blue,
+                        foregroundColor: Colors.white,
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // Apply Now / Applied button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed:
+                      (_hasApplied || _isApplying) ? null : _handleApply,
+                      icon: _isApplying
+                          ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                          : Icon(
+                        _hasApplied
+                            ? Icons.check_circle_rounded
+                            : Icons.arrow_forward_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _hasApplied
+                            ? 'Applied'
+                            : _isApplying
+                            ? 'Submitting...'
+                            : 'Apply Now',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _hasApplied ? _green : _blue,
+                        disabledBackgroundColor: _hasApplied
+                            ? _green
+                            : _blue.withValues(alpha: 0.6),
+                        foregroundColor: Colors.white,
+                        disabledForegroundColor: Colors.white,
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ]),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _jobData?['description'] ?? widget.job.description ?? 'No description provided.',
-              style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
-            ),
 
-            const SizedBox(height: 20),
-
-            // Requirements
-            if ((_jobData?['requirements'] ?? '').isNotEmpty) ...[
-              const Text(
-                'Requirements',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+            ] else if (!_isLoading && _isEmployer && isOwnJob) ...[
+              // Employer: Edit Job button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleEditJob,
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edit Job'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                _jobData?['requirements'] ?? '',
-                style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+
+            ] else if (!_isLoading && _isEmployer && !isOwnJob) ...[
+              // Employer viewing another company's job
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'You cannot apply to jobs from other companies.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 20),
             ],
-
-            // Benefits
-            if ((_jobData?['benefits'] ?? '').isNotEmpty) ...[
-              const Text(
-                'Benefits',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _jobData?['benefits'] ?? '',
-                style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // Apply Button (only for jobseekers who haven't applied)
-            if (!_isEmployer && !_hasApplied)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _applyForJob,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B4FD8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Apply Now',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-
-            // Already Applied message
-            if (!_isEmployer && _hasApplied)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green),
-                ),
-                child: const Center(
-                  child: Text(
-                    '✓ You have already applied for this job',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.green,
-                    ),
-                  ),
-                ),
-              ),
-
-            // Employer message
-            if (_isEmployer)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange),
-                ),
-                child: const Center(
-                  child: Text(
-                    'You are viewing as an employer',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
+
+      bottomNavigationBar: NavBarWidget(
+        currentIndex: _currentIndex,
+        onTabSelected: (index) {
+          setState(() => _currentIndex = index);
+
+          if (index == 0) {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          } else if (index == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
+            );
+          }
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfilePage(
+                    user: FirebaseAuth.instance.currentUser),
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  // ── Widget helpers ────────────────────────────────────────────────────────
+
+  Widget _sectionTitle(String text) => Text(
+    text,
+    style: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        color: Colors.black87),
+  );
+
+  Widget _infoCard(String title, String value) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFA790CC)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 9,
+                  color: Color(0xFF94A3B8),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 6),
+          Text(value,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _badgeChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: const Color(0xFF2563EB)),
+        const SizedBox(width: 6),
+        Text(text,
+            style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF2563EB),
+                fontWeight: FontWeight.w500)),
+      ]),
+    );
+  }
+
+  Widget _bulletSection(String raw) {
+    final lines = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines.map((line) {
+        final text =
+        line.startsWith('•') ? line.substring(1).trim() : line;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 22, height: 22,
+                margin: const EdgeInsets.only(top: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.check,
+                    color: Color(0xFF2563EB), size: 14),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(text,
+                    style: const TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 14,
+                        height: 1.5)),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _benefitsSection(String raw) {
+    final lines = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    return Wrap(
+      spacing: 8, runSpacing: 8,
+      children: lines.map((line) {
+        final text =
+        line.startsWith('•') ? line.substring(1).trim() : line;
+        return Container(
+          padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF86EFAC)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.check_circle_outline,
+                size: 13, color: Color(0xFF16A34A)),
+            const SizedBox(width: 5),
+            Text(text,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF15803D),
+                    fontWeight: FontWeight.w500)),
+          ]),
+        );
+      }).toList(),
     );
   }
 }
