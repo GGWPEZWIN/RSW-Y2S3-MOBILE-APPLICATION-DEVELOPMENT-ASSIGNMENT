@@ -1,14 +1,14 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 
 class EditProfilePage extends StatefulWidget {
   final User user;
-
-  const EditProfilePage({super.key, required this.user}); // Updated to super.key
+  const EditProfilePage({super.key, required this.user});
 
   @override
   State<EditProfilePage> createState() => _EditProfilePageState();
@@ -24,6 +24,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _newPasswordController = TextEditingController();
 
   File? _imageFile;
+  String? _currentPhotoData; // Stores either Google URL or Base64 string
   bool _isLoading = false;
   bool _isGoogleUser = false;
   final _formKey = GlobalKey<FormState>();
@@ -52,9 +53,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
         final data = doc.data();
         setState(() {
           _nameController.text = data?['name'] ?? widget.user.displayName ?? '';
-          _emailController.text = data?['email'] ?? widget.user.email ?? '';
           _phoneController.text = data?['phone'] ?? '';
           _locationController.text = data?['location'] ?? '';
+
+          // --- FIX: Fallback to Google photoURL if Firestore is empty ---
+          _currentPhotoData = data?['photoUrl'] ?? widget.user.photoURL;
+        });
+      } else {
+        // Brand new user: use Google photo URL as default
+        setState(() {
+          _currentPhotoData = widget.user.photoURL;
         });
       }
     } catch (e) {
@@ -74,10 +82,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (picked != null) {
       setState(() => _imageFile = File(picked.path));
     }
+  }
+
+  Future<String> _processImage(File file) async {
+    final bytes = await file.readAsBytes();
+    img.Image? originalImage = img.decodeImage(bytes);
+    if (originalImage == null) return "";
+
+    // Resize to keep Firestore document size small
+    img.Image resizedImage = img.copyResize(originalImage, width: 150);
+    return base64Encode(img.encodeJpg(resizedImage, quality: 70));
   }
 
   Future<bool> _reauthenticate(String currentPassword) async {
@@ -99,7 +117,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _isLoading = true);
     try {
       final user = widget.user;
-      String? photoUrl = user.photoURL;
+      String? photoToSave = _currentPhotoData;
 
       // 1. Password Logic
       if (!_isGoogleUser && _newPasswordController.text.isNotEmpty) {
@@ -109,20 +127,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
         await user.updatePassword(_newPasswordController.text.trim());
       }
 
-      // 2. Image Logic
+      // 2. Image Processing (Convert to Base64 if a new file was picked)
       if (_imageFile != null) {
-        final ref = FirebaseStorage.instance.ref().child('profile_photos/${user.uid}.jpg');
-        await ref.putFile(_imageFile!);
-        photoUrl = await ref.getDownloadURL();
+        photoToSave = await _processImage(_imageFile!);
       }
 
-      // 3. Update Firestore (Using set with merge to keep Role safe)
+      // 3. Update Auth Display Name
+      if (_nameController.text.trim().isNotEmpty) {
+        await user.updateDisplayName(_nameController.text.trim());
+      }
+
+      // 4. Save to Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
-        'photoUrl': photoUrl,
+        'photoUrl': photoToSave,
       }, SetOptions(merge: true));
+
+      await user.reload();
 
       if (mounted) {
         Navigator.pop(context);
@@ -162,16 +185,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
               _buildLabel("Full Name"),
               _buildTextField(_nameController, "Your Name", Icons.person_outline),
-
               const SizedBox(height: 16),
               _buildLabel("Email Address (Locked)"),
-              // --- FIXED: ENABLED = FALSE ---
               _buildTextField(_emailController, "Email", Icons.lock_outline, enabled: false),
-
               const SizedBox(height: 16),
               _buildLabel("Phone Number"),
               _buildTextField(_phoneController, "01x-xxxxxxx", Icons.phone_android_outlined),
-
               const SizedBox(height: 16),
               _buildLabel("Location"),
               _buildTextField(_locationController, "City, State", Icons.location_on_outlined),
@@ -202,6 +221,24 @@ class _EditProfilePageState extends State<EditProfilePage> {
   );
 
   Widget _buildProfilePicture() {
+    ImageProvider? imageProvider;
+
+    if (_imageFile != null) {
+      // 1. Show the local file if user just picked one
+      imageProvider = FileImage(_imageFile!);
+    } else if (_currentPhotoData != null && _currentPhotoData!.isNotEmpty) {
+      // 2. Check if data is a URL (Google) or Base64 (Manual)
+      if (_currentPhotoData!.startsWith('http')) {
+        imageProvider = NetworkImage(_currentPhotoData!);
+      } else {
+        try {
+          imageProvider = MemoryImage(base64Decode(_currentPhotoData!));
+        } catch (e) {
+          imageProvider = null;
+        }
+      }
+    }
+
     return GestureDetector(
       onTap: _pickImage,
       child: Stack(
@@ -209,13 +246,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
           CircleAvatar(
             radius: 55,
             backgroundColor: const Color(0xFFF1F5F9),
-            backgroundImage: _imageFile != null
-                ? FileImage(_imageFile!)
-                : (widget.user.photoURL != null ? NetworkImage(widget.user.photoURL!) : null) as ImageProvider?,
-            child: (_imageFile == null && widget.user.photoURL == null)
-                ? const Icon(Icons.person, size: 40, color: brandBlue) : null,
+            backgroundImage: imageProvider,
+            child: imageProvider == null
+                ? const Icon(Icons.person, size: 40, color: brandBlue)
+                : null,
           ),
-          Positioned(bottom: 0, right: 0, child: CircleAvatar(radius: 18, backgroundColor: brandBlue, child: const Icon(Icons.edit, size: 15, color: Colors.white))),
+          const Positioned(
+              bottom: 0,
+              right: 0,
+              child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: brandBlue,
+                  child: Icon(Icons.edit, size: 15, color: Colors.white)
+              )
+          ),
         ],
       ),
     );
@@ -246,7 +290,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           backgroundColor: brandBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)), elevation: 0,
         ),
         child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
             : const Text("Save Changes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
       ),
     );
