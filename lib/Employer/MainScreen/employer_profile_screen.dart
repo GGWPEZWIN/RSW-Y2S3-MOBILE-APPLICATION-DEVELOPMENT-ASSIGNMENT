@@ -1,4 +1,3 @@
-import 'dart:convert'; // Required for base64Decode
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -52,6 +51,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // --- 1. HEADER (LINKED TO BASIC PROFILE EDIT) ---
+                // Now passes Name, Phone, AND Location to the edit page
                 GestureDetector(
                   onTap: () {
                     if (user != null) {
@@ -59,7 +59,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                         user: user,
                         currentName: employerData?['companyName'] ?? '',
                         currentPhone: employerData?['phone'] ?? '',
-                        currentLocation: employerData?['location'] ?? '',
+                        currentLocation: employerData?['location'] ?? '', // Pass location here
                       )));
                     }
                   },
@@ -97,6 +97,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 ),
 
                 const SizedBox(height: 40),
+                // --- BOTTOM LOCATION SECTION REMOVED ---
               ],
             ),
           );
@@ -108,23 +109,6 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   // --- WIDGET BUILDERS ---
 
   Widget _buildHeader(Map<String, dynamic>? data, User? user) {
-    // Determine the Logo Provider (Base64 vs Network)
-    ImageProvider? imageProvider;
-    final String? photoUrl = data?['photoUrl'];
-
-    if (photoUrl != null && photoUrl.isNotEmpty) {
-      if (photoUrl.startsWith('http')) {
-        imageProvider = NetworkImage(photoUrl);
-      } else {
-        try {
-          imageProvider = MemoryImage(base64Decode(photoUrl));
-        } catch (e) {
-          debugPrint("Error decoding employer logo: $e");
-          imageProvider = null;
-        }
-      }
-    }
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
@@ -136,25 +120,19 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
           CircleAvatar(
             radius: 45,
             backgroundColor: const Color(0xFFF1F5F9),
-            backgroundImage: imageProvider,
-            child: imageProvider == null
-                ? const Icon(Icons.business, size: 40, color: kPrimaryBlue)
-                : null,
+            backgroundImage: (data?['photoUrl'] != null) ? NetworkImage(data!['photoUrl']) : null,
+            child: (data?['photoUrl'] == null) ? const Icon(Icons.business, size: 40, color: kPrimaryBlue) : null,
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  data?['companyName'] ?? 'Company Name',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis, // Safe for long names
-                  maxLines: 1,
-                ),
+                Text(data?['companyName'] ?? 'Company Name', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 _buildHeaderRow(Icons.email_outlined, data?['email'] ?? user?.email ?? ''),
                 _buildHeaderRow(Icons.phone_outlined, data?['phone'] ?? 'Add phone'),
+                // Shows the location in the header
                 _buildHeaderRow(Icons.location_on_outlined, data?['location'] ?? 'Add office location'),
               ],
             ),
@@ -172,15 +150,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         children: [
           Icon(icon, size: 14, color: kPrimaryBlue),
           const SizedBox(width: 8),
-          // --- FIXED OVERFLOW ---
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: kTextSecondary, fontSize: 13),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
+          Expanded(child: Text(text, style: const TextStyle(color: kTextSecondary, fontSize: 13), overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
@@ -230,7 +200,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kPrimaryBlue.withOpacity(0.3)),
+        border: Border.all(color: kPrimaryBlue.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,11 +209,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
           Text(industry, style: const TextStyle(color: Colors.black87, fontSize: 13)),
           const SizedBox(height: 12),
           const Text("Website", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          Text(
-            website,
-            style: const TextStyle(color: kPrimaryBlue, fontSize: 13, decoration: TextDecoration.underline),
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(website, style: const TextStyle(color: kPrimaryBlue, fontSize: 13, decoration: TextDecoration.underline)),
         ],
       ),
     );
