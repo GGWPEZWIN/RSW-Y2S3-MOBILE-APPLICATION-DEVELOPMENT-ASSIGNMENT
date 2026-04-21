@@ -34,8 +34,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   int _selectedIndex = 0;
   static const Color _primaryBlue = Color(0xFF3B4FD8);
 
-  // ✅ employerId = current user uid (matches what create_job_screen saves
-  //    AND matches the Firebase index fields shown in the screenshot)
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   void _navigateToCreateJob() {

@@ -206,7 +206,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     }
   }
 
-  // Navigate to EditJobPage — fetches full Firestore doc first
   Future<void> _handleEditJob() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -314,21 +313,37 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Company + location
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(job.company,
+                  // ── FIX: Company + location overflow ─────────────────────
+                  // Previously a Row with no overflow protection.
+                  // Now using Wrap so a long address wraps to the next line
+                  // instead of overflowing off screen.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          job.company,
                           style: const TextStyle(
                               color: _blue,
                               fontWeight: FontWeight.w600,
-                              fontSize: 15)),
-                      const Text('  •  ',
-                          style: TextStyle(color: Color(0xFF64748B))),
-                      Text(job.location,
+                              fontSize: 15),
+                        ),
+                        const Text(
+                          '•',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
+                        ),
+                        Text(
+                          job.location,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                              color: Color(0xFF64748B), fontSize: 15)),
-                    ],
+                              color: Color(0xFF64748B), fontSize: 15),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -486,17 +501,26 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                               color: Colors.grey[300],
                             ),
                             child: Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.location_on,
-                                      color: Colors.grey[600], size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(job.location,
-                                      style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 13)),
-                                ],
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.location_on,
+                                        color: Colors.grey[600], size: 18),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        job.location,
+                                        style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: 13),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -684,6 +708,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           const SizedBox(height: 6),
           Text(value,
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
