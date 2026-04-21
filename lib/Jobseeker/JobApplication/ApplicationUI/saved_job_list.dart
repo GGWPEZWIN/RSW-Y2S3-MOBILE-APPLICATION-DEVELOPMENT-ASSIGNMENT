@@ -260,14 +260,20 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
             const SizedBox(height: 10),
 
             if (location.isNotEmpty)
-              Row(children: [
-                const Icon(Icons.location_on_outlined,
-                    size: 13, color: Colors.white54),
-                const SizedBox(width: 4),
-                Text(location,
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 12)),
-              ]),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start, // Align icon with the first line of text
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 13, color: Colors.white54),
+                  const SizedBox(width: 4),
+                  Expanded( // 👈 This prevents the overflow
+                    child: Text(
+                      location,
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      softWrap: true, // Allows text to wrap to the next line
+                    ),
+                  ),
+                ],
+              ),
 
             if (salary.isNotEmpty) ...[
               const SizedBox(height: 4),

@@ -34,8 +34,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   int _selectedIndex = 0;
   static const Color _primaryBlue = Color(0xFF3B4FD8);
 
-  // ✅ employerId = current user uid (matches what create_job_screen saves
-  //    AND matches the Firebase index fields shown in the screenshot)
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   void _navigateToCreateJob() {
@@ -176,20 +174,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                         return SingleChildScrollView(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            const SizedBox(height: 18),
-                            Container(
-                              height: 48,
-                              decoration: BoxDecoration(color: const Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(24)),
-                              child: TextField(
-                                decoration: InputDecoration(
-                                  hintText: 'Search anything here ......',
-                                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                                  suffixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                ),
-                              ),
-                            ),
                             const SizedBox(height: 24),
                             const Text('Dashboard', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
                             const SizedBox(height: 16),
