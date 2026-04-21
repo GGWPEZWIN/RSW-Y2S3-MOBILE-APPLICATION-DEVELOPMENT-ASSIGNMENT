@@ -33,6 +33,12 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   final TextEditingController _keywordsController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
 
+  // Filter selection states
+  String _selectedWorkType = 'All work types';
+  String _selectedRemoteOption = 'All remote options';
+  String _selectedSalaryRange = 'RM 0 to RM50k+ Monthly';
+  String _selectedClassification = 'Any classification';
+
   @override
   void dispose() {
     _keywordsController.dispose();
@@ -121,10 +127,81 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Column(
                     children: [
-                      _buildFilterRow('All work types'),
-                      _buildFilterRow('All remote options'),
-                      _buildFilterRow('RM 0 to RM50k+ Monthly'),
-                      _buildFilterRow('Any classification', isLast: true),
+                      _buildFilterRow(
+                        'All work types',
+                        value: _selectedWorkType,
+                        options: const [
+                          'All work types',
+                          'Full-time',
+                          'Part-time',
+                          'Contract',
+                          'Casual',
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedWorkType = value;
+                          });
+                        },
+                      ),
+                      _buildFilterRow(
+                        'All remote options',
+                        value: _selectedRemoteOption,
+                        options: const [
+                          'All remote options',
+                          'On-site',
+                          'Remote',
+                          'Hybrid',
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedRemoteOption = value;
+                          });
+                        },
+                      ),
+                      _buildFilterRow(
+                        'RM 0 to RM50k+ Monthly',
+                        value: _selectedSalaryRange,
+                        options: const [
+                          'RM 0 - RM2000 Monthly',
+                          'RM 2000 - RM4000 Monthly',
+                          'RM 4000 - RM6000 Monthly',
+                          'RM 6000 - RM8000 Monthly',
+                          'RM 8000 - RM10000 Monthly',
+                          'RM 10000 - RM15000 Monthly',
+                          'RM 15000 - RM20000 Monthly',
+                          'RM 20000+ Monthly',
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedSalaryRange = value;
+                          });
+                        },
+                      ),
+                      _buildFilterRow(
+                        'Any classification',
+                        value: _selectedClassification,
+                        options: const [
+                          'Any classification',
+                          'IT & Software',
+                          'Sales & Marketing',
+                          'Finance & Accounting',
+                          'Healthcare',
+                          'Education',
+                          'Hospitality',
+                          'Retail',
+                          'Manufacturing',
+                          'Construction',
+                          'Creative & Design',
+                          'Administration',
+                          'Customer Service',
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedClassification = value;
+                          });
+                        },
+                        isLast: true,
+                      ),
                     ],
                   ),
                 ),
@@ -138,7 +215,9 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        _performSearch();
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2352D8),
                         foregroundColor: Colors.white,
@@ -216,7 +295,13 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
   }
 
-  Widget _buildFilterRow(String label, {bool isLast = false}) {
+  Widget _buildFilterRow(
+      String label, {
+        required String value,
+        required List<String> options,
+        required Function(String) onChanged,
+        bool isLast = false,
+      }) {
     return Column(
       children: [
         // Top divider (skip for first item — handled by spacing above)
@@ -224,14 +309,16 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
           const Divider(height: 1, thickness: 1, color: Color(0xFFD8D0F5)),
 
         InkWell(
-          onTap: () {},
+          onTap: () {
+            _showFilterBottomSheet(label, value, options, onChanged);
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  label,
+                  value,
                   style: const TextStyle(
                     fontSize: 15,
                     color: Colors.black87,
@@ -249,6 +336,174 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
         ),
         const Divider(height: 1, thickness: 1, color: Color(0xFFD8D0F5)),
       ],
+    );
+  }
+
+  void _showFilterBottomSheet(
+      String title,
+      String currentValue,
+      List<String> options,
+      Function(String) onChanged,
+      ) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String tempSelected = currentValue;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  Text(
+                    'Select $title',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Options list
+                  ...options.map((option) {
+                    final isSelected = tempSelected == option;
+                    return Column(
+                      children: [
+                        ListTile(
+                          leading: isSelected
+                              ? const Icon(Icons.radio_button_checked, color: Color(0xFF2352D8))
+                              : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
+                          title: Text(
+                            option,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                              color: isSelected ? const Color(0xFF2352D8) : Colors.black87,
+                            ),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              tempSelected = option;
+                            });
+                          },
+                        ),
+                        if (option != options.last)
+                          const Divider(height: 1, thickness: 0.5, color: Color(0xFFEEEEEE)),
+                      ],
+                    );
+                  }).toList(),
+
+                  const SizedBox(height: 20),
+
+                  // Apply button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        onChanged(tempSelected);
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2352D8),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Apply',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _performSearch() {
+    final keywords = _keywordsController.text.trim();
+    final location = _locationController.text.trim();
+
+    // Build search query
+    final searchParams = {
+      'keywords': keywords,
+      'location': location,
+      'workType': _selectedWorkType == 'All work types' ? '' : _selectedWorkType,
+      'workplace': _selectedRemoteOption == 'All remote options' ? '' : _selectedRemoteOption,
+      'salary': _selectedSalaryRange,
+      'classification': _selectedClassification == 'Any classification' ? '' : _selectedClassification,
+    };
+
+    // Show search results
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Search Parameters'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSearchResultRow('Keywords', keywords.isEmpty ? 'All' : keywords),
+            _buildSearchResultRow('Location', location.isEmpty ? 'All' : location),
+            _buildSearchResultRow('Work Type', _selectedWorkType),
+            _buildSearchResultRow('Remote Option', _selectedRemoteOption),
+            _buildSearchResultRow('Salary Range', _selectedSalaryRange),
+            _buildSearchResultRow('Classification', _selectedClassification),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchResultRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
