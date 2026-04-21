@@ -4,21 +4,31 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../Interview/schedule_interview_page.dart';
 import '../MainScreen/applicants_list_screen.dart';
 
-class EmployerNotificationsPage extends StatelessWidget {
+class EmployerNotificationsPage extends StatefulWidget {
   const EmployerNotificationsPage({super.key});
 
-  static const Color kBlue   = Color(0xFF3B4FD8);
-  static const Color kBg     = Color(0xFFF3F4F8);
-  static const Color kText   = Color(0xFF1A1A2E);
-  static const Color kSubtext= Color(0xFF6B7280);
-  static const Color kOrange = Color(0xFFF59E0B);
-  static const Color kGreen  = Color(0xFF22C55E);
-  static const Color kRed    = Color(0xFFEF4444);
-  static const Color kPurple = Color(0xFF7C3AED);
+  @override
+  State<EmployerNotificationsPage> createState() =>
+      _EmployerNotificationsPageState();
+}
+
+class _EmployerNotificationsPageState
+    extends State<EmployerNotificationsPage> {
+
+  static const Color kBlue    = Color(0xFF3B4FD8);
+  static const Color kBg      = Color(0xFFF3F4F8);
+  static const Color kText    = Color(0xFF1A1A2E);
+  static const Color kSubtext = Color(0xFF6B7280);
+  static const Color kOrange  = Color(0xFFF59E0B);
+  static const Color kGreen   = Color(0xFF22C55E);
+  static const Color kRed     = Color(0xFFEF4444);
+  static const Color kPurple  = Color(0xFF7C3AED);
+
+  // ── Track locally which notif IDs are being tapped (prevents flicker) ──
+  final Set<String> _tappedIds = {};
 
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  // ── Colour + icon per type ────────────────────────────────────────────────
   Color _typeColor(String type) {
     switch (type) {
       case 'new_application':     return kBlue;
@@ -42,7 +52,7 @@ class EmployerNotificationsPage extends StatelessWidget {
   }
 
   Future<void> _markAllRead() async {
-    final batch  = FirebaseFirestore.instance.batch();
+    final batch = FirebaseFirestore.instance.batch();
     final unread = await FirebaseFirestore.instance
         .collection('employer_notifications')
         .where('employerId', isEqualTo: _employerId)
@@ -54,72 +64,83 @@ class EmployerNotificationsPage extends StatelessWidget {
     await batch.commit();
   }
 
-  // ── Tap handler ───────────────────────────────────────────────────────────
   Future<void> _handleTap(
       BuildContext context, String notifId, Map<String, dynamic> data) async {
 
-    // Mark read
-    await FirebaseFirestore.instance
+    // ── Prevent double-tap + stop flicker by tracking locally ──
+    if (_tappedIds.contains(notifId)) return;
+    setState(() => _tappedIds.add(notifId));
+
+    // Mark read in Firestore (don't await — do it in background)
+    FirebaseFirestore.instance
         .collection('employer_notifications')
         .doc(notifId)
         .update({'isRead': true});
 
-    final type            = (data['type']            as String?) ?? '';
-    final applicationId   = (data['applicationId']   as String?) ?? '';
-    final jobId           = (data['jobId']            as String?) ?? '';
-    final jobTitle        = (data['jobTitle']         as String?) ?? 'Job';
-    final candidateUserId = (data['candidateUserId']  as String?) ?? '';
-    final candidateName   = (data['candidateName']    as String?) ?? 'Candidate';
+    final type             = (data['type']           as String?) ?? '';
+    final applicationId    = (data['applicationId']  as String?) ?? '';
+    final jobId            = (data['jobId']           as String?) ?? '';
+    final jobTitle         = (data['jobTitle']        as String?) ?? 'Job';
+    final candidateUserId  = (data['candidateUserId'] as String?) ?? '';
+    final candidateName    = (data['candidateName']   as String?) ?? 'Candidate';
     final rescheduleReason = data['rescheduleReason'] as String?;
 
-    // ── new_application → open applicants list ────────────────────────────
     if (type == 'new_application') {
       if (!context.mounted) return;
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ApplicantsByJobScreen(jobId: jobId, jobTitle: jobTitle),
+      await Navigator.push(context, MaterialPageRoute(
+        builder: (_) =>
+            ApplicantsByJobScreen(jobId: jobId, jobTitle: jobTitle),
       ));
+      if (mounted) setState(() => _tappedIds.remove(notifId));
       return;
     }
 
-    // ── interview types → open ScheduleInterviewPage ──────────────────────
     if (type == 'reschedule_request' ||
         type == 'reschedule_accepted' ||
         type == 'interview_scheduled' ||
         type == 'interview_cancelled') {
-      if (applicationId.isEmpty) return;
+      if (applicationId.isEmpty) {
+        if (mounted) setState(() => _tappedIds.remove(notifId));
+        return;
+      }
 
-      // Fetch interview doc + candidate email in parallel
       final results = await Future.wait([
         FirebaseFirestore.instance
-            .collection('interviews').doc(applicationId).get(),
+            .collection('interviews')
+            .doc(applicationId)
+            .get(),
         FirebaseFirestore.instance
-            .collection('users').doc(candidateUserId).get(),
+            .collection('users')
+            .doc(candidateUserId)
+            .get(),
       ]);
 
       final interviewDoc = results[0];
       final userDoc      = results[1];
-
       final existing = interviewDoc.exists
           ? interviewDoc.data() as Map<String, dynamic>
           : null;
-      final email = ((userDoc.data() as Map<String, dynamic>?)
-      ?['email'] as String?) ?? '';
+      final email =
+          ((userDoc.data() as Map<String, dynamic>?)
+          ?['email'] as String?) ?? '';
 
       if (!context.mounted) return;
 
-      Navigator.push(context, MaterialPageRoute(
+      await Navigator.push(context, MaterialPageRoute(
         builder: (_) => ScheduleInterviewPage(
-          applicationId:    applicationId,
-          candidateUserId:  candidateUserId,
-          jobId:            jobId,
-          jobTitle:         jobTitle,
-          candidateName:    candidateName,
-          candidateEmail:   email,
+          applicationId:     applicationId,
+          candidateUserId:   candidateUserId,
+          jobId:             jobId,
+          jobTitle:          jobTitle,
+          candidateName:     candidateName,
+          candidateEmail:    email,
           existingInterview: existing,
-          // Only pass reason when employer needs to respond to a request
-          rescheduleReason: type == 'reschedule_request' ? rescheduleReason : null,
+          rescheduleReason:
+          type == 'reschedule_request' ? rescheduleReason : null,
         ),
       ));
+
+      if (mounted) setState(() => _tappedIds.remove(notifId));
     }
   }
 
@@ -133,7 +154,9 @@ class EmployerNotificationsPage extends StatelessWidget {
         leading: const BackButton(color: Colors.black),
         title: const Text('Notifications',
             style: TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 18)),
         actions: [
           TextButton(
             onPressed: _markAllRead,
@@ -150,7 +173,8 @@ class EmployerNotificationsPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: kBlue));
+            return const Center(
+                child: CircularProgressIndicator(color: kBlue));
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return _emptyState();
@@ -162,9 +186,16 @@ class EmployerNotificationsPage extends StatelessWidget {
               final doc  = snap.data!.docs[i];
               final data = doc.data() as Map<String, dynamic>;
               final type = (data['type'] as String?) ?? '';
+
+              // ── Use local tapped state to show as read immediately ──
+              final locallyRead = _tappedIds.contains(doc.id);
+              final effectiveData = locallyRead
+                  ? {...data, 'isRead': true}
+                  : data;
+
               return _EmployerNotifCard(
                 notifId: doc.id,
-                data:    data,
+                data:    effectiveData,
                 color:   _typeColor(type),
                 icon:    _typeIcon(type),
                 onTap:   () => _handleTap(context, doc.id, data),
@@ -181,21 +212,25 @@ class EmployerNotificationsPage extends StatelessWidget {
       Container(
         width: 80, height: 80,
         decoration: BoxDecoration(
-            color: kBlue.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
-        child: const Icon(Icons.notifications_none_rounded, size: 44, color: kBlue),
+            color: kBlue.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20)),
+        child: const Icon(Icons.notifications_none_rounded,
+            size: 44, color: kBlue),
       ),
       const SizedBox(height: 16),
       const Text('No notifications yet',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
+          style: TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
       const SizedBox(height: 6),
-      const Text('New applications and interview updates\nwill appear here.',
+      const Text(
+          'New applications and interview updates\nwill appear here.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 13, color: kSubtext)),
     ]),
   );
 }
 
-// ── Notification Card ─────────────────────────────────────────────────────────
+// ── Notification Card ──────────────────────────────────────────────────────
 
 class _EmployerNotifCard extends StatelessWidget {
   final String notifId;
@@ -205,14 +240,17 @@ class _EmployerNotifCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _EmployerNotifCard({
-    required this.notifId, required this.data,
-    required this.color, required this.icon, required this.onTap,
+    required this.notifId,
+    required this.data,
+    required this.color,
+    required this.icon,
+    required this.onTap,
   });
 
-  static const Color kText   = Color(0xFF1A1A2E);
-  static const Color kSubtext= Color(0xFF6B7280);
-  static const Color kBorder = Color(0xFFE2E8F0);
-  static const Color kOrange = Color(0xFFF59E0B);
+  static const Color kText    = Color(0xFF1A1A2E);
+  static const Color kSubtext = Color(0xFF6B7280);
+  static const Color kBorder  = Color(0xFFE2E8F0);
+  static const Color kOrange  = Color(0xFFF59E0B);
 
   String _timeAgo(Timestamp? ts) {
     if (ts == null) return '';
@@ -226,25 +264,24 @@ class _EmployerNotifCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final type      = (data['type']             as String?) ?? '';
-    final title     = (data['title']            as String?) ?? '';
-    final body      = (data['body']             as String?) ?? '';
-    final isRead    = (data['isRead']            as bool?)  ?? false;
-    final reason    = data['rescheduleReason']  as String?;
-    final createdAt = data['createdAt']         as Timestamp?;
-    final appliedAt = data['appliedAt']         as Timestamp?;
-    final ts        = appliedAt ?? createdAt;
+    final type     = (data['type']            as String?) ?? '';
+    final title    = (data['title']           as String?) ?? '';
+    final body     = (data['body']            as String?) ?? '';
+    final isRead   = (data['isRead']          as bool?)   ?? false;
+    final reason   = data['rescheduleReason'] as String?;
+    final createdAt = data['createdAt']       as Timestamp?;
+    final appliedAt = data['appliedAt']       as Timestamp?;
+    final ts = appliedAt ?? createdAt;
 
-    final isRescheduleRequest = type == 'reschedule_request';
+    final isRescheduleRequest  = type == 'reschedule_request';
     final isRescheduleAccepted = type == 'reschedule_accepted';
-    final isNewApplication = type == 'new_application';
+    final isNewApplication     = type == 'new_application';
 
-    // Action label per type
     String actionLabel;
-    if (isNewApplication)       actionLabel = 'View Applicant';
-    else if (isRescheduleRequest) actionLabel = 'Review & Reschedule';
+    if (isNewApplication)        actionLabel = 'View Applicant';
+    else if (isRescheduleRequest)  actionLabel = 'Review & Reschedule';
     else if (isRescheduleAccepted) actionLabel = 'View Interview';
-    else                        actionLabel = 'View';
+    else                         actionLabel = 'View';
 
     return GestureDetector(
       onTap: onTap,
@@ -258,9 +295,12 @@ class _EmployerNotifCard extends StatelessWidget {
             color: isRead ? kBorder : color.withOpacity(0.35),
             width: isRead ? 1 : 1.5,
           ),
-          boxShadow: [BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
@@ -268,79 +308,107 @@ class _EmployerNotifCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 14),
 
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
-            // Title + unread dot
-            Row(children: [
-              Expanded(child: Text(title, style: TextStyle(
-                fontSize: 14,
-                fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
-                color: kText,
-              ))),
-              if (!isRead) Container(
-                  width: 8, height: 8,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            ]),
-            const SizedBox(height: 5),
+                  // Title + unread dot
+                  Row(children: [
+                    Expanded(
+                      child: Text(title,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                              isRead ? FontWeight.w500 : FontWeight.bold,
+                              color: kText)),
+                    ),
+                    if (!isRead)
+                      Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                              color: color, shape: BoxShape.circle)),
+                  ]),
+                  const SizedBox(height: 5),
 
-            Text(body, style: const TextStyle(fontSize: 13, color: kSubtext, height: 1.4)),
+                  Text(body,
+                      style: const TextStyle(
+                          fontSize: 13, color: kSubtext, height: 1.4)),
 
-            // Applied time for new applications
-            if (isNewApplication && ts != null) ...[
-              const SizedBox(height: 6),
-              Row(children: [
-                const Icon(Icons.access_time_rounded, size: 13, color: kSubtext),
-                const SizedBox(width: 4),
-                Text('Applied ${_timeAgo(ts)}',
-                    style: const TextStyle(fontSize: 12, color: kSubtext)),
-              ]),
-            ],
+                  if (isNewApplication && ts != null) ...[
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      const Icon(Icons.access_time_rounded,
+                          size: 13, color: kSubtext),
+                      const SizedBox(width: 4),
+                      Text('Applied ${_timeAgo(ts)}',
+                          style: const TextStyle(
+                              fontSize: 12, color: kSubtext)),
+                    ]),
+                  ],
 
-            // Reschedule reason box (only for reschedule_request)
-            if (isRescheduleRequest && reason != null && reason.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: kOrange.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kOrange.withOpacity(0.3)),
-                ),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.chat_bubble_outline_rounded,
-                      size: 14, color: kOrange),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text('"$reason"', style: const TextStyle(
-                      fontSize: 12, color: kOrange,
-                      fontStyle: FontStyle.italic, height: 1.4))),
+                  if (isRescheduleRequest &&
+                      reason != null &&
+                      reason.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: kOrange.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                        Border.all(color: kOrange.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.chat_bubble_outline_rounded,
+                                size: 14, color: kOrange),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text('"$reason"',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: kOrange,
+                                      fontStyle: FontStyle.italic,
+                                      height: 1.4)),
+                            ),
+                          ]),
+                    ),
+                  ],
+
+                  const SizedBox(height: 10),
+
+                  // Footer: time + action badge
+                  Row(children: [
+                    Text(_timeAgo(ts),
+                        style: const TextStyle(
+                            fontSize: 11, color: kSubtext)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border:
+                        Border.all(color: color.withOpacity(0.3)),
+                      ),
+                      child: Text(actionLabel,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ]),
                 ]),
-              ),
-            ],
-
-            const SizedBox(height: 10),
-
-            // Footer: time + action badge
-            Row(children: [
-              Text(_timeAgo(ts),
-                  style: const TextStyle(fontSize: 11, color: kSubtext)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: color.withOpacity(0.3)),
-                ),
-                child: Text(actionLabel, style: TextStyle(
-                    fontSize: 11, color: color, fontWeight: FontWeight.bold)),
-              ),
-            ]),
-          ])),
+          ),
         ]),
       ),
     );
