@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../login.dart';
-import '../../edit_profile.dart';
-import '../../services/notification_service.dart';
+import '../../settings_page.dart';
+import '../ProfileEdit/edit_basic_profile.dart';
+import '../ProfileEdit/edit_company_background.dart';
+import '../ProfileEdit/edit_company_information.dart';
 
-class EmployerProfileScreen extends StatelessWidget {
+class EmployerProfileScreen extends StatefulWidget {
   const EmployerProfileScreen({super.key});
 
-  static const Color kPrimary = Color(0xFF425AE2);
+  @override
+  State<EmployerProfileScreen> createState() => _EmployerProfileScreenState();
+}
+
+class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
+  static const Color kPrimaryBlue = Color(0xFF2563EB);
+  static const Color kTextSecondary = Color(0xFF64748B);
+  static const Color kBorderColor = Color(0xFFE2E8F0);
 
   @override
   Widget build(BuildContext context) {
@@ -17,177 +25,168 @@ class EmployerProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF3B4FD8),
-        foregroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsPage())),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            // Profile Picture
-            Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: user?.photoURL != null
-                        ? NetworkImage(user!.photoURL!)
-                        : null,
-                    child: user?.photoURL == null
-                        ? const Icon(Icons.business, size: 60, color: Color(0xFF3B4FD8))
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3B4FD8),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.edit, size: 20, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Center(child: Text("Error loading profile"));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-            // Name
-            Text(
-              user?.displayName ?? 'Employer Name',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
+          final employerData = snapshot.data?.data() as Map<String, dynamic>?;
 
-            // Email
-            Text(
-              user?.email ?? 'employer@example.com',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 32),
-
-            // Company Info Card
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Company Information',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(Icons.business, 'Company Name', 'Tech Solutions Sdn Bhd'),
-                    _buildInfoRow(Icons.location_on, 'Location', 'Penang, Malaysia'),
-                    _buildInfoRow(Icons.phone, 'Phone', '+60 12-345 6789'),
-                    _buildInfoRow(Icons.email, 'Company Email', user?.email ?? 'info@techsolutions.com'),
-                  ],
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- 1. HEADER (LINKED TO BASIC PROFILE EDIT) ---
+                // Now passes Name, Phone, AND Location to the edit page
+                GestureDetector(
+                  onTap: () {
+                    if (user != null) {
+                      Navigator.push(context, MaterialPageRoute(builder: (c) => EditBasicProfilePage(
+                        user: user,
+                        currentName: employerData?['companyName'] ?? '',
+                        currentPhone: employerData?['phone'] ?? '',
+                        currentLocation: employerData?['location'] ?? '', // Pass location here
+                      )));
+                    }
+                  },
+                  child: _buildHeader(employerData, user),
                 ),
-              ),
-            ),
-            const SizedBox(height: 32),
 
-            // Edit Profile
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (user != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            EditProfilePage(user: user!),
-                      ),
-                    ).then((_) {
-                      (context as Element).markNeedsBuild();
-                    });
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Edit Profile',
-                    style: TextStyle(fontSize: 16)),
-              ),
-            ),
-            const SizedBox(height: 12),
+                const SizedBox(height: 24),
+                const Text("Employer Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Divider(thickness: 1, height: 24),
 
-            // Logout Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _showLogoutDialog(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                // --- 2. COMPANY BACKGROUND ---
+                _buildSectionHeader("Company Background", onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => EditBackgroundPage(
+                    currentBackground: employerData?['background'] ?? "",
+                  )));
+                }),
+                _buildContentCard(
+                  title: "Background",
+                  subtitle: employerData?['background'] ?? "No background description set.",
+                  icon: Icons.business_outlined,
                 ),
-                child: const Text(
-                  'Logout',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
 
-            // Delete Account Button (Optional)
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => _showDeleteAccountDialog(context),
-                child: const Text(
-                  'Delete Account',
-                  style: TextStyle(color: Colors.red, fontSize: 14),
+                const SizedBox(height: 24),
+
+                // --- 3. COMPANY INFORMATION ---
+                _buildSectionHeader("Company Information", onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => EditCompanyInfo(
+                    currentIndustry: employerData?['industry'] ?? "",
+                    currentWebsite: employerData?['website'] ?? "",
+                  )));
+                }),
+                _buildDetailBox(
+                  industry: employerData?['industry'] ?? "Not Specified",
+                  website: employerData?['website'] ?? "No website added",
                 ),
-              ),
+
+                const SizedBox(height: 40),
+                // --- BOTTOM LOCATION SECTION REMOVED ---
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  // --- WIDGET BUILDERS ---
+
+  Widget _buildHeader(Map<String, dynamic>? data, User? user) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.grey[600]),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
+          CircleAvatar(
+            radius: 45,
+            backgroundColor: const Color(0xFFF1F5F9),
+            backgroundImage: (data?['photoUrl'] != null) ? NetworkImage(data!['photoUrl']) : null,
+            child: (data?['photoUrl'] == null) ? const Icon(Icons.business, size: 40, color: kPrimaryBlue) : null,
           ),
+          const SizedBox(width: 20),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data?['companyName'] ?? 'Company Name', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                _buildHeaderRow(Icons.email_outlined, data?['email'] ?? user?.email ?? ''),
+                _buildHeaderRow(Icons.phone_outlined, data?['phone'] ?? 'Add phone'),
+                // Shows the location in the header
+                _buildHeaderRow(Icons.location_on_outlined, data?['location'] ?? 'Add office location'),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, size: 16, color: kPrimaryBlue),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: kPrimaryBlue),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(color: kTextSecondary, fontSize: 13), overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        IconButton(onPressed: onTap, icon: const Icon(Icons.edit_outlined, size: 18, color: kTextSecondary)),
+      ],
+    );
+  }
+
+  Widget _buildContentCard({required String title, required String subtitle, required IconData icon}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: kPrimaryBlue, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 13, height: 1.4)),
+              ],
             ),
           ),
         ],
@@ -195,97 +194,22 @@ class EmployerProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () async {
-              // Show loading indicator
-              if (context.mounted) {
-                Navigator.pop(context); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Logging out...'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              }
-              
-              // Sign out from Firebase
-              await FirebaseAuth.instance.signOut();
-              NotificationService().stopListening();
-
-              // Navigate to login screen and remove all previous routes
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                      (route) => false,
-                );
-              }
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
+  Widget _buildDetailBox({required String industry, required String website}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kPrimaryBlue.withValues(alpha: 0.3)),
       ),
-    );
-  }
-
-  void _showDeleteAccountDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text('Are you sure? This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              // 1. Get references before we lose context
-              final user = FirebaseAuth.instance.currentUser;
-              if (user == null) return;
-              final uid = user.uid;
-
-              // 2. NAVIGATE AWAY IMMEDIATELY
-              // This kills the Profile screen and the Exception you are seeing.
-              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-
-              // 3. Perform Deletion in the background (No more red screen!)
-              try {
-                final db = FirebaseFirestore.instance;
-
-                // Delete Jobs
-                final jobs = await db.collection('jobs').where('createdBy', isEqualTo: uid).get();
-                for (var doc in jobs.docs) { await doc.reference.delete(); }
-
-                // Delete Profile
-                await db.collection('users').doc(uid).delete();
-
-                // Delete Auth Account
-                await user.delete();
-
-                print("Account deleted successfully.");
-              } catch (e) {
-                print("Background deletion error: $e");
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Industry", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(industry, style: const TextStyle(color: Colors.black87, fontSize: 13)),
+          const SizedBox(height: 12),
+          const Text("Website", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(website, style: const TextStyle(color: kPrimaryBlue, fontSize: 13, decoration: TextDecoration.underline)),
         ],
       ),
     );
