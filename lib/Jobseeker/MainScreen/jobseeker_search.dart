@@ -50,10 +50,13 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   // REAL SEARCH FUNCTION – queries Firestore jobs collection
   // ------------------------------------------------------------
   Future<void> _performSearch() async {
-    final keywords = _keywordsController.text.trim().toLowerCase();
-    final location = _locationController.text.trim().toLowerCase();
+    // 1. Capture and normalize user inputs
+    final rawWhat = _keywordsController.text.trim();
+    final searchWhat = rawWhat.toLowerCase();
 
-    // Show loading dialog
+    final rawWhere = _locationController.text.trim();
+    final searchWhere = rawWhere.toLowerCase();
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -61,63 +64,63 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
 
     try {
+      // 2. Base Query: Only use categorical dropdowns for the DB query
+      // This keeps the request broad enough so we don't accidentally filter out everything
       Query query = FirebaseFirestore.instance.collection('jobs');
 
-      // 1. Work type filter
       if (_selectedWorkType != 'All work types') {
         query = query.where('workType', isEqualTo: _selectedWorkType);
       }
-
-      // 2. Workplace filter (remote/on‑site/hybrid)
       if (_selectedRemoteOption != 'All remote options') {
         query = query.where('workplace', isEqualTo: _selectedRemoteOption);
       }
-
-      // 3. Classification filter
       if (_selectedClassification != 'Any classification') {
         query = query.where('classification', isEqualTo: _selectedClassification);
       }
 
-      // 4. Location filter (exact match on lowercase field)
-      if (location.isNotEmpty) {
-        query = query.where('locationLower', isEqualTo: location);
-      }
-
-      // 5. Salary range filter
-      final salaryRange = _parseSalaryRange(_selectedSalaryRange);
-      if (salaryRange != null) {
-        query = query
-            .where('salaryMin', isGreaterThanOrEqualTo: salaryRange.min)
-            .where('salaryMax', isLessThanOrEqualTo: salaryRange.max);
-      }
-
-      // 6. Keyword search (arrayContainsAny for multiple words)
-      if (keywords.isNotEmpty) {
-        final keywordList = keywords.split(' ').where((w) => w.isNotEmpty).toList();
-        if (keywordList.isNotEmpty) {
-          // Assumes each job has a 'keywords' array field
-          query = query.where('keywords', arrayContainsAny: keywordList);
-        }
-      }
-
       final snapshot = await query.get();
-      final jobs = snapshot.docs;
 
-      // Close loading dialog
+      // 3. Client-Side Filter: This handles the partial matches and case-insensitivity
+      final filteredJobs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+
+        // --- LOCATION FILTER (WHERE) ---
+        // We check if the stored location contains the user's search text
+        final String dbLocation = (data['location'] ?? '').toString().toLowerCase();
+        bool locationMatch = searchWhere.isEmpty || dbLocation.contains(searchWhere);
+
+        // --- TITLE & KEYWORDS FILTER (WHAT) ---
+        final String dbTitle = (data['title'] ?? '').toString().toLowerCase();
+        final List<dynamic> dbKeywords = data['keywords'] ?? [];
+
+        // Check if title contains the search string
+        bool titleMatch = dbTitle.contains(searchWhat);
+
+        // Check if any word in the search matches any word in the keywords array
+        final searchTerms = searchWhat.split(' ').where((s) => s.isNotEmpty).toList();
+        bool keywordMatch = searchTerms.any((term) =>
+            dbKeywords.any((k) => k.toString().toLowerCase() == term)
+        );
+
+        bool whatMatch = searchWhat.isEmpty || titleMatch || keywordMatch;
+
+        // Only keep the job if BOTH What and Where match
+        return whatMatch && locationMatch;
+      }).toList();
+
       if (context.mounted) Navigator.pop(context);
 
-      if (!context.mounted) return;
-
-      if (jobs.isEmpty) {
-        _showNoResults(keywords);
+      if (filteredJobs.isEmpty) {
+        _showNoResults(rawWhat.isNotEmpty ? rawWhat : rawWhere);
       } else {
-        // Navigate to results screen
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => JobResultsScreen(jobs: jobs),
-          ),
-        );
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => JobResultsScreen(jobs: filteredJobs),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) Navigator.pop(context);
@@ -197,7 +200,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('What', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                      const Text('Title', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       _buildSearchField(controller: _keywordsController, hintText: 'Enter keywords'),
                     ],
@@ -209,7 +212,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Where', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                      const Text('Location', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       _buildSearchField(controller: _locationController, hintText: 'Enter suburb, city, or region'),
                     ],
@@ -342,12 +345,17 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   void _showFilterBottomSheet(String title, String currentValue, List<String> options, Function(String) onChanged) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // Allows the sheet to take more height if needed
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         String tempSelected = currentValue;
         return StatefulBuilder(
           builder: (context, setState) {
             return Container(
+              // Use constraints to prevent the sheet from becoming too tall
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
               padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -355,29 +363,42 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                 children: [
                   Text('Select $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  ...options.map((option) {
-                    final isSelected = tempSelected == option;
-                    return Column(
-                      children: [
-                        ListTile(
-                          leading: isSelected
-                              ? const Icon(Icons.radio_button_checked, color: Color(0xFF2352D8))
-                              : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
-                          title: Text(
-                            option,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? const Color(0xFF2352D8) : Colors.black87,
+
+                  // 1. Wrap the list in Expanded + ListView to handle long lists
+                  Expanded(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final option = options[index];
+                        final isSelected = tempSelected == option;
+                        return Column(
+                          children: [
+                            ListTile(
+                              contentPadding: EdgeInsets.zero, // Match your UI design
+                              leading: isSelected
+                                  ? const Icon(Icons.radio_button_checked, color: Color(0xFF2352D8))
+                                  : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
+                              title: Text(
+                                option,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                  color: isSelected ? const Color(0xFF2352D8) : Colors.black87,
+                                ),
+                              ),
+                              onTap: () => setState(() => tempSelected = option),
                             ),
-                          ),
-                          onTap: () => setState(() => tempSelected = option),
-                        ),
-                        if (option != options.last) const Divider(height: 1, thickness: 0.5, color: Color(0xFFEEEEEE)),
-                      ],
-                    );
-                  }).toList(),
+                            if (option != options.last) const Divider(height: 1, thickness: 0.5, color: Color(0xFFEEEEEE)),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
                   const SizedBox(height: 20),
+
+                  // 2. Button stays at the bottom
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -390,7 +411,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                         backgroundColor: const Color(0xFF2352D8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text('Apply', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      child: const Text('Apply', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                     ),
                   ),
                 ],
