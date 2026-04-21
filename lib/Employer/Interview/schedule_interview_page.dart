@@ -3,6 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../services/fcm_service.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'dart:async';
+import 'dart:developer';
+import 'package:permission_handler/permission_handler.dart' as handler;
+import 'package:location/location.dart';
 
 // ── Local notifier (fixed API calls) ───────────────────────────────────────
 class _LocalNotifier {
@@ -93,6 +99,14 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
   final _formKey      = GlobalKey<FormState>();
   final _notesCtrl    = TextEditingController();
   final _locationCtrl = TextEditingController();
+  final Location _location = Location();
+  final MapController _mapController = MapController();
+  bool _isLocating = false;
+  bool _permissionGranted = false;
+  bool _gpsEnabled = false;
+  bool _trackingEnabled = false;
+  late StreamSubscription _subscription;
+  final List<LocationData> _locationList = [];
 
   DateTime?  _selectedDate;
   TimeOfDay? _selectedTime;
@@ -120,6 +134,58 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
   void initState() {
     super.initState();
     _prefill();
+  }
+
+  Future<bool> isPermissionGranted() async {
+    return await handler.Permission.locationWhenInUse.isGranted;
+  }
+  Future<bool> isGpsEnabled() async {
+    return await handler.Permission.location.serviceStatus.isEnabled;
+  }
+
+  void _getCurrentLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      // 1. Check/Request GPS Service (from your Lab step 12)
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) return;
+      }
+
+      // 2. Check/Request Permission (from your Lab step 13)
+      PermissionStatus permission = await _location.hasPermission();
+      if (permission == PermissionStatus.denied) {
+        permission = await _location.requestPermission();
+        if (permission != PermissionStatus.granted) return;
+      }
+
+      // 3. Get actual position
+      final data = await _location.getLocation();
+      if (data.latitude != null && data.longitude != null) {
+        final myLocation = LatLng(data.latitude!, data.longitude!);
+
+        setState(() {
+          _locationCtrl.text = "${data.latitude!.toStringAsFixed(6)}, ${data.longitude!.toStringAsFixed(6)}";
+        });
+
+        // Move the map to your current spot
+        _mapController.move(myLocation, 15);
+      }
+    } catch (e) {
+      _snack("Could not get location: $e", Colors.red);
+    } finally {
+      setState(() => _isLocating = false);
+    }
+  }
+
+  void checkStatus() async {
+    bool permissionGranted = await isPermissionGranted();
+    bool gpsEnabled = await isGpsEnabled();
+    setState(() {
+      _permissionGranted = permissionGranted;
+      _gpsEnabled = gpsEnabled;
+    });
   }
 
   void _prefill() {
@@ -477,17 +543,76 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
               _locationDropdown(),
               const SizedBox(height: 12),
 
-              if (_locationType == 'On-site')
+              if (_locationType == 'On-site') ...[
                 _field(
                   controller: _locationCtrl,
-                  hint: 'e.g. Level 3, Menara JobBuddy, Penang',
+                  hint: 'Address or coordinates',
                   icon: Icons.location_on_outlined,
                   label: 'Address',
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Please enter address'
-                      : null,
-                )
-              else if (_locationType == 'Zoom' || _locationType == 'Google Meet')
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+
+                Stack( // Use a Stack to put a button OVER the map
+                  children: [
+                    Container(
+                      height: 220,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: kBorder),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: FlutterMap(
+                          mapController: _mapController, // Assign the controller
+                          options: MapOptions(
+                            initialZoom: 13,
+                            initialCenter: const LatLng(3.140853, 101.693207),
+                            onTap: (tapPos, point) {
+                              setState(() {
+                                _locationCtrl.text = "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+                              });
+                            },
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.example.jobbuddy',
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                if (_locationCtrl.text.contains(','))
+                                  Marker(
+                                    point: LatLng(
+                                      double.tryParse(_locationCtrl.text.split(',')[0]) ?? 3.1408,
+                                      double.tryParse(_locationCtrl.text.split(',')[1]) ?? 101.6932,
+                                    ),
+                                    width: 40, height: 40,
+                                    child: const Icon(Icons.location_on, color: kRed, size: 35),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ── GPS PINPOINT BUTTON ──
+                    Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: FloatingActionButton.small(
+                        backgroundColor: Colors.white,
+                        onPressed: _isLocating ? null : _getCurrentLocation,
+                        child: _isLocating
+                            ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.my_location, color: kBlue),
+                      ),
+                    ),
+                  ],
+                ),
+
+              ] else if (_locationType == 'Zoom' || _locationType == 'Google Meet')
                 _field(
                   controller: _locationCtrl,
                   hint: _locationType == 'Zoom'
@@ -504,6 +629,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                   label: 'Phone Number',
                   keyboardType: TextInputType.phone,
                 ),
+
               const SizedBox(height: 20),
 
               _label('Notes for Candidate'),

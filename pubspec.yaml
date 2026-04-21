@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  location: ^7.0.1
+
   # Firebase
   firebase_core: ^4.6.0
   firebase_auth: ^6.3.0
@@ -50,6 +52,8 @@ dependencies:
   flutter_svg: ^2.0.10+1
   cupertino_icons: ^1.0.8
   flutter_spinkit: ^5.2.0
+  flutter_map: ^8.3.0
+  flutter_map_location_marker: ^10.2.0
 
 dev_dependencies:
   flutter_test:

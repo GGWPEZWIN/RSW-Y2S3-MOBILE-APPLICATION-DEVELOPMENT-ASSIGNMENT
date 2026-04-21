@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:location/location.dart';
 
 class EditBasicProfilePage extends StatefulWidget {
   final User user;
@@ -28,6 +31,9 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
   late TextEditingController _locationController; // Added location controller
+  final MapController _mapController = MapController();
+  bool _isLocating = false;
+  final Location _location = Location();
 
   // Password Controllers for Local Auth
   final _currentPasswordController = TextEditingController();
@@ -56,6 +62,49 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     super.dispose();
+  }
+
+  LatLng _getMapCenter() {
+    if (_locationController.text.contains(',')) {
+      try {
+        final parts = _locationController.text.split(',');
+        return LatLng(double.parse(parts[0]), double.parse(parts[1]));
+      } catch (_) {}
+    }
+    return const LatLng(3.140853, 101.693207); // Default
+  }
+
+  void _getCurrentLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) return;
+      }
+
+      PermissionStatus permission = await _location.hasPermission();
+      if (permission == PermissionStatus.denied) {
+        permission = await _location.requestPermission();
+        if (permission != PermissionStatus.granted) return;
+      }
+
+      final data = await _location.getLocation();
+      if (data.latitude != null && data.longitude != null) {
+        final myLocation = LatLng(data.latitude!, data.longitude!);
+
+        setState(() {
+          _locationController.text =
+          "${data.latitude!.toStringAsFixed(6)}, ${data.longitude!.toStringAsFixed(6)}";
+        });
+
+        _mapController.move(myLocation, 15);
+      }
+    } catch (e) {
+      debugPrint("Location error: $e");
+    } finally {
+      setState(() => _isLocating = false);
+    }
   }
 
   Future<void> _pickImage() async {
@@ -170,7 +219,75 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
 
               const SizedBox(height: 20),
               _buildLabel("Company Location"),
-              _buildTextField(_locationController, "e.g. Butterworth, Penang", Icons.location_on_outlined),
+              _buildTextField(
+                _locationController,
+                "e.g. 123 Business Park, Penang",
+                Icons.location_on_outlined,
+              ),
+              const SizedBox(height: 12),
+
+              Stack(
+                children: [
+                  Container(
+                    height: 220,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialZoom: 13,
+                          initialCenter: _getMapCenter(),
+                          onTap: (tapPos, point) {
+                            setState(() {
+                              _locationController.text =
+                              "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+                            });
+                          },
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.example.jobbuddy',
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              if (_locationController.text.contains(','))
+                                Marker(
+                                  point: _getMapCenter(),
+                                  width: 40,
+                                  height: 40,
+                                  child: const Icon(Icons.location_on, color: Colors.red, size: 35),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // ── FLOATING GPS BUTTON (Matches Schedule Interview) ──
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: FloatingActionButton.small(
+                      heroTag: "btn_profile_gps", // Unique tag to avoid errors
+                      backgroundColor: Colors.white,
+                      onPressed: _isLocating ? null : _getCurrentLocation,
+                      child: _isLocating
+                          ? const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B4FD8))
+                      )
+                          : const Icon(Icons.my_location, color: Color(0xFF3B4FD8)),
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 24),
               const Divider(),
@@ -224,7 +341,12 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     ),
   );
 
-  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool enabled = true, bool isPassword = false}) {
+  Widget _buildTextField(
+      TextEditingController controller,
+      String hint,
+      IconData icon,
+      {bool enabled = true, bool isPassword = false, Widget? suffixIcon} // Add suffixIcon here
+      ) {
     return TextFormField(
       controller: controller,
       enabled: enabled,
@@ -232,10 +354,14 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
+        suffixIcon: suffixIcon, // Add this line
         filled: !enabled,
         fillColor: enabled ? Colors.white : const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0))
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       ),
     );
   }
