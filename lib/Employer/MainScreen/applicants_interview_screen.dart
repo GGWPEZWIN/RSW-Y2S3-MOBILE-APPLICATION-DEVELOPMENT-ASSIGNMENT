@@ -26,7 +26,7 @@ class ApplicantsInterviewScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('applications')
-            .where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
+            //.where('employerId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
             .where('status', isEqualTo: 'interview')
             .orderBy('appliedAt', descending: true)
             .snapshots(),
@@ -34,17 +34,24 @@ class ApplicantsInterviewScreen extends StatelessWidget {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: kBlue));
           }
+
+          // This will tell you EXACTLY why it's empty (e.g., "The query requires an index")
           if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+            return Center(child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text('Error: ${snap.error}', textAlign: TextAlign.center),
+            ));
           }
+
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return _emptyState();
           }
+
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             itemCount: snap.data!.docs.length,
             itemBuilder: (context, i) {
-              final doc  = snap.data!.docs[i];
+              final doc = snap.data!.docs[i];
               return _InterviewCard(
                   applicationId: doc.id,
                   appData: doc.data() as Map<String, dynamic>);

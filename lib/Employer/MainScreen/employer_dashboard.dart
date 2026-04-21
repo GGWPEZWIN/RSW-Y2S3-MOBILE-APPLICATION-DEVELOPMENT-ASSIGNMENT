@@ -38,37 +38,34 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   String get _employerId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   void _navigateToCreateJob() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobPage()))
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const CreateJobPage()))
         .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
   }
 
-  // FIX 1: Edit icon now correctly opens EditJobPage with the job's existing data
   Future<void> _navigateToEditJob(QueryDocumentSnapshot job) async {
     final data = job.data() as Map<String, dynamic>;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditJobPage(jobId: job.id, jobData: data),
-      ),
-    );
+    await Navigator.push(context,
+        MaterialPageRoute(builder: (_) => EditJobPage(jobId: job.id, jobData: data)));
     if (mounted) setState(() => _selectedIndex = 0);
   }
 
   void _navigateToAllJobs() {
-    Navigator.push(context, MaterialPageRoute(
-        builder: (_) => AllJobsListScreen(employerId: _employerId)))
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => AllJobsListScreen(employerId: _employerId)))
         .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
   }
 
   void _navigateToJobList() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const JobListScreenWrapper()))
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const JobListScreenWrapper()))
         .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
   }
 
   String _getTimeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inDays > 0)    return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours > 0)   return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes > 1 ? 's' : ''} ago';
     return 'Just now';
   }
@@ -79,7 +76,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(children: [
-          // ── Header ────────────────────────────────────────────────
+
+          // ── Header ──────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: const BoxDecoration(
@@ -89,14 +87,19 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             child: Row(children: [
               Container(
                 width: 44, height: 44,
-                decoration: BoxDecoration(color: const Color(0xFFEEF0FF), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.work_outline_rounded, color: _primaryBlue, size: 24),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFEEF0FF),
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.work_outline_rounded,
+                    color: _primaryBlue, size: 24),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: RichText(text: const TextSpan(children: [
-                  TextSpan(text: 'JobBuddy ',  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black)),
-                  TextSpan(text: 'Employer',   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w400, color: Colors.black)),
+                  TextSpan(text: 'JobBuddy ',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black)),
+                  TextSpan(text: 'Employer',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w400, color: Colors.black)),
                 ])),
               ),
               StreamBuilder<QuerySnapshot>(
@@ -106,22 +109,28 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                     .where('isRead', isEqualTo: false)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  final unread = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                  final unread =
+                  snapshot.hasData ? snapshot.data!.docs.length : 0;
                   return Stack(children: [
                     IconButton(
                       onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => const EmployerNotificationsPage())),
-                      icon: const Icon(Icons.notifications_none_rounded, color: Colors.black87, size: 26),
+                          MaterialPageRoute(
+                              builder: (_) => const EmployerNotificationsPage())),
+                      icon: const Icon(Icons.notifications_none_rounded,
+                          color: Colors.black87, size: 26),
                     ),
                     if (unread > 0)
                       Positioned(
                         right: 8, top: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
-                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444), shape: BoxShape.circle),
+                          constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
                           child: Text(unread > 9 ? '9+' : '$unread',
-                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Colors.white,
+                                  fontSize: 9, fontWeight: FontWeight.bold),
                               textAlign: TextAlign.center),
                         ),
                       ),
@@ -131,7 +140,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             ]),
           ),
 
-          // ── Body ──────────────────────────────────────────────────
+          // ── Body ────────────────────────────────────────────────────
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -140,8 +149,10 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, jobSnap) {
-                if (jobSnap.hasError) return Center(child: Text('Error: ${jobSnap.error}'));
-                if (!jobSnap.hasData) return const Center(child: CircularProgressIndicator());
+                if (jobSnap.hasError)
+                  return Center(child: Text('Error: ${jobSnap.error}'));
+                if (!jobSnap.hasData)
+                  return const Center(child: CircularProgressIndicator());
 
                 final jobs      = jobSnap.data!.docs;
                 final jobCount  = jobs.length;
@@ -153,7 +164,13 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                       .where('employerId', isEqualTo: _employerId)
                       .snapshots(),
                   builder: (context, appSnap) {
-                    final totalApplicants = appSnap.hasData ? appSnap.data!.docs.length : 0;
+                    final allApps = appSnap.hasData
+                        ? appSnap.data!.docs
+                        : <QueryDocumentSnapshot>[];
+                    final totalApplicants = allApps.length;
+
+                    // ── Removed hired success rate ─────────────────────
+                    // No longer calculating hireRate
 
                     return StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -162,60 +179,139 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                           .where('isRead', isEqualTo: false)
                           .snapshots(),
                       builder: (context, notifSnap) {
-                        final unreadNotifs = notifSnap.hasData ? notifSnap.data!.docs.length : 0;
+                        final unreadNotifs = notifSnap.hasData
+                            ? notifSnap.data!.docs.length
+                            : 0;
 
                         final now = DateTime.now();
                         final expiredCount = jobs.where((j) {
                           final d   = j.data() as Map<String, dynamic>;
-                          final exp = (d['expiryDate'] as Timestamp?)?.toDate();
+                          final exp =
+                          (d['expiryDate'] as Timestamp?)?.toDate();
                           return exp != null && exp.isBefore(now);
                         }).length;
 
-                        final stats = [
-                          {'value': jobCount.toString(),        'label': 'Jobs Posted',        'icon': Icons.assignment_outlined,    'bg': const Color(0xFFFFF3E0), 'iconColor': const Color(0xFFE07B39)},
-                          {'value': totalApplicants.toString(), 'label': 'Applicants',          'icon': Icons.group_outlined,         'bg': const Color(0xFFF0F2FF), 'iconColor': const Color(0xFF3B4FD8)},
-                          {'value': expiredCount.toString(),    'label': 'Jobs Closed',         'icon': Icons.receipt_long_outlined,  'bg': const Color(0xFFFFF3E0), 'iconColor': const Color(0xFFE07B39)},
-                          {'value': '0%',                       'label': 'Hired Success',       'icon': Icons.bar_chart_rounded,      'bg': const Color(0xFFE8FBF0), 'iconColor': const Color(0xFF2CB06A)},
-                          {'value': '0',                        'label': 'Upcoming Interviews', 'icon': Icons.event_note_outlined,    'bg': const Color(0xFFF0F2FF), 'iconColor': const Color(0xFF3B4FD8)},
-                          {'value': unreadNotifs.toString(),    'label': 'Notifications',       'icon': Icons.notifications_outlined, 'bg': const Color(0xFFFFF0EC), 'iconColor': const Color(0xFFE07B39)},
-                        ];
+                        // ── Upcoming interviews ────────────────────────
+                        return StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('interviews')
+                              .where('employerId', isEqualTo: _employerId)
+                              .snapshots(),
+                          builder: (context, interviewSnap) {
+                            final upcomingInterviews =
+                            interviewSnap.hasData
+                                ? interviewSnap.data!.docs.where((doc) {
+                              final d = doc.data()
+                              as Map<String, dynamic>;
+                              final dt =
+                              (d['scheduledAt'] as Timestamp?)
+                                  ?.toDate();
+                              final status = (d['status'] ?? '')
+                                  .toString()
+                                  .toLowerCase();
+                              return dt != null &&
+                                  dt.isAfter(now) &&
+                                  status != 'cancelled';
+                            }).length
+                                : 0;
 
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            const SizedBox(height: 24),
-                            const Text('Dashboard', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 16),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: stats.length,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 0.85),
-                              itemBuilder: (_, i) => _buildStatCard(stats[i]),
-                            ),
-                            const SizedBox(height: 28),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Recent job post', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                                if (recentJob != null)
-                                  GestureDetector(
-                                    onTap: _navigateToAllJobs,
-                                    child: const Row(children: [
-                                      Text('view all', style: TextStyle(fontSize: 14, color: Colors.black54)),
-                                      SizedBox(width: 2),
-                                      Icon(Icons.chevron_right, size: 18, color: Colors.black54),
-                                    ]),
+                            // ✅ Only 5 stat cards (removed Hired Success)
+                            final stats = [
+                              {
+                                'value':     jobCount.toString(),
+                                'label':     'Jobs Posted',
+                                'icon':      Icons.assignment_outlined,
+                                'bg':        const Color(0xFFFFF3E0),
+                                'iconColor': const Color(0xFFE07B39),
+                              },
+                              {
+                                'value':     totalApplicants.toString(),
+                                'label':     'Applicants',
+                                'icon':      Icons.group_outlined,
+                                'bg':        const Color(0xFFF0F2FF),
+                                'iconColor': const Color(0xFF3B4FD8),
+                              },
+                              {
+                                'value':     expiredCount.toString(),
+                                'label':     'Jobs Closed',
+                                'icon':      Icons.receipt_long_outlined,
+                                'bg':        const Color(0xFFFFF3E0),
+                                'iconColor': const Color(0xFFE07B39),
+                              },
+                              {
+                                'value':     upcomingInterviews.toString(),
+                                'label':     'Upcoming Interviews',
+                                'icon':      Icons.event_note_outlined,
+                                'bg':        const Color(0xFFF0F2FF),
+                                'iconColor': const Color(0xFF3B4FD8),
+                              },
+                              {
+                                'value':     unreadNotifs.toString(),
+                                'label':     'Notifications',
+                                'icon':      Icons.notifications_outlined,
+                                'bg':        const Color(0xFFFFF0EC),
+                                'iconColor': const Color(0xFFE07B39),
+                              },
+                            ];
+
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 24),
+                                  const Text('Dashboard',
+                                      style: TextStyle(fontSize: 22,
+                                          fontWeight: FontWeight.w800)),
+                                  const SizedBox(height: 16),
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: stats.length,
+                                    gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.85,
+                                    ),
+                                    itemBuilder: (_, i) =>
+                                        _buildStatCard(stats[i]),
                                   ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            recentJob != null
-                                ? _buildRecentJobCard(recentJob, appSnap.data?.docs ?? [])
-                                : _buildEmptyJobCard(),
-                            const SizedBox(height: 30),
-                          ]),
+                                  const SizedBox(height: 28),
+                                  Row(
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Recent job post',
+                                          style: TextStyle(fontSize: 18,
+                                              fontWeight: FontWeight.w800)),
+                                      if (recentJob != null)
+                                        GestureDetector(
+                                          onTap: _navigateToAllJobs,
+                                          child: const Row(children: [
+                                            Text('view all',
+                                                style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.black54)),
+                                            SizedBox(width: 2),
+                                            Icon(Icons.chevron_right,
+                                                size: 18,
+                                                color: Colors.black54),
+                                          ]),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  recentJob != null
+                                      ? _buildRecentJobCard(
+                                      recentJob, allApps)
+                                      : _buildEmptyJobCard(),
+                                  const SizedBox(height: 30),
+                                ],
+                              ),
+                            );
+                          },
                         );
                       },
                     );
@@ -235,7 +331,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       onTap: _navigateToCreateJob,
       child: Container(
         width: double.infinity,
-        decoration: BoxDecoration(color: _primaryBlue, borderRadius: BorderRadius.circular(18)),
+        decoration: BoxDecoration(
+            color: _primaryBlue, borderRadius: BorderRadius.circular(18)),
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
@@ -245,15 +342,20 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Icon(Icons.add_rounded, color: Colors.white, size: 36),
+                child: const Icon(Icons.add_rounded,
+                    color: Colors.white, size: 36),
               ),
               const SizedBox(height: 16),
               const Text('No jobs posted yet',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                  style: TextStyle(fontSize: 17,
+                      fontWeight: FontWeight.w700, color: Colors.white)),
               const SizedBox(height: 8),
-              Text('Start attracting top talent by posting\nyour first job opening today.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.8), height: 1.5)),
+              Text(
+                'Start attracting top talent by posting\nyour first job opening today.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13,
+                    color: Colors.white.withOpacity(0.8), height: 1.5),
+              ),
             ]),
           ),
           Container(
@@ -261,13 +363,17 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.12),
               borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(18), bottomRight: Radius.circular(18)),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18)),
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Create your first job posting',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-              Icon(Icons.chevron_right, color: Colors.white, size: 20),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Create your first job posting',
+                      style: TextStyle(color: Colors.white,
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                ]),
           ),
         ]),
       ),
@@ -277,34 +383,46 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   Widget _buildStatCard(Map<String, dynamic> stat) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
           width: 44, height: 44,
-          decoration: BoxDecoration(color: stat['bg'] as Color, borderRadius: BorderRadius.circular(12)),
-          child: Icon(stat['icon'] as IconData, color: stat['iconColor'] as Color, size: 22),
+          decoration: BoxDecoration(
+              color: stat['bg'] as Color,
+              borderRadius: BorderRadius.circular(12)),
+          child: Icon(stat['icon'] as IconData,
+              color: stat['iconColor'] as Color, size: 22),
         ),
         const SizedBox(height: 10),
-        Text(stat['value'] as String, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text(stat['value'] as String,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Text(stat['label'] as String, textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10, color: Color(0xFF888888))),
+          child: Text(stat['label'] as String,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 10, color: Color(0xFF888888))),
         ),
       ]),
     );
   }
 
-  Widget _buildRecentJobCard(QueryDocumentSnapshot job, List<QueryDocumentSnapshot> allApps) {
+  Widget _buildRecentJobCard(
+      QueryDocumentSnapshot job, List<QueryDocumentSnapshot> allApps) {
     final data      = job.data() as Map<String, dynamic>;
     final title     = data['title']     ?? 'Untitled';
     final workType  = data['workType']  ?? 'Full-time';
     final workplace = data['workplace'] ?? 'On-site';
     final location  = data['location']  ?? 'Location not specified';
-    final createdAt = (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final createdAt =
+        (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
 
     final jobApplicantCount = allApps.where((a) {
       final aData = a.data() as Map<String, dynamic>;
@@ -313,7 +431,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(color: _primaryBlue, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(
+          color: _primaryBlue, borderRadius: BorderRadius.circular(18)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
@@ -321,41 +440,47 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Expanded(
                 child: Text(title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                    style: const TextStyle(fontSize: 18,
+                        fontWeight: FontWeight.w700, color: Colors.white)),
               ),
-              // FIX 1: Edit icon → EditJobPage (not CreateJobPage)
               GestureDetector(
                 onTap: () => _navigateToEditJob(job),
                 child: Container(
                     padding: const EdgeInsets.all(6),
-                    child: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20)),
+                    child: const Icon(Icons.edit_outlined,
+                        color: Colors.white70, size: 20)),
               ),
             ]),
             const SizedBox(height: 10),
-            Row(children: [_buildTag(workType), const SizedBox(width: 8), _buildTag(workplace)]),
-            const SizedBox(height: 14),
-            // FIX: location overflow
             Row(children: [
-              const Icon(Icons.location_on_outlined, color: Colors.white70, size: 16),
+              _buildTag(workType),
+              const SizedBox(width: 8),
+              _buildTag(workplace),
+            ]),
+            const SizedBox(height: 14),
+            Row(children: [
+              const Icon(Icons.location_on_outlined,
+                  color: Colors.white70, size: 16),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  location,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text(location,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ),
             ]),
             const SizedBox(height: 8),
             Row(children: [
               const Icon(Icons.access_time, color: Colors.white70, size: 16),
               const SizedBox(width: 6),
-              Text(_getTimeAgo(createdAt), style: const TextStyle(color: Colors.white, fontSize: 13)),
+              Text(_getTimeAgo(createdAt),
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
               const SizedBox(width: 16),
-              const Icon(Icons.people_outline, color: Colors.white70, size: 16),
+              const Icon(Icons.people_outline,
+                  color: Colors.white70, size: 16),
               const SizedBox(width: 6),
-              Text('$jobApplicantCount applicant${jobApplicantCount != 1 ? 's' : ''}',
+              Text(
+                  '$jobApplicantCount applicant${jobApplicantCount != 1 ? 's' : ''}',
                   style: const TextStyle(color: Colors.white, fontSize: 13)),
             ]),
             const SizedBox(height: 18),
@@ -363,19 +488,24 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         ),
         GestureDetector(
           onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ApplicantsListScreen(filterJobId: job.id, filterJobTitle: title))),
+              builder: (_) => ApplicantsListScreen(
+                  filterJobId: job.id, filterJobTitle: title))),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.12),
               borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(18), bottomRight: Radius.circular(18)),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18)),
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Check out applicants',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
-              Icon(Icons.chevron_right, color: Colors.white, size: 20),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Check out applicants',
+                      style: TextStyle(color: Colors.white,
+                          fontSize: 14, fontWeight: FontWeight.w500)),
+                  Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                ]),
           ),
         ),
       ]),
@@ -384,21 +514,27 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
   Widget _buildTag(String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87)),
+    decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(20)),
+    child: Text(text,
+        style: const TextStyle(fontSize: 12,
+            fontWeight: FontWeight.w500, color: Colors.black87)),
   );
 
   Widget _buildBottomNavBar() {
     return Container(
-      decoration: BoxDecoration(color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1))),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+              top: BorderSide(color: Colors.grey.shade200, width: 1))),
       child: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: _primaryBlue,
         unselectedItemColor: Colors.grey.shade400,
         currentIndex: _selectedIndex,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle:
+        const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         onTap: (index) {
@@ -408,32 +544,56 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             case 1: _navigateToJobList(); break;
             case 2:
               Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => ApplicantsListScreen(employerId: _employerId)))
-                  .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
+                  builder: (_) =>
+                      ApplicantsListScreen(employerId: _employerId)))
+                  .then((_) {
+                if (mounted) setState(() => _selectedIndex = 0);
+              });
               break;
             case 3:
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ApplicantsInterviewScreen()))
-                  .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
+              Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const ApplicantsInterviewScreen()))
+                  .then((_) {
+                if (mounted) setState(() => _selectedIndex = 0);
+              });
               break;
             case 4:
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const EmployerProfileScreen()))
-                  .then((_) { if (mounted) setState(() => _selectedIndex = 0); });
+              Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const EmployerProfileScreen()))
+                  .then((_) {
+                if (mounted) setState(() => _selectedIndex = 0);
+              });
               break;
           }
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined),          activeIcon: Icon(Icons.home_rounded),      label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.work_outline_rounded),   activeIcon: Icon(Icons.work_rounded),      label: 'Jobs'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book_outlined),     activeIcon: Icon(Icons.menu_book_rounded), label: 'Applications'),
-          BottomNavigationBarItem(icon: Icon(Icons.star_border_rounded),    activeIcon: Icon(Icons.star_rounded),      label: 'Interviews'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), activeIcon: Icon(Icons.person_rounded),    label: 'Profile'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home_rounded),
+              label: 'Home'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.work_outline_rounded),
+              activeIcon: Icon(Icons.work_rounded),
+              label: 'Jobs'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book_outlined),
+              activeIcon: Icon(Icons.menu_book_rounded),
+              label: 'Applications'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.star_border_rounded),
+              activeIcon: Icon(Icons.star_rounded),
+              label: 'Interviews'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Profile'),
         ],
       ),
     );
   }
 }
 
-// ==================== AllJobsListScreen ====================
+// ── AllJobsListScreen (unchanged) ───────────────────────────────────────────
 
 class AllJobsListScreen extends StatelessWidget {
   final String employerId;
@@ -443,10 +603,13 @@ class AllJobsListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All My Jobs', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('All My Jobs',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF3B4FD8),
         foregroundColor: Colors.white,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context)),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -455,9 +618,12 @@ class AllJobsListScreen extends StatelessWidget {
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
           final jobs = snapshot.data!.docs;
-          if (jobs.isEmpty) return const Center(child: Text('You have no jobs posted yet.'));
+          if (jobs.isEmpty)
+            return const Center(
+                child: Text('You have no jobs posted yet.'));
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: jobs.length,
@@ -467,7 +633,8 @@ class AllJobsListScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   title: Text(data['title'] ?? 'Untitled'),
-                  subtitle: Text('${data['company']} • ${data['location']}'),
+                  subtitle: Text(
+                      '${data['company']} • ${data['location']}'),
                   trailing: const Icon(Icons.chevron_right),
                 ),
               );
