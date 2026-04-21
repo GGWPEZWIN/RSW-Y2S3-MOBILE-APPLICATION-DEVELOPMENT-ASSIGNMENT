@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
-import '../../../Employer/JobListing/ApplicationUI/create_job_screen.dart';
+import '../../../Employer/JobListing/ApplicationUI/edit_job_screen.dart';
 import '../../JobApplication/ApplicationServices/apply_job_service.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
@@ -26,11 +26,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   bool _isLoading    = true;
   bool _hasApplied   = false;
   bool _isApplying   = false;
-  bool _isSaving = false;
+  bool _isSaving     = false;
   String? _userCompanyId;
   int _applicantCount = 0;
 
-  String _fetchedEducation = '';
+  String _fetchedEducation  = '';
   String _fetchedExperience = '';
 
   static const Color _blue  = Color(0xFF2563EB);
@@ -46,9 +46,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   Future<void> _loadApplicantCount() async {
     final count = await ApplyJobService.getApplicantCount(widget.job.id!);
     if (mounted) {
-      setState(() {
-        _applicantCount = count;
-      });
+      setState(() => _applicantCount = count);
     }
   }
 
@@ -57,10 +55,10 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     if (user == null) return false;
 
     final snap = await FirebaseFirestore.instance
-        .collection('applications') // Or your specific collection name
+        .collection('applications')
         .where('jobId', isEqualTo: jobId)
         .where('userId', isEqualTo: user.uid)
-        .where('status', isNotEqualTo: 'withdrawn') // Add this filter
+        .where('status', isNotEqualTo: 'withdrawn')
         .get();
 
     return snap.docs.isNotEmpty;
@@ -74,18 +72,18 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     }
 
     try {
-      // 1. Fetch User Data
-      final userDocFuture = FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDocFuture = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-      // 2. Fetch active applications (filtering out withdrawn ones)
       final appQueryFuture = FirebaseFirestore.instance
           .collection('applications')
           .where('jobId', isEqualTo: widget.job.id)
           .where('userId', isEqualTo: user.uid)
-          .where('status', isNotEqualTo: 'withdrawn') // This is the fix
+          .where('status', isNotEqualTo: 'withdrawn')
           .get();
 
-      // 3. Check if saved
       final savedDocFuture = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -93,22 +91,23 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           .doc(widget.job.id)
           .get();
 
-      final results = await Future.wait([userDocFuture, appQueryFuture, savedDocFuture]);
+      final results =
+      await Future.wait([userDocFuture, appQueryFuture, savedDocFuture]);
 
-      final userDoc = results[0] as DocumentSnapshot;
-      final appSnap = results[1] as QuerySnapshot;
+      final userDoc  = results[0] as DocumentSnapshot;
+      final appSnap  = results[1] as QuerySnapshot;
       final savedDoc = results[2] as DocumentSnapshot;
 
-      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'];
+      final companyId =
+      (userDoc.data() as Map<String, dynamic>?)?['companyId'];
 
       if (mounted) {
         setState(() {
-          _isEmployer = companyId != null;
+          _isEmployer    = companyId != null;
           _userCompanyId = companyId as String?;
-          // If docs are empty, it means no active (non-withdrawn) application exists
-          _hasApplied = appSnap.docs.isNotEmpty;
-          _isSaved = savedDoc.exists;
-          _isLoading = false;
+          _hasApplied    = appSnap.docs.isNotEmpty;
+          _isSaved       = savedDoc.exists;
+          _isLoading     = false;
         });
       }
     } catch (e) {
@@ -126,16 +125,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       context,
       MaterialPageRoute(
         builder: (context) => JobApplicationScreen(
-          jobId: widget.job.id!,
-          jobTitle: widget.job.title,
-          company: widget.job.company,
+          jobId:     widget.job.id!,
+          jobTitle:  widget.job.title,
+          company:   widget.job.company,
           companyId: widget.job.companyId,
-          job: widget.job,
+          job:       widget.job,
         ),
       ),
     );
 
-    // If they applied successfully, refresh the state from Firestore
     if (result == true && mounted) {
       await _loadUserData();
       await _loadApplicantCount();
@@ -155,7 +153,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Start loading
     setState(() => _isSaving = true);
 
     try {
@@ -172,23 +169,26 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           const SnackBar(content: Text('Job removed from saved')),
         );
       } else {
-        final jobSnap = await FirebaseFirestore.instance.collection('jobs').doc(widget.job.id).get();
+        final jobSnap = await FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(widget.job.id)
+            .get();
         final fullData = jobSnap.data() as Map<String, dynamic>? ?? {};
 
         await docRef.set({
-          'jobId': widget.job.id,
-          'jobTitle': widget.job.title,
-          'company': widget.job.company,
-          'location': widget.job.location,
-          'workType': widget.job.workType,
-          'workplace': widget.job.workplace,
-          'salary': widget.job.salary,
-          'description': fullData['description'] ?? '',
-          'requirements': fullData['requirements'] ?? '',
-          'benefits': fullData['benefits'] ?? '',
-          'educationLevel': _fetchedEducation,
+          'jobId':           widget.job.id,
+          'jobTitle':        widget.job.title,
+          'company':         widget.job.company,
+          'location':        widget.job.location,
+          'workType':        widget.job.workType,
+          'workplace':       widget.job.workplace,
+          'salary':          widget.job.salary,
+          'description':     fullData['description']     ?? '',
+          'requirements':    fullData['requirements']    ?? '',
+          'benefits':        fullData['benefits']        ?? '',
+          'educationLevel':  _fetchedEducation,
           'experienceLevel': _fetchedExperience,
-          'savedAt': FieldValue.serverTimestamp(),
+          'savedAt':         FieldValue.serverTimestamp(),
         });
 
         if (mounted) setState(() => _isSaved = true);
@@ -202,8 +202,37 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     } catch (e) {
       debugPrint("Error saving job: $e");
     } finally {
-      // Stop loading regardless of success or failure
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  // Navigate to EditJobPage — fetches full Firestore doc first
+  Future<void> _handleEditJob() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('jobs')
+          .doc(widget.job.id)
+          .get();
+      final fullData = doc.data() as Map<String, dynamic>? ?? {};
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EditJobPage(
+            jobId:   widget.job.id!,
+            jobData: fullData,
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load job data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -218,8 +247,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final job        = widget.job;
-    final bool isOwnJob = _userCompanyId != null && job.companyId == _userCompanyId;
+    final job       = widget.job;
+    final isOwnJob  = _userCompanyId != null && job.companyId == _userCompanyId;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -248,7 +277,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── White top card ─────────────────────────────────────────────
+            // ── White top card ────────────────────────────────────────────
             Container(
               color: Colors.white,
               width: double.infinity,
@@ -264,9 +293,13 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                     ),
                     child: Center(
                       child: Text(
-                        job.company.isNotEmpty ? job.company[0].toUpperCase() : 'J',
+                        job.company.isNotEmpty
+                            ? job.company[0].toUpperCase()
+                            : 'J',
                         style: const TextStyle(
-                            color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -276,7 +309,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   Text(
                     job.title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
 
@@ -286,8 +320,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                     children: [
                       Text(job.company,
                           style: const TextStyle(
-                              color: _blue, fontWeight: FontWeight.w600, fontSize: 15)),
-                      const Text('  •  ', style: TextStyle(color: Color(0xFF64748B))),
+                              color: _blue,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15)),
+                      const Text('  •  ',
+                          style: TextStyle(color: Color(0xFF64748B))),
                       Text(job.location,
                           style: const TextStyle(
                               color: Color(0xFF64748B), fontSize: 15)),
@@ -307,24 +344,28 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
             const SizedBox(height: 12),
 
-            // ── Body ──────────────────────────────────────────────────────
+            // ── Body ─────────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  // Meta row with live applicant count
+                  // Meta row
                   Row(children: [
-                    const Icon(Icons.access_time, size: 15, color: Color(0xFF64748B)),
+                    const Icon(Icons.access_time,
+                        size: 15, color: Color(0xFF64748B)),
                     const SizedBox(width: 4),
                     Text(_getTimeAgo(job.createdAt),
-                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                        style: const TextStyle(
+                            color: Color(0xFF64748B), fontSize: 13)),
                     const SizedBox(width: 16),
-                    const Icon(Icons.people_outline, size: 15, color: Color(0xFF64748B)),
+                    const Icon(Icons.people_outline,
+                        size: 15, color: Color(0xFF64748B)),
                     const SizedBox(width: 4),
                     Text('$_applicantCount applied',
-                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                        style: const TextStyle(
+                            color: Color(0xFF64748B), fontSize: 13)),
                   ]),
                   const SizedBox(height: 20),
 
@@ -338,7 +379,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         .doc(job.id)
                         .get(),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
                         return const Center(
                           child: Padding(
                             padding: EdgeInsets.all(20),
@@ -355,15 +397,19 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                       String applicationMethod = 'In-app';
 
                       if (snapshot.hasData && snapshot.data!.exists) {
-                        final data = snapshot.data!.data() as Map<String, dynamic>;
-                        description       = data['description']       ?? 'No description provided.';
-                        requirements      = data['requirements']      ?? '';
-                        benefits          = data['benefits']          ?? '';
-                        experience        = data['experienceLevel']   ?? '';
-                        education         = data['educationLevel']    ?? '';
-                        applicationMethod = data['applicationMethod'] ?? 'In-app';
+                        final data = snapshot.data!.data()
+                        as Map<String, dynamic>;
+                        description =
+                            data['description'] ?? 'No description provided.';
+                        requirements =
+                            data['requirements']    ?? '';
+                        benefits     = data['benefits']         ?? '';
+                        experience   = data['experienceLevel']  ?? '';
+                        education    = data['educationLevel']   ?? '';
+                        applicationMethod =
+                            data['applicationMethod'] ?? 'In-app';
 
-                        _fetchedEducation = education;
+                        _fetchedEducation  = education;
                         _fetchedExperience = experience;
                       }
 
@@ -372,24 +418,27 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         children: [
                           Text(description,
                               style: const TextStyle(
-                                  color: Color(0xFF475569), fontSize: 14, height: 1.6)),
+                                  color: Color(0xFF475569),
+                                  fontSize: 14,
+                                  height: 1.6)),
                           const SizedBox(height: 24),
 
-                          // Experience + Education badges
-                          if (experience.isNotEmpty || education.isNotEmpty) ...[
+                          if (experience.isNotEmpty ||
+                              education.isNotEmpty) ...[
                             Wrap(
                               spacing: 10, runSpacing: 8,
                               children: [
                                 if (experience.isNotEmpty)
-                                  _badgeChip(Icons.trending_up_rounded, experience),
+                                  _badgeChip(
+                                      Icons.trending_up_rounded, experience),
                                 if (education.isNotEmpty)
-                                  _badgeChip(Icons.school_outlined, education),
+                                  _badgeChip(
+                                      Icons.school_outlined, education),
                               ],
                             ),
                             const SizedBox(height: 24),
                           ],
 
-                          // Requirements
                           if (requirements.isNotEmpty) ...[
                             _sectionTitle('Requirements'),
                             const SizedBox(height: 10),
@@ -397,7 +446,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                             const SizedBox(height: 24),
                           ],
 
-                          // Benefits
                           if (benefits.isNotEmpty) ...[
                             _sectionTitle('Benefits'),
                             const SizedBox(height: 10),
@@ -405,28 +453,30 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                             const SizedBox(height: 24),
                           ],
 
-                          // In-app info banner
                           if (applicationMethod == 'In-app') ...[
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEFF6FF),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFBFDBFE)),
+                                border: Border.all(
+                                    color: const Color(0xFFBFDBFE)),
                               ),
                               child: const Row(children: [
-                                Icon(Icons.info_outline_rounded, size: 18, color: _blue),
+                                Icon(Icons.info_outline_rounded,
+                                    size: 18, color: _blue),
                                 SizedBox(width: 10),
                                 Expanded(
-                                  child: Text('Apply directly through the JobBuddy app.',
-                                      style: TextStyle(fontSize: 13, color: _blue)),
+                                  child: Text(
+                                      'Apply directly through the JobBuddy app.',
+                                      style: TextStyle(
+                                          fontSize: 13, color: _blue)),
                                 ),
                               ]),
                             ),
                             const SizedBox(height: 24),
                           ],
 
-                          // Location placeholder
                           _sectionTitle('Office Location'),
                           const SizedBox(height: 10),
                           Container(
@@ -439,11 +489,13 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.location_on, color: Colors.grey[600], size: 18),
+                                  Icon(Icons.location_on,
+                                      color: Colors.grey[600], size: 18),
                                   const SizedBox(width: 6),
                                   Text(job.location,
                                       style: TextStyle(
-                                          color: Colors.grey[700], fontSize: 13)),
+                                          color: Colors.grey[700],
+                                          fontSize: 13)),
                                 ],
                               ),
                             ),
@@ -459,7 +511,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
             // ── Action buttons ────────────────────────────────────────────
             if (!_isLoading && !_isEmployer) ...[
-              // Job Seeker: Show Save + Apply buttons
+              // Job Seeker: Save + Apply
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                 child: Row(children: [
@@ -467,7 +519,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   // Save button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _toggleSave(),
+                      onPressed: _toggleSave,
                       icon: Icon(
                         _isSaved ? Icons.bookmark : Icons.bookmark_border,
                         size: 18,
@@ -477,7 +529,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         backgroundColor:
                         _isSaved ? const Color(0xFF1D4ED8) : _blue,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
@@ -488,7 +541,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   // Apply Now / Applied button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (_hasApplied || _isApplying) ? null : _handleApply,
+                      onPressed:
+                      (_hasApplied || _isApplying) ? null : _handleApply,
                       icon: _isApplying
                           ? const SizedBox(
                         width: 16, height: 16,
@@ -509,13 +563,14 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                             : 'Apply Now',
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                        _hasApplied ? _green : _blue,
-                        disabledBackgroundColor:
-                        _hasApplied ? _green : _blue.withOpacity(0.6),
+                        backgroundColor: _hasApplied ? _green : _blue,
+                        disabledBackgroundColor: _hasApplied
+                            ? _green
+                            : _blue.withValues(alpha: 0.6),
                         foregroundColor: Colors.white,
                         disabledForegroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
@@ -523,18 +578,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   ),
                 ]),
               ),
+
             ] else if (!_isLoading && _isEmployer && isOwnJob) ...[
-              // Employer sees their own job → Show Edit button only
+              // Employer: Edit Job button
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => CreateJobPage(jobToEdit: job)),
-                    ),
+                    onPressed: _handleEditJob,
                     icon: const Icon(Icons.edit, size: 18),
                     label: const Text('Edit Job'),
                     style: ElevatedButton.styleFrom(
@@ -547,8 +599,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                   ),
                 ),
               ),
+
             ] else if (!_isLoading && _isEmployer && !isOwnJob) ...[
-              // Employer viewing another company's job → Show message only
+              // Employer viewing another company's job
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                 child: Container(
@@ -573,20 +626,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       bottomNavigationBar: NavBarWidget(
         currentIndex: _currentIndex,
         onTabSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          setState(() => _currentIndex = index);
 
-          // Navigation Logic:
           if (index == 0) {
             Navigator.of(context).popUntil((route) => route.isFirst);
-          } else if(index == 1) {
+          } else if (index == 1) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const SavedJobsScreen()),
             );
-          }
-          else if(index == 2) {
+          } else if (index == 2) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const AppliedJobsScreen()),
@@ -595,7 +644,10 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           if (index == 3) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ProfilePage(user: FirebaseAuth.instance.currentUser)),
+              MaterialPageRoute(
+                builder: (_) => ProfilePage(
+                    user: FirebaseAuth.instance.currentUser),
+              ),
             );
           }
         },
@@ -608,7 +660,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   Widget _sectionTitle(String text) => Text(
     text,
     style: const TextStyle(
-        fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87),
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        color: Colors.black87),
   );
 
   Widget _infoCard(String title, String value) {
@@ -630,7 +684,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           const SizedBox(height: 6),
           Text(value,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),
     );
@@ -666,7 +721,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
-        final text = line.startsWith('•') ? line.substring(1).trim() : line;
+        final text =
+        line.startsWith('•') ? line.substring(1).trim() : line;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(
@@ -686,7 +742,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
               Expanded(
                 child: Text(text,
                     style: const TextStyle(
-                        color: Color(0xFF475569), fontSize: 14, height: 1.5)),
+                        color: Color(0xFF475569),
+                        fontSize: 14,
+                        height: 1.5)),
               ),
             ],
           ),
@@ -705,9 +763,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     return Wrap(
       spacing: 8, runSpacing: 8,
       children: lines.map((line) {
-        final text = line.startsWith('•') ? line.substring(1).trim() : line;
+        final text =
+        line.startsWith('•') ? line.substring(1).trim() : line;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: const Color(0xFFF0FDF4),
             borderRadius: BorderRadius.circular(20),
