@@ -915,15 +915,22 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ],
 
+// CV / Resume
             if (a.resume.isNotEmpty) ...[
               const SizedBox(height: 24),
-              _sectionTitle('CV / Resume'), // Localized
+              _sectionTitle('CV / Resume'),
               const SizedBox(height: 12),
               _CvViewer(
-                // Split by ':' and take the last part to remove the filename prefix
-                base64Image: a.resume.contains(':')
-                    ? a.resume.split(':').last
-                    : a.resume,
+                base64Image: () {
+                  // 1. Remove filename prefix (text before the colon)
+                  String raw = a.resume.contains(':') ? a.resume.split(':').last : a.resume;
+
+                  // 2. Remove Data URI prefix (text before the comma, e.g., data:image/png;base64,)
+                  if (raw.contains(',')) raw = raw.split(',').last;
+
+                  // 3. Final safety: Remove any whitespace, newlines, or tabs
+                  return raw.replaceAll(RegExp(r'\s+'), '');
+                }(),
               ),
             ],
 
