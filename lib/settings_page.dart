@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'l10n/app_localizations.dart';
 import '../../../login.dart';
+import 'l10n/app_localizations.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -12,7 +13,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // New state variable for the notification toggle
   bool _notificationsEnabled = true;
 
   // --- SIGN OUT LOGIC ---
@@ -174,7 +174,34 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
           children: [
-            // NEW NOTIFICATION TOGGLE
+            // 1. LANGUAGE SELECTION
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.translate, color: kPrimaryBlue),
+                title: Text(l10n.selectLanguage, style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: DropdownButton<Locale>(
+                  value: Localizations.localeOf(context),
+                  underline: const SizedBox(),
+                  onChanged: (Locale? newLocale) {
+                    // This assumes you have a Locale provider or a way to trigger
+                    // the Locale change at the App level (e.g., MyApp.setLocale)
+                  },
+                  items: const [
+                    DropdownMenuItem(value: Locale('en'), child: Text("English")),
+                    DropdownMenuItem(value: Locale('ms'), child: Text("Bahasa")),
+                    DropdownMenuItem(value: Locale('zh'), child: Text("中文")),
+                  ],
+                ),
+              ),
+            ),
+
+            // 2. NOTIFICATION TOGGLE
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
