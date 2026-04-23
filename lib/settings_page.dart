@@ -181,6 +181,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     const Color kPrimaryBlue = Color(0xFF2563EB);
+    final stateManager = Provider.of<AppStateManager>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -214,7 +215,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
 
-            // 2. NOTIFICATION TOGGLE
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
@@ -228,12 +228,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 subtitle: Text(l10n.notificationsSubtitle),
                 secondary: Icon(
-                  _notificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
-                  color: _notificationsEnabled ? kPrimaryBlue : Colors.grey,
+                  stateManager.notificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
+                  color: stateManager.notificationsEnabled ? kPrimaryBlue : Colors.grey,
                 ),
-                value: _notificationsEnabled,
+                // Read from stateManager
+                value: stateManager.notificationsEnabled,
                 onChanged: (bool value) {
-                  setState(() => _notificationsEnabled = value);
+                  // Update via stateManager
+                  stateManager.setNotifications(value);
                 },
                 activeColor: kPrimaryBlue,
               ),
