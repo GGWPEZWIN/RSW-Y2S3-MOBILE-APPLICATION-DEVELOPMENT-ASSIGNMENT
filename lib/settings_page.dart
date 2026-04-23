@@ -115,7 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: Text(l10n.signOutBtn, style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(l10n.signOutConfirm),
+        //content: Text(l10n.signOutConfirm),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
           TextButton(

@@ -11,7 +11,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 class ApplicantService {
 
   static const String _AImodel = 'gemini-3-flash-preview';
-  static final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
+  static final String _apiKey = dotenv.env['APPLICANT_API_KEY'] ?? "";
 
   static Applicant buildApplicant({
     required String resumePath,
