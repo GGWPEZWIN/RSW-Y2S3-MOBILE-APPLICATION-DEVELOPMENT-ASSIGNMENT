@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../login.dart'; // Ensure this path correctly points to your login screen
+import 'package:intl/intl.dart';
+import '../../../login.dart';
+import '../../../main.dart';
+import 'l10n/app_localizations.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
+
+  static const Color kPrimaryBlue = Color(0xFF2563EB);
 
   // --- SIGN OUT LOGIC ---
   Future<void> _signOut(BuildContext context) async {
@@ -23,21 +28,17 @@ class SettingsPage extends StatelessWidget {
   }
 
   // --- DELETE ACCOUNT LOGIC ---
-  Future<void> _handleDeleteAccount(BuildContext context, String inputEmail) async {
+  Future<void> _handleDeleteAccount(BuildContext context, String inputEmail, AppLocalizations l10n) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Check if the typed email matches the current user
     if (inputEmail.trim().toLowerCase() != user.email?.toLowerCase()) {
-      _showSnackBar(context, "Email does not match. Please try again.", Colors.orange);
+      _showSnackBar(context, "Email does not match.", Colors.orange);
       return;
     }
 
     try {
-      // 1. Delete data from Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-
-      // 2. Delete user from Firebase Auth
       await user.delete();
 
       if (context.mounted) {
@@ -48,44 +49,69 @@ class SettingsPage extends StatelessWidget {
         );
       }
     } catch (e) {
-      debugPrint("Delete error: $e");
       if (context.mounted) {
-        _showSnackBar(context, "Session expired. Please re-login to delete account.", Colors.red);
+        _showSnackBar(context, "Session expired. Re-login to delete.", Colors.red);
       }
+    }
+  }
+
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'ms': return "Bahasa Melayu";
+      case 'zh': return "中文 (Chinese)";
+      default: return "English";
     }
   }
 
   void _showSnackBar(BuildContext context, String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(message),
-          backgroundColor: color,
-          behavior: SnackBarBehavior.floating
-      ),
+      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
     );
   }
 
-  // --- SIGN OUT CONFIRMATION DIALOG ---
-  void _showSignOutDialog(BuildContext context) {
+  // --- LANGUAGE SELECTION DIALOG ---
+  void _showLanguageDialog(BuildContext context, AppLocalizations l10n) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to sign out of your account?'),
+        title: Text(l10n.selectLanguage), // FIXED: Using l10n parameter
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _langTile("🇺🇸", "English", const Locale('en'), context),
+            _langTile("🇲🇾", "Bahasa Melayu", const Locale('ms'), context),
+            _langTile("🇨🇳", "中文", const Locale('zh'), context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _langTile(String flag, String label, Locale locale, BuildContext context) {
+    return ListTile(
+      leading: Text(flag, style: const TextStyle(fontSize: 20)),
+      title: Text(label),
+      onTap: () {
+        appLocale.value = locale;
+        Navigator.pop(context);
+      },
+    );
+  }
+
+  // --- SIGN OUT CONFIRMATION DIALOG ---
+  void _showSignOutDialog(BuildContext context, AppLocalizations l10n) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Text(l10n.signOutBtn, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to sign out?'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _signOut(context);
-            },
-            child: const Text('Sign Out',
-                style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)
-            ),
+            onPressed: () { Navigator.pop(context); _signOut(context); },
+            child: const Text('Sign Out', style: TextStyle(color: kPrimaryBlue)),
           ),
         ],
       ),
@@ -93,55 +119,28 @@ class SettingsPage extends StatelessWidget {
   }
 
   // --- DELETE CONFIRMATION DIALOG ---
-  void _showDeleteDialog(BuildContext context) {
+  void _showDeleteDialog(BuildContext context, AppLocalizations l10n) {
     final emailController = TextEditingController();
     final user = FirebaseAuth.instance.currentUser;
-    final String userEmail = user?.email ?? "";
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Delete Account',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)
-        ),
+        title: Text(l10n.deleteAccBtn, style: const TextStyle(color: Colors.red)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('This is permanent. All profile data will be lost.'),
-            const SizedBox(height: 12),
-            Text('Type your email to confirm:',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 13)
-            ),
-            Text(userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                hintText: "Enter email",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-            ),
+            const Text('This is permanent.'),
+            TextField(controller: emailController, decoration: const InputDecoration(hintText: "Enter email")),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => _handleDeleteAccount(context, emailController.text),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Confirm Delete',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
-            ),
+            onPressed: () => _handleDeleteAccount(context, emailController.text, l10n),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -150,45 +149,56 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color kPrimaryBlue = Color(0xFF2563EB);
+    // 1. Initialize l10n here
+    final l10n = AppLocalizations.of(context)!;
+
+    if (l10n == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        elevation: 0,
+        title: Text(l10n.settingsTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Column(
           children: [
-            const Spacer(),
-            // SIGN OUT BUTTON
-            ElevatedButton(
-              onPressed: () => _showSignOutDialog(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimaryBlue,
-                minimumSize: const Size(double.infinity, 55),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                elevation: 0,
-              ),
-              child: const Text("Sign Out",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-              ),
+            Align(alignment: Alignment.centerLeft, child: Text(l10n.langLabel, style: const TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<Locale>(
+              valueListenable: appLocale,
+              builder: (context, locale, _) {
+                return InkWell(
+                  onTap: () => _showLanguageDialog(context, l10n), // Pass l10n here
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.language, color: kPrimaryBlue),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_getLanguageName(locale.languageCode))),
+                        const Icon(Icons.arrow_forward_ios, size: 14),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            // DELETE ACCOUNT BUTTON
+            const Spacer(),
+            ElevatedButton(
+              onPressed: () => _showSignOutDialog(context, l10n),
+              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryBlue, minimumSize: const Size(double.infinity, 55)),
+              child: Text(l10n.signOutBtn, style: const TextStyle(color: Colors.white)),
+            ),
             TextButton(
-              onPressed: () => _showDeleteDialog(context),
-              child: const Text("Delete Account",
-                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)
-              ),
+              onPressed: () => _showDeleteDialog(context, l10n),
+              child: Text(l10n.deleteAccBtn, style: const TextStyle(color: Colors.redAccent)),
             ),
           ],
         ),

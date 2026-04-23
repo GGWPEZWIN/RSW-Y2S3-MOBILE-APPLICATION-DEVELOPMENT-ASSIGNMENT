@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../l10n/app_localizations.dart';
 import 'employer_dashboard.dart';
 
 class CompanyRegistrationPage extends StatefulWidget {
@@ -86,10 +87,17 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Create Company', style: TextStyle(fontWeight: FontWeight.bold)),
+        // Translated 'Create Company'
+        title: Text(l10n.createCompanyTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -107,38 +115,38 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Let’s set up your company',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              Text(
+                l10n.setupCompanyHeader,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'This information will appear on your job posts.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              Text(
+                l10n.setupCompanySubtitle,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 32),
 
               // Company Name
-              _buildFieldLabel('Company Name *'),
+              _buildFieldLabel(l10n.companyNameLabel),
               TextFormField(
                 controller: _companyNameController,
-                decoration: _inputDecoration('e.g., TechFlow Sdn Bhd'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Company name required' : null,
+                decoration: _inputDecoration(l10n.companyNameHint),
+                validator: (v) => v == null || v.trim().isEmpty ? l10n.companyNameRequired : null,
               ),
               const SizedBox(height: 20),
 
               // Company Email
-              _buildFieldLabel('Company Email *'),
+              _buildFieldLabel(l10n.companyEmailLabel),
               TextFormField(
                 controller: _companyEmailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: _inputDecoration('hr@company.com'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Email required' : null,
+                validator: (v) => v == null || v.trim().isEmpty ? l10n.emailRequired : null,
               ),
               const SizedBox(height: 20),
 
               // Phone
-              _buildFieldLabel('Phone Number'),
+              _buildFieldLabel(l10n.phoneNumberLabel),
               TextFormField(
                 controller: _companyPhoneController,
                 keyboardType: TextInputType.phone,
@@ -147,16 +155,16 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
               const SizedBox(height: 20),
 
               // Address
-              _buildFieldLabel('Address'),
+              _buildFieldLabel(l10n.addressLabel),
               TextFormField(
                 controller: _companyAddressController,
                 maxLines: 2,
-                decoration: _inputDecoration('Penang, Malaysia'),
+                decoration: _inputDecoration(l10n.addressHint),
               ),
               const SizedBox(height: 20),
 
               // Website (optional)
-              _buildFieldLabel('Website (optional)'),
+              _buildFieldLabel(l10n.websiteLabel),
               TextFormField(
                 controller: _companyWebsiteController,
                 keyboardType: TextInputType.url,
@@ -165,11 +173,11 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
               const SizedBox(height: 20),
 
               // Description
-              _buildFieldLabel('Company Description'),
+              _buildFieldLabel(l10n.descriptionLabel),
               TextFormField(
                 controller: _companyDescriptionController,
                 maxLines: 3,
-                decoration: _inputDecoration('Tell job seekers about your company...'),
+                decoration: _inputDecoration(l10n.descriptionHint),
               ),
               const SizedBox(height: 40),
 
@@ -183,7 +191,7 @@ class _CompanyRegistrationPageState extends State<CompanyRegistrationPage> {
                     backgroundColor: _primaryBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Create Company', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(l10n.createCompanyBtn, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

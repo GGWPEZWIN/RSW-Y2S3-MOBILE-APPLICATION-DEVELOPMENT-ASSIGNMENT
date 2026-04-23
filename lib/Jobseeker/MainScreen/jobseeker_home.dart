@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Employer/models/job_model.dart';
+import '../../l10n/app_localizations.dart';
 import '../JobApplication/ApplicationServices/C-B-F_Machine_Learning.dart';
 import '../JobApplication/ApplicationUI/job_details_screen.dart';
 import '../JobApplication/ApplicationUI/jobseeker_notification_page.dart';
@@ -213,6 +214,13 @@ class _HomePageState extends State<HomePage> {
   // ── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F5FA),
       body: SafeArea(
@@ -232,8 +240,8 @@ class _HomePageState extends State<HomePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Find Your\nDream Job',
+                            Text(
+                              l10n.findDreamJob,
                               style: TextStyle(
                                 fontSize: 30,
                                 fontWeight: FontWeight.w800,
@@ -338,7 +346,7 @@ class _HomePageState extends State<HomePage> {
                       child: AbsorbPointer(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: 'Search for jobs ......',
+                            hintText: l10n.searchJobsHint,
                             hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                             suffixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
                             border: InputBorder.none,
@@ -366,7 +374,7 @@ class _HomePageState extends State<HomePage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Recommendations',
+                          Text(l10n.recommendationsTitle,
                               style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w800)),
@@ -423,20 +431,20 @@ class _HomePageState extends State<HomePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(children: const [
-                              Icon(Icons.auto_awesome_rounded,
+                            Row(children: [
+                              const Icon(Icons.auto_awesome_rounded,
                                   size: 17, color: _blue),
-                              SizedBox(width: 8),
-                              Text('How it works',
-                                  style: TextStyle(
+                              const SizedBox(width: 8),
+                              Text(l10n.howItWorks,
+                                  style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.black87)),
                             ]),
                             const SizedBox(height: 8),
-                            const Text(
-                              'These matches are generated based on your skills, resume analysis, and past application preferences.',
-                              style: TextStyle(
+                            Text(
+                              l10n.matchingDescription,
+                              style: const TextStyle(
                                   fontSize: 13,
                                   color: Color(0xFF475569),
                                   height: 1.5),
@@ -448,14 +456,14 @@ class _HomePageState extends State<HomePage> {
                                   MaterialPageRoute(
                                       builder: (_) =>
                                       const AiMatchingScreen())),
-                              child: Row(children: const [
-                                Text('Learn more',
-                                    style: TextStyle(
+                              child: Row(children: [
+                                Text(l10n.learnMore,
+                                    style: const TextStyle(
                                         fontSize: 13,
                                         color: _blue,
                                         fontWeight: FontWeight.w700)),
-                                SizedBox(width: 4),
-                                Icon(Icons.arrow_forward_rounded,
+                                const SizedBox(width: 4),
+                                const Icon(Icons.arrow_forward_rounded,
                                     size: 14, color: _blue),
                               ]),
                             ),

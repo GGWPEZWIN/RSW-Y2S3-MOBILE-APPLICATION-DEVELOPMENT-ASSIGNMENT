@@ -211,7 +211,7 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Edit Basic Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('   Edit Basic Profile', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white, elevation: 0, centerTitle: true, foregroundColor: Colors.black,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
       ),
@@ -256,7 +256,13 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
                           },
                         ),
                         children: [
-                          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.example.demo_openscreetmap',
+                            additionalOptions: const {
+                              'User-Agent': 'JobSeekerApp/1.0 (com.your.unique.package.id)',
+                            },
+                          ),
                           MarkerLayer(
                             markers: [
                               if (_locationController.text.contains(','))
