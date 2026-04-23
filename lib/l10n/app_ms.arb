@@ -109,5 +109,6 @@
   "workEmailLabel": "Emel Kerja",
   "orLabel": "atau",
   "createEmployerAccountBtn": "Cipta Akaun Majikan",
-  "employerAccountNotice": "Akaun majikan adalah berasingan daripada akaun pencari kerja. Hanya syarikat berdaftar boleh mengakses portal majikan."
+  "employerAccountNotice": "Akaun majikan adalah berasingan daripada akaun pencari kerja. Hanya syarikat berdaftar boleh mengakses portal majikan.",
+  "notificationsSubtitle": "Aktifkan atau matikan amaran pop-up"
 }
