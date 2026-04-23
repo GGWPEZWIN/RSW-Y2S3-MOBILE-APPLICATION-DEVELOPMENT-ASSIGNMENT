@@ -8,12 +8,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 
 class SmartAnalyzerService {
-  // We will keep your model name if it worked before,
-  // but changed to 1.5-flash if you continue to see timeouts.
   static const String _AImodel = 'gemini-3-flash-preview';
-
-  // FIX: Using a 'get' ensures the app fetches the key from memory
-  // at the moment you click scan, not when the app first starts.
   String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? "";
 
   Future<List<Map<String, dynamic>>> getMissingSuggestionsFromImage({
@@ -24,16 +19,14 @@ class SmartAnalyzerService {
     required List<dynamic> existingLanguages,
   }) async {
     try {
-      // 1. Deep Debug: Let's see if the key actually exists in memory
-      debugPrint("--- AI Service Debug ---");
-      debugPrint("Detected API Key length: ${_apiKey.length}");
 
+      // Safety check: if API key is missing from .env
       if (_apiKey.isEmpty) {
-        debugPrint("❌ ERROR: API Key is EMPTY. Check your .env file and pubspec.yaml assets.");
+        debugPrint("Gemini API Key is missing from .env file!");
         return [];
       }
 
-      // 2. OCR Step
+      // 1. OCR Step
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final tempDir = await getTemporaryDirectory();
       final file = await File('${tempDir.path}/profile_ocr.png').create();
@@ -42,12 +35,9 @@ class SmartAnalyzerService {
       await textRecognizer.close();
 
       String extractedText = recognizedText.text;
-      if (extractedText.isEmpty) {
-        debugPrint("⚠️ OCR result was empty.");
-        return [];
-      }
+      if (extractedText.isEmpty) return [];
 
-      // 3. AI Analysis Step
+      // 2. AI Analysis Step
       final model = GenerativeModel(model: _AImodel, apiKey: _apiKey);
 
       final prompt = '''
@@ -78,29 +68,17 @@ class SmartAnalyzerService {
       ]
       ''';
 
-      debugPrint("🚀 Sending request to Gemini...");
-
       final response = await model.generateContent([Content.text(prompt)]);
-
-      if (response.text == null) {
-        debugPrint("❌ AI Response was NULL.");
-        return [];
-      }
-
-      // Debug: See exactly what the AI sent back
-      debugPrint("📦 RAW AI RESPONSE: ${response.text}");
+      if (response.text == null) return [];
 
       String cleanedText = response.text!
           .replaceAll('```json', '')
           .replaceAll('```', '')
           .trim();
 
-      // Debug: See what we are passing to the JSON decoder
-      debugPrint("🧹 CLEANED JSON: $cleanedText");
-
       List<dynamic> aiResults = jsonDecode(cleanedText);
 
-      // 4. Filtering Logic
+      // 3. Filtering Logic to prevent duplicates and handle categories
       List<Map<String, dynamic>> finalSuggestions = [];
 
       for (var item in aiResults) {
@@ -123,10 +101,9 @@ class SmartAnalyzerService {
         }
       }
 
-      debugPrint("✅ Found ${finalSuggestions.length} new suggestions.");
       return finalSuggestions;
     } catch (e) {
-      debugPrint("❌ SmartAnalyzerService Error: $e");
+      debugPrint("SmartAnalyzerService Error: $e");
       return [];
     }
   }

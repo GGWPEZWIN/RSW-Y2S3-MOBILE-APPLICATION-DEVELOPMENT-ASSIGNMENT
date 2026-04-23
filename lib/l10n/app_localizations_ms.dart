@@ -343,4 +343,23 @@ class AppLocalizationsMs extends AppLocalizations {
   @override
   String get employerAccountNotice =>
       'Akaun majikan adalah berasingan daripada akaun pencari kerja. Hanya syarikat berdaftar boleh mengakses portal majikan.';
+
+  @override
+  String get notificationsSubtitle => 'Aktifkan atau matikan amaran pop-up';
+
+  @override
+  String get signOutConfirm =>
+      'Adakah anda pasti mahu log keluar dari akaun anda?';
+
+  @override
+  String get companyInformation => 'Maklumat Syarikat';
+
+  @override
+  String get industryLabel => 'Industri';
+
+  @override
+  String get addPhone => 'Tambah telefon';
+
+  @override
+  String get addOfficeLocation => 'Tambah lokasi pejabat';
 }

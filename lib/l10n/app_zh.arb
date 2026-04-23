@@ -109,5 +109,12 @@
   "workEmailLabel": "工作邮箱",
   "orLabel": "或",
   "createEmployerAccountBtn": "创建雇主账户",
-  "employerAccountNotice": "雇主账户与求职者账户是分开的。只有注册公司才能访问雇主门户。"
+  "employerAccountNotice": "雇主账户与求职者账户是分开的。只有注册公司才能访问雇主门户。",
+  "notificationsSubtitle": "启用或禁用弹出通知",
+  "signOutConfirm": "您确定要退出您的帐户吗？",
+  "companyInformation": "公司信息",
+  "industryLabel": "行业",
+  "addPhone": "添加电话",
+  "addOfficeLocation": "添加办公地点"
+
 }

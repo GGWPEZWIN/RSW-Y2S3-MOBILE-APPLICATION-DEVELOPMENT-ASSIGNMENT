@@ -6,6 +6,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
+import 'app_state_manager.dart';
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -13,6 +15,7 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   bool _isInitialized = false;
   StreamSubscription<QuerySnapshot>? _pushQueueSub;
@@ -101,30 +104,31 @@ class NotificationService {
 
   // ─── Cross‑device push listener ─────────────────────────────────────────
 
-  void startListeningToFirestore(String uid) {
-    _pushQueueSub?.cancel();
-    if (uid.isEmpty) return;
-
-    _pushQueueSub = FirebaseFirestore.instance
-        .collection('push_notifications_queue')
-        .where('recipientId', isEqualTo: uid)
+  void startListeningToFirestore(String userId) {
+    _db.collection('push_notifications_queue')
+        .where('recipientId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
         .snapshots()
-        .listen(
-          (snap) async {
-        for (final change in snap.docChanges) {
-          if (change.type != DocumentChangeType.added) continue;
-          final data = change.doc.data() as Map<String, dynamic>? ?? {};
-          final title = (data['title'] as String?) ?? 'JobBuddy';
-          final body = (data['body'] as String?) ?? '';
-          await change.doc.reference.update({'status': 'delivered'});
-          await showNotification(title: title, body: body);
-        }
-      },
-      onError: (e) => debugPrint('push_queue listener error: $e'),
-    );
-  }
+        .listen((snapshot) {
 
+      // --- THE BOUNCER CHECK ---
+      final isEnabled = AppStateManager.instance?.notificationsEnabled ?? true;
+      if (!isEnabled) {
+        debugPrint("Firestore Notification ignored: Toggle is OFF");
+        return;
+      }
+
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          showNotification(
+            title: data?['title'] ?? '',
+            body: data?['body'] ?? '',
+          );
+        }
+      }
+    });
+  }
   void stopListening() {
     _pushQueueSub?.cancel();
     _pushQueueSub = null;

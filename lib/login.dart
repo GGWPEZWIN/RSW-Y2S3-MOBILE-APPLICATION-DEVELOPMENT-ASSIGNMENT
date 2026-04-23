@@ -1,7 +1,9 @@
+import 'package:assignment/services/app_state_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'email_signup.dart';
 import 'email_login.dart';
 import 'employer_login.dart';
@@ -46,7 +48,11 @@ class _LoginPageState extends State<LoginPage> {
       leading: Text(flag, style: const TextStyle(fontSize: 20)),
       title: Text(label),
       onTap: () {
-        appLocale.value = locale; // Updates the global app locale
+        final stateManager = Provider.of<AppStateManager>(context, listen: false);
+
+        // Update the language using the code (e.g., 'en', 'ms', 'zh')
+        stateManager.setLanguage(locale.languageCode);
+
         Navigator.pop(context);
       },
     );

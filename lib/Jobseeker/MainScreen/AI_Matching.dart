@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../JobApplication/ApplicationServices/C-B-F_Machine_Learning.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +56,16 @@ class _AiMatchingScreenState extends State<AiMatchingScreen>
   int _navIndex = 0;
 
   // Initialize your Service with your Gemini API Key
-  final RecommendationService _aiService = RecommendationService('AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0');
+  // TODO
+  final String _apiKey = dotenv.env['APPLICANT_API_KEY'] ?? "";
+  late final RecommendationService _aiService;
+
+  @override
+  void initState() {
+    super.initState();
+    // 3. Initialize it here, now that we are sure the app is ready
+    _aiService = RecommendationService(_apiKey);
+  }
 
   @override
   void dispose() {

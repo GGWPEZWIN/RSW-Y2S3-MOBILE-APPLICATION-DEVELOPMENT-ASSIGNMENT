@@ -341,4 +341,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get employerAccountNotice =>
       'Employer accounts are separate from jobseeker accounts. Only registered companies can access the employer portal.';
+
+  @override
+  String get notificationsSubtitle => 'Enable or disable pop-up alerts';
+
+  @override
+  String get signOutConfirm =>
+      'Are you sure you want to sign out of your account?';
+
+  @override
+  String get companyInformation => 'Company Information';
+
+  @override
+  String get industryLabel => 'Industry';
+
+  @override
+  String get addPhone => 'Add phone';
+
+  @override
+  String get addOfficeLocation => 'Add office location';
 }

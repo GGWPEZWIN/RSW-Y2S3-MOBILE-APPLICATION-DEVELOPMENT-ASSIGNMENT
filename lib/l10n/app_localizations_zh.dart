@@ -337,4 +337,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get employerAccountNotice => '雇主账户与求职者账户是分开的。只有注册公司才能访问雇主门户。';
+
+  @override
+  String get notificationsSubtitle => '启用或禁用弹出通知';
+
+  @override
+  String get signOutConfirm => '您确定要退出您的帐户吗？';
+
+  @override
+  String get companyInformation => '公司信息';
+
+  @override
+  String get industryLabel => '行业';
+
+  @override
+  String get addPhone => '添加电话';
+
+  @override
+  String get addOfficeLocation => '添加办公地点';
 }

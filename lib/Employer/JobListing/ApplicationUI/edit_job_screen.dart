@@ -76,24 +76,43 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
     final educations = (job['educationLevel']?.toString() ?? '')
         .split(',').map((e) => e.trim()).toSet();
 
+    // Load address data
+    String streetAddress = '';
+    String state = '';
+    String city = '';
+    String postcode = '';
+
+    if (job['street_address'] != null && job['street_address'].toString().isNotEmpty) {
+      streetAddress = job['street_address']?.toString() ?? '';
+      state = job['state']?.toString() ?? '';
+      city = job['city']?.toString() ?? '';
+      postcode = job['postcode']?.toString() ?? '';
+    } else if (job['location'] != null && job['location'].toString().isNotEmpty) {
+      final location = job['location']?.toString() ?? '';
+      parseLocationString(location);  // Uses method from SharedJobForm
+    }
+
     setState(() {
-      jobTitleCtrl.text     = job['title']?.toString() ?? '';
-      locationCtrl.text     = job['location']?.toString() ?? '';
-      selectedWorkplace     = job['workplace']?.toString() ?? 'On-site';
-      selectedWorkType      = job['workType']?.toString() ?? 'Full-time';
-      selectedPayType       = job['payType']?.toString() ?? 'Monthly';
-      selectedCurrency      = _extractCurrency(job['salary']?.toString() ?? '') ?? 'MYR';
-      minPayCtrl.text       = minPay;
-      maxPayCtrl.text       = maxPay;
-      showPayOnAd           = job['showPayOnAd']?.toString() ?? 'Yes';
-
-      // FIX 3: Firestore stores it as 'industry' — read that field correctly
-      selectedIndustry      = job['industry']?.toString() ?? '';
-
-      descriptionCtrl.text  = job['description']?.toString() ?? '';
+      jobTitleCtrl.text = job['title']?.toString() ?? '';
+      locationCtrl.text = job['location']?.toString() ?? '';
+      selectedWorkplace = job['workplace']?.toString() ?? 'On-site';
+      selectedWorkType = job['workType']?.toString() ?? 'Full-time';
+      selectedPayType = job['payType']?.toString() ?? 'Monthly';
+      selectedCurrency = _extractCurrency(job['salary']?.toString() ?? '') ?? 'MYR';
+      minPayCtrl.text = minPay;
+      maxPayCtrl.text = maxPay;
+      showPayOnAd = job['showPayOnAd']?.toString() ?? 'Yes';
+      selectedIndustry = job['industry']?.toString() ?? '';
+      descriptionCtrl.text = job['description']?.toString() ?? '';
       requirementsCtrl.text = job['requirements']?.toString() ?? '';
-      benefitsCtrl.text     = job['benefits']?.toString() ?? '';
-      vacanciesCtrl.text    = (job['vacancies'] ?? 1).toString();
+      benefitsCtrl.text = job['benefits']?.toString() ?? '';
+      vacanciesCtrl.text = (job['vacancies'] ?? 1).toString();
+
+      // Load address into fields
+      streetCtrl.text = streetAddress;
+      if (state.isNotEmpty) selectedState = state;
+      if (city.isNotEmpty) selectedCity = city;
+      if (postcode.isNotEmpty) selectedPostcode = postcode;
 
       if (experiences.isNotEmpty) {
         selectedExperiences.clear();
@@ -104,11 +123,11 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         selectedEducations.addAll(educations);
       }
 
-      publishDate               = (job['publishDate'] as Timestamp?)?.toDate();
-      expiryDate                = (job['expiryDate'] as Timestamp?)?.toDate();
-      applicationMethod         = job['applicationMethod']?.toString() ?? 'In-app';
+      publishDate = (job['publishDate'] as Timestamp?)?.toDate();
+      expiryDate = (job['expiryDate'] as Timestamp?)?.toDate();
+      applicationMethod = job['applicationMethod']?.toString() ?? 'In-app';
       applicationEmailCtrl.text = job['applicationEmail']?.toString() ?? '';
-      applicationUrlCtrl.text   = job['applicationUrl']?.toString() ?? '';
+      applicationUrlCtrl.text = job['applicationUrl']?.toString() ?? '';
 
       _isLoading = false;
     });
@@ -120,7 +139,6 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 
   Future<void> _changeCategory() async {
-    // FIX 2: If categories haven't loaded yet, wait for them before opening sheet
     if (_isFetchingCategories) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Loading categories, please wait...')),
@@ -128,7 +146,6 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
       return;
     }
 
-    // If cache is empty (fetch failed silently), try once more
     if (_cachedCategories.isEmpty) {
       await _preloadCategories();
     }
@@ -140,12 +157,12 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => _CategoryPickerSheet(
-        currentCategory:     selectedIndustry,
+        currentCategory: selectedIndustry,
         preloadedCategories: _cachedCategories,
-        isLoading:           false, // already waited above
-        onCategorySelected:  (categoryName, jobTitle) {
+        isLoading: false,
+        onCategorySelected: (categoryName, jobTitle) {
           setState(() {
-            selectedIndustry  = categoryName;
+            selectedIndustry = categoryName;
             jobTitleCtrl.text = jobTitle;
           });
           Navigator.pop(context);
@@ -171,11 +188,11 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
       final user = FirebaseAuth.instance.currentUser;
       final jobData = buildJobDataMap(
         companyName: widget.jobData['company']?.toString() ?? 'Your Company',
-        companyId:   widget.jobData['companyId']?.toString() ?? user?.uid ?? '',
-        employerId:  user?.uid ?? '',
-        isEditing:   true,
-        createdAt:   widget.jobData['createdAt'],
-        applicants:  widget.jobData['applicants'] ?? '0 applied',
+        companyId: widget.jobData['companyId']?.toString() ?? user?.uid ?? '',
+        employerId: user?.uid ?? '',
+        isEditing: true,
+        createdAt: widget.jobData['createdAt'],
+        applicants: widget.jobData['applicants'] ?? '0 applied',
       );
 
       await FirebaseFirestore.instance
@@ -201,7 +218,6 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 
   Widget _buildChangeCategoryBanner() {
-    // FIX 3: Shows the actual saved category name, never "Not set" if it exists
     final displayName = selectedIndustry.isNotEmpty ? selectedIndustry : 'Not set';
     return Container(
       padding: const EdgeInsets.all(12),
@@ -273,8 +289,8 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
             if (currentStep == 2) buildManageStep(),
             buildNavButtons(
               saveLabel: 'Save Changes',
-              onSave:    _updateJob,
-              formKey:   _formKey,
+              onSave: _updateJob,
+              formKey: _formKey,
             ),
           ]),
         ),
@@ -283,10 +299,7 @@ class _EditJobPageState extends State<EditJobPage> with SharedJobForm {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Category picker bottom sheet — receives pre-loaded list, no Firestore calls
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Category picker bottom sheet
 class _CategoryPickerSheet extends StatefulWidget {
   final String currentCategory;
   final List<Map<String, dynamic>> preloadedCategories;

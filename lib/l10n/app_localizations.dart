@@ -759,6 +759,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Employer accounts are separate from jobseeker accounts. Only registered companies can access the employer portal.'**
   String get employerAccountNotice;
+
+  /// No description provided for @notificationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable or disable pop-up alerts'**
+  String get notificationsSubtitle;
+
+  /// No description provided for @signOutConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to sign out of your account?'**
+  String get signOutConfirm;
+
+  /// No description provided for @companyInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Company Information'**
+  String get companyInformation;
+
+  /// No description provided for @industryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Industry'**
+  String get industryLabel;
+
+  /// No description provided for @addPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Add phone'**
+  String get addPhone;
+
+  /// No description provided for @addOfficeLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Add office location'**
+  String get addOfficeLocation;
 }
 
 class _AppLocalizationsDelegate
