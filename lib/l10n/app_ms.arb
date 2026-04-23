@@ -104,5 +104,10 @@
   "signOutBtn": "Log Keluar",
   "deleteAccBtn": "Padam Akaun",
   "allMyJobsTitle": "Semua kerja saya",
-  "noRecords": "Tiada rekod"
+  "noRecords": "Tiada rekod",
+  "employerLoginSubtitle": "Log masuk ke akaun majikan anda untuk menguruskan pengambilan pekerja.",
+  "workEmailLabel": "Emel Kerja",
+  "orLabel": "atau",
+  "createEmployerAccountBtn": "Cipta Akaun Majikan",
+  "employerAccountNotice": "Akaun majikan adalah berasingan daripada akaun pencari kerja. Hanya syarikat berdaftar boleh mengakses portal majikan."
 }

@@ -104,5 +104,10 @@
   "signOutBtn": "Sign Out",
   "deleteAccBtn": "Delete Account",
   "allMyJobsTitle": "All my job",
-  "noRecords": "No records"
+  "noRecords": "No records",
+  "employerLoginSubtitle": "Log in to your employer account to manage hiring.",
+  "workEmailLabel": "Work Email",
+  "orLabel": "or",
+  "createEmployerAccountBtn": "Create Employer Account",
+  "employerAccountNotice": "Employer accounts are separate from jobseeker accounts. Only registered companies can access the employer portal."
 }

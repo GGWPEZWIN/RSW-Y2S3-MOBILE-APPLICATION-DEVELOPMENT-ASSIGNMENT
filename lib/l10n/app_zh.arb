@@ -104,5 +104,10 @@
   "signOutBtn": "登出",
   "deleteAccBtn": "删除账号",
   "allMyJobsTitle": "我的所有工作",
-  "noRecords": "无记录"
+  "noRecords": "无记录",
+  "employerLoginSubtitle": "登录您的雇主账户以管理招聘。",
+  "workEmailLabel": "工作邮箱",
+  "orLabel": "或",
+  "createEmployerAccountBtn": "创建雇主账户",
+  "employerAccountNotice": "雇主账户与求职者账户是分开的。只有注册公司才能访问雇主门户。"
 }
