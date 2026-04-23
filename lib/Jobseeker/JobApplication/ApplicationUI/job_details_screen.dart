@@ -494,34 +494,65 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
                           _sectionTitle('Office Location'),
                           const SizedBox(height: 10),
+                          //Container(
+                          //  height: 150,
+                          //  decoration: BoxDecoration(
+                          //    borderRadius: BorderRadius.circular(16),
+                          //    color: Colors.grey[300],
+                          //  ),
+                          //  child: Center(
+                          //    child: Padding(
+                          //      padding: const EdgeInsets.symmetric(horizontal: 16),
+                          //      child: Row(
+                          //        mainAxisSize: MainAxisSize.min,
+                          //        children: [
+                          //          Icon(Icons.location_on,
+                          //              color: Colors.grey[600], size: 18),
+                          //          const SizedBox(width: 6),
+                          //          Expanded(
+                          //            child: Text(
+                          //              job.location,
+                          //              style: TextStyle(
+                          //                  color: Colors.grey[700],
+                          //                  fontSize: 13),
+                          //              maxLines: 2,
+                          //              overflow: TextOverflow.ellipsis,
+                          //            ),
+                          //          ),
+                          //        ],
+                          //      ),
+                          //    ),
+                          //  ),
+                          //),
                           Container(
-                            height: 150,
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               color: Colors.grey[300],
                             ),
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.location_on,
-                                        color: Colors.grey[600], size: 18),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        job.location,
-                                        style: TextStyle(
-                                            color: Colors.grey[700],
-                                            fontSize: 13),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  color: Colors.grey,
+                                  size: 18,
                                 ),
-                              ),
+                                const SizedBox(width: 6),
+
+                                Expanded(
+                                  child: Text(
+                                    job.location,
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 24),

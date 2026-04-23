@@ -42,7 +42,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- VIEW RESUME LOGIC (NEW) ---
+  // --- VIEW RESUME LOGIC ---
   void _viewResume(String base64String) {
     showDialog(
       context: context,
@@ -78,7 +78,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // --- AUTOMATIC UPDATE LOGIC ---
+  // --- AUTOMATIC UPDATE LOGIC (FOR SKILLS/LANGS) ---
   Future<void> _autoUpdateProfile(List<String> newSkills, List<String> newLanguages) async {
     if (newSkills.isEmpty && newLanguages.isEmpty) return;
     try {
@@ -138,11 +138,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Initialize l10n
     final l10n = AppLocalizations.of(context);
     final user = widget.user;
 
-    // 2. Safety check
     if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
@@ -152,7 +150,6 @@ class _ProfilePageState extends State<ProfilePage> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         automaticallyImplyLeading: false,
-        // Translated 'Profile'
         title: Text(l10n.profileTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
@@ -183,7 +180,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     _buildHeader(userData, photoData),
                     const SizedBox(height: 24),
-                    // Translated 'Improve your job matches'
                     Text(l10n.improveMatches, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const Divider(thickness: 1, height: 24),
 
@@ -222,10 +218,42 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 24),
 
-                    // 5. RESUME
+                    // 5. RESUME (MODIFIED LOGIC BELOW)
                     _buildSectionHeader(l10n.resumeLabel, onAction: l10n.actionUpload, onTap: () async {
-                      final results = await ResumeService().uploadResume(context, (isLoading) => setState(() => _isAnalyzing = isLoading));
-                      // ... your existing upload logic ...
+                      // 1. Trigger the upload and AI Scan
+                      final results = await ResumeService().uploadResume(
+                          context,
+                              (isLoading) => setState(() => _isAnalyzing = isLoading)
+                      );
+
+                      // 2. If results found (your 12 items), save them to Firestore
+                      if (results != null && results.isNotEmpty) {
+                        // Separate Skills/Languages for auto-update and Education/Experience for suggestions
+                        List<String> aiSkills = [];
+                        List<String> aiLangs = [];
+                        List<Map<String, dynamic>> aiHistories = [];
+
+                        for (var item in results) {
+                          String cat = item['category'].toString();
+                          if (cat == 'Skill') aiSkills.add(item['title']);
+                          else if (cat == 'Language') aiLangs.add(item['title']);
+                          else aiHistories.add(item);
+                        }
+
+                        // Save suggestions (Cards)
+                        if (aiHistories.isNotEmpty) {
+                          await _saveSuggestionsToFirestore(aiHistories);
+                        }
+
+                        // Auto update simple chips
+                        await _autoUpdateProfile(aiSkills, aiLangs);
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Scan complete! Found ${results.length} items."), backgroundColor: Colors.green)
+                          );
+                        }
+                      }
                     }),
                     if (resumeUrl != null && resumeUrl.isNotEmpty)
                       GestureDetector(
@@ -354,11 +382,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildDynamicList(BuildContext context, String path, IconData icon, Function(Map<String, dynamic>, String) onEdit) {
-    // 1. Initialize l10n
     final l10n = AppLocalizations.of(context);
+    if (l10n == null) return const SizedBox.shrink();
 
-    // 2. Safety check
-    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(widget.user?.uid).collection(path).orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {

@@ -16,7 +16,7 @@ class _ResumeParserPageState extends State<ResumeParserPage> {
   String _extractedText = "No data extracted yet.";
   bool _isLoading = false;
   String AImodel = 'gemini-3-flash-preview';
-  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
+  final String _apiKey = dotenv.env['APPLICANT_API_KEY'] ?? "";
 
   // Initialize the Gemini Model
   late final model = GenerativeModel(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../Employer/models/job_model.dart';
 import '../../l10n/app_localizations.dart';
 import '../JobApplication/ApplicationServices/C-B-F_Machine_Learning.dart';
@@ -28,8 +29,10 @@ class _HomePageState extends State<HomePage> {
   Set<String> _savedJobs   = {};
 
   // ── Content-based filtering ML ───────────────────────────────────────────
-  final RecommendationService _recommendationService =
-  RecommendationService('AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0');
+  // TODO
+  late final RecommendationService _recommendationService;
+  final String apiKey = dotenv.env['APPLICANT_API_KEY'] ?? "";
+
   List<JobRecommendation>? _aiRecommendations;
   bool _isAiLoading = false;
 
