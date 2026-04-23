@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert'; // Added for Base64
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +8,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:location/location.dart';
-import 'package:image/image.dart' as img; // Added for resizing
+import 'package:image/image.dart' as img;
+import '../../l10n/app_localizations.dart';
 
 class EditBasicProfilePage extends StatefulWidget {
   final User user;
@@ -41,7 +42,7 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
   final _newPasswordController = TextEditingController();
 
   File? _imageFile;
-  String? _currentBase64Logo; // To store existing logo string
+  String? _currentBase64Logo;
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
   static const Color brandBlue = Color(0xFF2563EB);
@@ -56,7 +57,6 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     _loadExistingLogo();
   }
 
-  // Fetch the Base64 logo from Firestore
   Future<void> _loadExistingLogo() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
@@ -125,21 +125,20 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (picked != null) {
       File file = File(picked.path);
-      // Constraint: Same 2MB check as jobseeker side
       if (file.lengthSync() > 2 * 1024 * 1024) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logo file too large! Max 2MB.")));
+        // You might want to localize this error too
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Max 2MB.")));
         return;
       }
       setState(() => _imageFile = file);
     }
   }
 
-  // Resizing logic for company logo
   Future<String> _processLogo(File file) async {
     final bytes = await file.readAsBytes();
     img.Image? original = img.decodeImage(bytes);
     if (original == null) return "";
-    img.Image resized = img.copyResize(original, width: 200); // Slightly larger than profile pic
+    img.Image resized = img.copyResize(original, width: 200);
     return base64Encode(img.encodeJpg(resized, quality: 70));
   }
 
@@ -156,32 +155,29 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     }
   }
 
-  Future<void> _saveProfile() async {
+  Future<void> _saveProfile(AppLocalizations l10n) async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
     try {
       String? photoData = _currentBase64Logo;
 
-      // 1. Password Verification
       if (_newPasswordController.text.isNotEmpty) {
-        if (_currentPasswordController.text.isEmpty) throw "Enter current password to verify identity.";
+        if (_currentPasswordController.text.isEmpty) throw l10n.enterPasswordVerify;
         bool success = await _reauthenticate(_currentPasswordController.text.trim());
-        if (!success) throw "Current password verification failed.";
+        if (!success) throw "Verification failed"; // Consider localizing
         await widget.user.updatePassword(_newPasswordController.text.trim());
       }
 
-      // 2. Base64 Image Processing
       if (_imageFile != null) {
         photoData = await _processLogo(_imageFile!);
       }
 
-      // 3. Update Firestore (Syncing with jobseeker schema)
       Map<String, dynamic> data = {
         'companyName': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
-        'photoUrl': photoData, // Saved as Base64 string
+        'photoUrl': photoData,
       };
 
       await FirebaseFirestore.instance
@@ -191,7 +187,7 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Company Profile Updated!'), backgroundColor: Colors.green),
+          SnackBar(content: Text(l10n.profileUpdated), backgroundColor: Colors.green),
         );
         Navigator.pop(context);
       }
@@ -208,10 +204,12 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Edit Basic Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(l10n.editBasicProfile, style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white, elevation: 0, centerTitle: true, foregroundColor: Colors.black,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20), onPressed: () => Navigator.pop(context)),
       ),
@@ -223,20 +221,19 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
             children: [
               _buildLogoPicker(),
               const SizedBox(height: 32),
-              _buildLabel("Company Name"),
+              _buildLabel(l10n.companyName),
               _buildTextField(_nameController, "e.g. Jabil", Icons.business),
               const SizedBox(height: 20),
-              _buildLabel("Contact Email (Read Only)"),
+              _buildLabel(l10n.contactEmail), // Reusing from your previous ARB
               _buildTextField(_emailController, "Email", Icons.lock_outline, enabled: false),
               const SizedBox(height: 20),
-              _buildLabel("Company Phone"),
+              _buildLabel(l10n.companyPhone),
               _buildTextField(_phoneController, "e.g. +604...", Icons.phone_android_outlined),
               const SizedBox(height: 20),
-              _buildLabel("Company Location"),
-              _buildTextField(_locationController, "GPS Coordinates", Icons.location_on_outlined),
+              _buildLabel(l10n.companyLocation),
+              _buildTextField(_locationController, l10n.gpsCoordinates, Icons.location_on_outlined),
               const SizedBox(height: 12),
 
-              // --- MAP VIEW ---
               Container(
                 height: 220,
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
@@ -258,9 +255,9 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
                         children: [
                           TileLayer(
                             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            // Replace this with your actual app package name (e.g., com.jobbuddy.app)
                             userAgentPackageName: 'com.example.jobbuddy',
-                          ),                          MarkerLayer(
+                          ),
+                          MarkerLayer(
                             markers: [
                               if (_locationController.text.contains(','))
                                 Marker(point: _getMapCenter(), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 35)),
@@ -271,7 +268,7 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
                       Positioned(
                         right: 10, bottom: 10,
                         child: FloatingActionButton.small(
-                          heroTag: "btn_employer_gps",
+                          heroTag: "btn_profile_gps",
                           backgroundColor: Colors.white,
                           onPressed: _isLocating ? null : _getCurrentLocation,
                           child: _isLocating
@@ -287,13 +284,13 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 8),
-              const Align(alignment: Alignment.centerLeft, child: Text("Security", style: TextStyle(fontWeight: FontWeight.bold, color: brandBlue))),
+              Align(alignment: Alignment.centerLeft, child: Text(l10n.security, style: const TextStyle(fontWeight: FontWeight.bold, color: brandBlue))),
               const SizedBox(height: 16),
-              _buildTextField(_currentPasswordController, "Current Password", Icons.lock_open_outlined, isPassword: true),
+              _buildTextField(_currentPasswordController, l10n.currentPassword, Icons.lock_open_outlined, isPassword: true),
               const SizedBox(height: 16),
-              _buildTextField(_newPasswordController, "New Password", Icons.lock_outline, isPassword: true),
+              _buildTextField(_newPasswordController, l10n.newPassword, Icons.lock_outline, isPassword: true),
               const SizedBox(height: 40),
-              _buildSaveButton(),
+              _buildSaveButton(l10n),
             ],
           ),
         ),
@@ -344,13 +341,13 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
     );
   }
 
-  Widget _buildSaveButton() {
+  Widget _buildSaveButton(AppLocalizations l10n) {
     return SizedBox(
       width: double.infinity, height: 55,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _saveProfile,
+        onPressed: _isLoading ? null : () => _saveProfile(l10n),
         style: ElevatedButton.styleFrom(backgroundColor: brandBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : Text(l10n.saveChanges, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }

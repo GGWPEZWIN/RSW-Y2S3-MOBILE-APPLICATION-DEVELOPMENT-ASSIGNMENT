@@ -360,4 +360,141 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addOfficeLocation => 'Add office location';
+
+  @override
+  String get editBasicProfile => 'Edit Basic Profile';
+
+  @override
+  String get companyName => 'Company Name';
+
+  @override
+  String get companyPhone => 'Company Phone';
+
+  @override
+  String get companyLocation => 'Company Location';
+
+  @override
+  String get gpsCoordinates => 'GPS Coordinates';
+
+  @override
+  String get security => 'Security';
+
+  @override
+  String get currentPassword => 'Current Password';
+
+  @override
+  String get newPassword => 'New Password';
+
+  @override
+  String get saveChanges => 'Save Changes';
+
+  @override
+  String get profileUpdated => 'Profile Updated!';
+
+  @override
+  String get enterPasswordVerify =>
+      'Enter current password to verify identity.';
+
+  @override
+  String get contactEmail => 'Contact Email (Read Only)';
+
+  @override
+  String get confirmBtn => 'Confirm';
+
+  @override
+  String get deleteAccount => 'Delete Account';
+
+  @override
+  String get deleteWarning =>
+      'This is permanent. All profile data will be lost.';
+
+  @override
+  String get typeEmailConfirm => 'Type your email to confirm:';
+
+  @override
+  String get enterEmail => 'Enter email';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get confirmDelete => 'Confirm Delete';
+
+  @override
+  String get createAccount => 'Create Account';
+
+  @override
+  String get joinJobBuddy => 'Join JobBuddy and find your next opportunity.';
+
+  @override
+  String get tapToAddPhoto => 'Tap to add profile photo';
+
+  @override
+  String get iAmA => 'I am a...';
+
+  @override
+  String get jobSeeker => 'Job Seeker';
+
+  @override
+  String get lookingForWork => 'Looking for work';
+
+  @override
+  String get employer => 'Employer';
+
+  @override
+  String get hiringTalent => 'Hiring talent';
+
+  @override
+  String get fullName => 'Full Name';
+
+  @override
+  String get emailAddress => 'Email Address';
+
+  @override
+  String get password => 'Password';
+
+  @override
+  String get confirmPassword => 'Confirm Password';
+
+  @override
+  String get minCharacters => 'Minimum 6 characters';
+
+  @override
+  String get reEnterPassword => 'Re-enter your password';
+
+  @override
+  String get alreadyHaveAccount => 'Already have an account?';
+
+  @override
+  String get login => 'Log in';
+
+  @override
+  String get nameRequired => 'Full name is required';
+
+  @override
+  String get validEmail => 'Enter a valid email';
+
+  @override
+  String get passRequired => 'Password is required';
+
+  @override
+  String get confirmPassRequired => 'Please confirm password';
+
+  @override
+  String get passNotMatch => 'Passwords do not match';
+
+  @override
+  String get createJobseekerAccount => 'Create your jobseeker account';
+
+  @override
+  String get email => 'Email';
+
+  @override
+  String get atLeast8Chars => 'At least 8 characters';
+
+  @override
+  String get passMinLength => 'Use 8 characters or more for your password';
+
+  @override
+  String get use8OrMore => 'Use 8 or more characters.';
 }

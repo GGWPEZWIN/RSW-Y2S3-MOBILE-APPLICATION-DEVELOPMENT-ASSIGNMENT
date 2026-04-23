@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_login.dart';
+import 'l10n/app_localizations.dart';
 
 class EmailSignUpScreen extends StatefulWidget {
   const EmailSignUpScreen({super.key});
@@ -161,6 +162,9 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize the localization object
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -170,8 +174,8 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Create Account',
-            style: TextStyle(
+        title: Text(l10n.createAccount, // Changed
+            style: const TextStyle(
                 color: Colors.black, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
@@ -196,13 +200,13 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text('Join JobBuddy',
-                    style: TextStyle(
+                Text(l10n.joinJobBuddy, // Changed
+                    style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                const Text('Create your jobseeker account',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                Text(l10n.createJobseekerAccount, // Changed
+                    style: const TextStyle(color: Colors.grey, fontSize: 14),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 32),
 
@@ -211,11 +215,11 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
                   decoration: _inputDeco(
-                      label: 'Full Name',
+                      label: l10n.fullName, // Changed
                       hint: 'e.g. Ahmad Faris',
                       icon: Icons.badge_outlined),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Full name is required'
+                      ? l10n.nameRequired // Changed
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -225,28 +229,28 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _inputDeco(
-                      label: 'Email',
+                      label: l10n.email, // Changed
                       hint: 'you@example.com',
                       icon: Icons.email_outlined),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty)
-                      return 'Email is required';
+                      return l10n.emailRequired; // Changed
                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
                         .hasMatch(v)) {
-                      return 'Enter a valid email';
+                      return l10n.validEmail; // Changed
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Password — ✅ Google-style: 8 chars minimum only
+                // Password
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: _inputDeco(
-                    label: 'Password',
-                    hint: 'At least 8 characters',
+                    label: l10n.password, // Changed
+                    hint: l10n.atLeast8Chars, // Changed
                     icon: Icons.lock_outline,
                     suffix: IconButton(
                       icon: Icon(_obscurePassword
@@ -257,20 +261,20 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Password is required';
+                    if (v == null || v.isEmpty) return l10n.passRequired; // Changed
                     if (v.length < 8)
-                      return 'Use 8 characters or more for your password';
+                      return l10n.passMinLength; // Changed
                     return null;
                   },
                 ),
                 const SizedBox(height: 6),
-                const Row(children: [
-                  SizedBox(width: 4),
-                  Icon(Icons.info_outline_rounded,
+                Row(children: [
+                  const SizedBox(width: 4),
+                  const Icon(Icons.info_outline_rounded,
                       size: 13, color: Colors.grey),
-                  SizedBox(width: 5),
-                  Text('Use 8 or more characters.',
-                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(width: 5),
+                  Text(l10n.use8OrMore, // Changed
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                 ]),
                 const SizedBox(height: 16),
 
@@ -279,8 +283,8 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirm,
                   decoration: _inputDeco(
-                    label: 'Confirm Password',
-                    hint: 'Re-enter your password',
+                    label: l10n.confirmPassword, // Changed
+                    hint: l10n.reEnterPassword, // Changed
                     icon: Icons.lock_outline,
                     suffix: IconButton(
                       icon: Icon(_obscureConfirm
@@ -292,9 +296,9 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty)
-                      return 'Please confirm your password';
+                      return l10n.confirmPassRequired; // Changed
                     if (v != _passwordController.text)
-                      return "Those passwords didn't match. Try again.";
+                      return l10n.passNotMatch; // Changed
                     return null;
                   },
                 ),
@@ -316,8 +320,8 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                         height: 24,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                        : const Text('Create Account',
-                        style: TextStyle(
+                        : Text(l10n.createAccount, // Changed
+                        style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white)),
@@ -328,15 +332,15 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Already have an account? '),
+                    Text(l10n.alreadyHaveAccount), // Changed
                     GestureDetector(
                       onTap: () => Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
                             builder: (_) => const EmailLoginPage()),
                       ),
-                      child: const Text('Log In',
-                          style: TextStyle(
+                      child: Text(l10n.login, // Changed
+                          style: const TextStyle(
                               color: _primaryBlue,
                               fontWeight: FontWeight.bold)),
                     ),

@@ -362,4 +362,143 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get addOfficeLocation => 'Tambah lokasi pejabat';
+
+  @override
+  String get editBasicProfile => 'Edit Profil Asas';
+
+  @override
+  String get companyName => 'Nama Syarikat';
+
+  @override
+  String get companyPhone => 'No. Telefon Syarikat';
+
+  @override
+  String get companyLocation => 'Lokasi Syarikat';
+
+  @override
+  String get gpsCoordinates => 'Koordinat GPS';
+
+  @override
+  String get security => 'Keselamatan';
+
+  @override
+  String get currentPassword => 'Kata Laluan Semasa';
+
+  @override
+  String get newPassword => 'Kata Laluan Baru';
+
+  @override
+  String get saveChanges => 'Simpan Perubahan';
+
+  @override
+  String get profileUpdated => 'Profil Dikemas Kini!';
+
+  @override
+  String get enterPasswordVerify =>
+      'Masukkan kata laluan semasa untuk pengesahan.';
+
+  @override
+  String get contactEmail => 'E-mel Hubungan (Baca Sahaja)';
+
+  @override
+  String get confirmBtn => 'Esah';
+
+  @override
+  String get deleteAccount => 'Padam Akaun';
+
+  @override
+  String get deleteWarning =>
+      'Ini adalah kekal. Semua data profil akan hilang.';
+
+  @override
+  String get typeEmailConfirm => 'Taip e-mel anda untuk sahkan:';
+
+  @override
+  String get enterEmail => 'Masukkan e-mel';
+
+  @override
+  String get cancel => 'Batal';
+
+  @override
+  String get confirmDelete => 'Sahkan Padam';
+
+  @override
+  String get createAccount => 'Cipta Akaun';
+
+  @override
+  String get joinJobBuddy =>
+      'Sertai JobBuddy dan cari peluang anda seterusnya.';
+
+  @override
+  String get tapToAddPhoto => 'Ketik untuk tambah foto profil';
+
+  @override
+  String get iAmA => 'Saya adalah...';
+
+  @override
+  String get jobSeeker => 'Pencari Kerja';
+
+  @override
+  String get lookingForWork => 'Mencari pekerjaan';
+
+  @override
+  String get employer => 'Majikan';
+
+  @override
+  String get hiringTalent => 'Mengambil pekerja';
+
+  @override
+  String get fullName => 'Nama Penuh';
+
+  @override
+  String get emailAddress => 'Alamat E-mel';
+
+  @override
+  String get password => 'Kata Laluan';
+
+  @override
+  String get confirmPassword => 'Sahkan Kata Laluan';
+
+  @override
+  String get minCharacters => 'Minimum 6 aksara';
+
+  @override
+  String get reEnterPassword => 'Masukkan semula kata laluan anda';
+
+  @override
+  String get alreadyHaveAccount => 'Sudah mempunyai akaun?';
+
+  @override
+  String get login => 'Log masuk';
+
+  @override
+  String get nameRequired => 'Nama penuh diperlukan';
+
+  @override
+  String get validEmail => 'Masukkan e-mel yang sah';
+
+  @override
+  String get passRequired => 'Kata Laluan diperlukan';
+
+  @override
+  String get confirmPassRequired => 'Sila sahkan kata laluan';
+
+  @override
+  String get passNotMatch => 'Kata laluan tidak sepadan';
+
+  @override
+  String get createJobseekerAccount => 'Cipta akaun pencari kerja anda';
+
+  @override
+  String get email => 'E-mel';
+
+  @override
+  String get atLeast8Chars => 'Sekurang-kurangnya 8 aksara';
+
+  @override
+  String get passMinLength =>
+      'Gunakan 8 aksara atau lebih untuk kata laluan anda';
+
+  @override
+  String get use8OrMore => 'Gunakan 8 atau lebih aksara.';
 }
