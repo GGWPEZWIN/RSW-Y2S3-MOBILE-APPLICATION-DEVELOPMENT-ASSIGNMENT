@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../login.dart'; // Ensure this path correctly points to your login screen
+import 'l10n/app_localizations.dart';
+import '../../../login.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  // New state variable for the notification toggle
+  bool _notificationsEnabled = true;
 
   // --- SIGN OUT LOGIC ---
   Future<void> _signOut(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
+      if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -27,20 +36,16 @@ class SettingsPage extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Check if the typed email matches the current user
     if (inputEmail.trim().toLowerCase() != user.email?.toLowerCase()) {
       _showSnackBar(context, "Email does not match. Please try again.", Colors.orange);
       return;
     }
 
     try {
-      // 1. Delete data from Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-
-      // 2. Delete user from Firebase Auth
       await user.delete();
 
-      if (context.mounted) {
+      if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -49,7 +54,7 @@ class SettingsPage extends StatelessWidget {
       }
     } catch (e) {
       debugPrint("Delete error: $e");
-      if (context.mounted) {
+      if (mounted) {
         _showSnackBar(context, "Session expired. Please re-login to delete account.", Colors.red);
       }
     }
@@ -150,13 +155,14 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     const Color kPrimaryBlue = Color(0xFF2563EB);
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.settingsTitle, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -168,7 +174,35 @@ class SettingsPage extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
           children: [
+            // NEW NOTIFICATION TOGGLE
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: SwitchListTile(
+                title: Text(
+                  l10n.notificationsLabel,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                subtitle: Text(l10n.notificationsSubtitle),
+                secondary: Icon(
+                  _notificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
+                  color: _notificationsEnabled ? kPrimaryBlue : Colors.grey,
+                ),
+                value: _notificationsEnabled,
+                onChanged: (bool value) {
+                  setState(() {
+                    _notificationsEnabled = value;
+                  });
+                },
+                activeColor: kPrimaryBlue,
+              ),
+            ),
+
             const Spacer(),
+
             // SIGN OUT BUTTON
             ElevatedButton(
               onPressed: () => _showSignOutDialog(context),
@@ -183,6 +217,7 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+
             // DELETE ACCOUNT BUTTON
             TextButton(
               onPressed: () => _showDeleteDialog(context),

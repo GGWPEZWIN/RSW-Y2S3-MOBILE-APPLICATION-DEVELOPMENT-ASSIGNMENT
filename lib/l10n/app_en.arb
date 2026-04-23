@@ -109,5 +109,6 @@
   "workEmailLabel": "Work Email",
   "orLabel": "or",
   "createEmployerAccountBtn": "Create Employer Account",
-  "employerAccountNotice": "Employer accounts are separate from jobseeker accounts. Only registered companies can access the employer portal."
+  "employerAccountNotice": "Employer accounts are separate from jobseeker accounts. Only registered companies can access the employer portal.",
+  "notificationsSubtitle": "Enable or disable pop-up alerts"
 }
