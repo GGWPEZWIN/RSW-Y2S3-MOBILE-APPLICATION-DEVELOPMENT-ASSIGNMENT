@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'app_state_manager.dart';
 import 'notification_service.dart';
 
 /// Background handler — must be top-level
@@ -17,6 +18,12 @@ class FCMService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db        = FirebaseFirestore.instance;
 
+  AppStateManager? _stateManager;
+
+  void attachStateManager(AppStateManager manager) {
+    _stateManager = manager;
+  }
+
   // ─── Call once in main.dart ───────────────────────────────────────────────
 
   Future<void> initialize() async {
@@ -29,6 +36,13 @@ class FCMService {
 
     // Show banner for true FCM messages while app is open
     FirebaseMessaging.onMessage.listen((message) {
+      final isEnabled = AppStateManager.instance?.notificationsEnabled ?? true;
+
+      if (!isEnabled) {
+        debugPrint('FCM Blocked: User disabled notifications in settings.');
+        return;
+      }
+
       final n = message.notification;
       if (n == null) return;
       NotificationService().showNotification(

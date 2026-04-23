@@ -48,7 +48,6 @@ class _LoginPageState extends State<LoginPage> {
       leading: Text(flag, style: const TextStyle(fontSize: 20)),
       title: Text(label),
       onTap: () {
-        // FIX: Access the AppStateManager instead of appLocale.value
         final stateManager = Provider.of<AppStateManager>(context, listen: false);
 
         // Update the language using the code (e.g., 'en', 'ms', 'zh')

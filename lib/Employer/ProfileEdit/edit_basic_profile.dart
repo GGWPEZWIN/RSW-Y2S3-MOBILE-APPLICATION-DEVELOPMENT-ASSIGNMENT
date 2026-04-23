@@ -256,8 +256,11 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
                           },
                         ),
                         children: [
-                          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-                          MarkerLayer(
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            // Replace this with your actual app package name (e.g., com.jobbuddy.app)
+                            userAgentPackageName: 'com.example.jobbuddy',
+                          ),                          MarkerLayer(
                             markers: [
                               if (_locationController.text.contains(','))
                                 Marker(point: _getMapCenter(), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 35)),

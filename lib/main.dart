@@ -39,6 +39,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Get the manager from Provider
+    final stateManager = Provider.of<AppStateManager>(context, listen: false);
+
+    // 2. Pass it to your FCM service
+    FCMService().attachStateManager(stateManager);
+
     // 3. Use Consumer to listen for language changes
     return Consumer<AppStateManager>(
       builder: (context, stateManager, child) {
