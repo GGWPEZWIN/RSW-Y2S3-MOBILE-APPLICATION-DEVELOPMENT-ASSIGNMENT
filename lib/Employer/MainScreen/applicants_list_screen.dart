@@ -915,12 +915,16 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ],
 
-            // CV / Resume
             if (a.resume.isNotEmpty) ...[
               const SizedBox(height: 24),
-              _sectionTitle('CV / Resume'),
+              _sectionTitle('CV / Resume'), // Localized
               const SizedBox(height: 12),
-              _CvViewer(base64Image: a.resume),
+              _CvViewer(
+                // Split by ':' and take the last part to remove the filename prefix
+                base64Image: a.resume.contains(':')
+                    ? a.resume.split(':').last
+                    : a.resume,
+              ),
             ],
 
             // Update Status button
