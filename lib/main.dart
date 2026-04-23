@@ -1,13 +1,15 @@
+import 'package:assignment/services/app_state_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'l10n/app_localizations.dart'; // Ensure path matches your folder
+import 'package:provider/provider.dart'; // 1. Add this import
+import 'l10n/app_localizations.dart';
 import 'login.dart';
 import 'services/google_sign_in_service.dart';
 import 'services/fcm_service.dart';
 
-// Global notifier for language changes
+//global value for english default
 final ValueNotifier<Locale> appLocale = ValueNotifier(const Locale('en'));
 
 void main() async {
@@ -23,7 +25,13 @@ void main() async {
     debugPrint('Initialization Error: $e');
   }
 
-  runApp(const MyApp());
+  runApp(
+    // 2. Wrap the app in the Provider
+    ChangeNotifierProvider(
+      create: (context) => AppStateManager(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -31,15 +39,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Locale>(
-      valueListenable: appLocale,
-      builder: (context, locale, child) {
+    // 3. Use Consumer to listen for language changes
+    return Consumer<AppStateManager>(
+      builder: (context, stateManager, child) {
         return MaterialApp(
           title: 'JobBuddy',
           debugShowCheckedModeBanner: false,
-          locale: locale,
 
-          // CRITICAL FIX: Added AppLocalizations.delegate
+          // 4. Get locale from stateManager
+          locale: stateManager.locale,
+
           localizationsDelegates: const [
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,

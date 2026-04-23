@@ -1,7 +1,8 @@
+import 'package:assignment/services/app_state_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'l10n/app_localizations.dart';
+import 'package:provider/provider.dart'; // Ensure provider is imported
 import '../../../login.dart';
 import 'l10n/app_localizations.dart';
 
@@ -14,6 +15,46 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
+
+// --- LANGUAGE SELECTION DIALOG ---
+  void _showLanguageDialog(BuildContext context) {
+    // This will no longer throw an error!
+    final stateManager = Provider.of<AppStateManager>(context, listen: false);
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Select Language",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            _buildLanguageOption(context, "English", 'en', stateManager),
+            _buildLanguageOption(context, "Bahasa Melayu", 'ms', stateManager),
+            _buildLanguageOption(context, "中文 (Chinese)", 'zh', stateManager),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(BuildContext context, String title, String code, AppStateManager manager) {
+    return ListTile(
+      title: Text(title),
+      trailing: manager.locale.languageCode == code
+          ? const Icon(Icons.check, color: Color(0xFF2563EB))
+          : null,
+      onTap: () {
+        manager.setLanguage(code);
+        Navigator.pop(context);
+      },
+    );
+  }
 
   // --- SIGN OUT LOGIC ---
   Future<void> _signOut(BuildContext context) async {
@@ -62,35 +103,27 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _showSnackBar(BuildContext context, String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(message),
-          backgroundColor: color,
-          behavior: SnackBarBehavior.floating
-      ),
+      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
     );
   }
 
   // --- SIGN OUT CONFIRMATION DIALOG ---
   void _showSignOutDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to sign out of your account?'),
+        title: Text(l10n.signOutBtn, style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(l10n.signOutConfirm),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _signOut(context);
             },
-            child: const Text('Sign Out',
-                style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)
-            ),
+            child: Text('Sign Out', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -107,18 +140,14 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Delete Account',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)
-        ),
+        title: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('This is permanent. All profile data will be lost.'),
             const SizedBox(height: 12),
-            Text('Type your email to confirm:',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 13)
-            ),
+            Text('Type your email to confirm:', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
             Text(userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 16),
             TextField(
@@ -133,10 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () => _handleDeleteAccount(context, emailController.text),
             style: ElevatedButton.styleFrom(
@@ -144,9 +170,7 @@ class _SettingsPageState extends State<SettingsPage> {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Confirm Delete',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
-            ),
+            child: const Text('Confirm Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -174,7 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
           children: [
-            // 1. LANGUAGE SELECTION
+            // 1. LANGUAGE SELECTION (Triggers your BottomSheet)
             Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
@@ -185,19 +209,8 @@ class _SettingsPageState extends State<SettingsPage> {
               child: ListTile(
                 leading: const Icon(Icons.translate, color: kPrimaryBlue),
                 title: Text(l10n.selectLanguage, style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: DropdownButton<Locale>(
-                  value: Localizations.localeOf(context),
-                  underline: const SizedBox(),
-                  onChanged: (Locale? newLocale) {
-                    // This assumes you have a Locale provider or a way to trigger
-                    // the Locale change at the App level (e.g., MyApp.setLocale)
-                  },
-                  items: const [
-                    DropdownMenuItem(value: Locale('en'), child: Text("English")),
-                    DropdownMenuItem(value: Locale('ms'), child: Text("Bahasa")),
-                    DropdownMenuItem(value: Locale('zh'), child: Text("中文")),
-                  ],
-                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                onTap: () => _showLanguageDialog(context),
               ),
             ),
 
@@ -220,9 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 value: _notificationsEnabled,
                 onChanged: (bool value) {
-                  setState(() {
-                    _notificationsEnabled = value;
-                  });
+                  setState(() => _notificationsEnabled = value);
                 },
                 activeColor: kPrimaryBlue,
               ),
@@ -230,7 +241,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const Spacer(),
 
-            // SIGN OUT BUTTON
             ElevatedButton(
               onPressed: () => _showSignOutDialog(context),
               style: ElevatedButton.styleFrom(
@@ -239,18 +249,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                 elevation: 0,
               ),
-              child: const Text("Sign Out",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-              ),
+              child: Text(l10n.signOutBtn, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
             const SizedBox(height: 16),
 
-            // DELETE ACCOUNT BUTTON
             TextButton(
               onPressed: () => _showDeleteDialog(context),
-              child: const Text("Delete Account",
-                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)
-              ),
+              child: Text(l10n.deleteAccBtn, style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
             ),
           ],
         ),
