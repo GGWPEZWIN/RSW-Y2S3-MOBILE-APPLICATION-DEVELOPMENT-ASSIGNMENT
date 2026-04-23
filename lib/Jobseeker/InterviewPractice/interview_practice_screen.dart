@@ -550,7 +550,6 @@ class _InterviewPracticeSessionScreenState
         secondaryLabel: 'Go Back',
         onPrimary: () {
           Navigator.pop(ctx);
-          // Retry the submission
           _submitForFeedback();
         },
         onSecondary: () {
@@ -560,6 +559,31 @@ class _InterviewPracticeSessionScreenState
             _isSubmitting = false;
           });
         },
+      ),
+    );
+  }
+
+  Future<void> _showLeaveDuringAnalysisDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Leave Practice?', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text('Your answer is still being analyzed. If you leave now, you will lose this progress.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+            },
+            child: const Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -574,10 +598,8 @@ class _InterviewPracticeSessionScreenState
       return;
     }
 
-    // Log current state for debugging
     debugPrint('📊 State before submission - mode: $_mode, waitingForFinal: $_isWaitingForFinal, answer length: ${_answerCtrl.text.length}');
 
-    // If we're in processing_stop, wait for it to complete
     if (_mode == 'processing_stop') {
       debugPrint('⏳ In processing_stop mode, waiting for completion...');
       _showSnack('Processing speech, please wait...');
@@ -613,7 +635,6 @@ class _InterviewPracticeSessionScreenState
       await Future.delayed(const Duration(milliseconds: 500));
     }
 
-    // Final check - force to stopped if needed
     if (_mode != 'stopped' && _mode != 'typing') {
       debugPrint('⚠️ Mode is $_mode, forcing to stopped');
       setState(() {
@@ -719,7 +740,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
       debugPrint('❌ Exception in submit: $e');
       if (mounted) {
         if (e.toString().contains('rate_limited')) {
-          // Show rate limit dialog
           await _showRateLimitDialog();
         } else {
           setState(() {
@@ -764,12 +784,33 @@ SCORE: <Score like 7/10 with one sentence justification.>
     }
   }
 
-  // ── End & Review logic ─────────────────────────────────────────────────────
-
   Future<void> _endAndReview() async {
     debugPrint('🏁 End & Review clicked');
+
     if (_mode == 'loading') {
-      _showSnack('Please wait for feedback before leaving');
+      final confirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Stop Analysis?', style: TextStyle(fontWeight: FontWeight.w700)),
+          content: const Text('Your answer is still being analyzed. If you stop now, you will lose this progress.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continue Waiting'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Stop & Leave', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        _navigateToReview();
+      }
       return;
     }
 
@@ -844,11 +885,32 @@ SCORE: <Score like 7/10 with one sentence justification.>
     );
   }
 
-  // ── Will-pop ───────────────────────────────────────────────────────────────
-
   Future<bool> _onWillPop() async {
     debugPrint('🔙 Back button pressed, current mode: $_mode');
-    if (_mode == 'loading') { _showSnack('Please wait for feedback before leaving'); return false; }
+
+    if (_mode == 'loading') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Leave Practice?', style: TextStyle(fontWeight: FontWeight.w700)),
+          content: const Text('Your answer is still being analyzed. If you leave now, you will lose this progress.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Stay'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Leave', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+      return confirm ?? false;
+    }
+
     if (_mode == 'listening' || _mode == 'stopped' || _mode == 'processing_stop' || _mode == 'editing_transcript') {
       final confirm = await showDialog<bool>(
         context: context,
@@ -856,7 +918,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
         builder: (_) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Leave Practice?', style: TextStyle(fontWeight: FontWeight.w700)),
-          content: const Text('Your recorded answer will be lost.'),
+          content: const Text('Your recorded/typed answer will be lost.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Stay')),
             TextButton(
@@ -867,6 +929,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
       );
       return confirm ?? false;
     }
+
     return true;
   }
 
@@ -906,7 +969,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
           ? _buildGeneratingScreen()
           : Column(children: [
 
-        // ── End & Review button ──────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           child: GestureDetector(
@@ -947,7 +1009,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
         ),
         const SizedBox(height: 20),
 
-        // ── Question pill ────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
@@ -965,7 +1026,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
         ),
         const SizedBox(height: 16),
 
-        // ── Main card ────────────────────────────────────────────────
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -990,7 +1050,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                           color: Colors.black87, height: 1.5)),
                 const SizedBox(height: 24),
 
-                // ── VOICE MODES ──────────────────────────────────────
                 if (_mode == 'idle' || _mode == 'listening' || _mode == 'stopped' || _mode == 'processing_stop' || _mode == 'editing_transcript') ...[
                   if (_mode != 'idle' && _mode != 'processing_stop' && _mode != 'editing_transcript') ...[
                     Text(_timerDisplay, style: TextStyle(
@@ -1010,7 +1069,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     const SizedBox(height: 16),
                   ],
 
-                  // Mic button
                   Opacity(
                     opacity: (_isMicTapLocked || _speechInitialising) ? 0.5 : 1.0,
                     child: GestureDetector(
@@ -1079,7 +1137,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   ),
                   const SizedBox(height: 12),
 
-                  // Live partial transcription
                   if (_mode == 'listening' && _currentWords.isNotEmpty)
                     Container(
                       width: double.infinity,
@@ -1099,7 +1156,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                       ]),
                     ),
 
-                  // Show processing indicator while waiting for final result
                   if (_mode == 'processing_stop') ...[
                     const SizedBox(height: 16),
                     const Row(
@@ -1117,7 +1173,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                     ),
                   ],
 
-                  // Captured text preview with EDIT capability
                   if (_answerCtrl.text.isNotEmpty && _mode != 'listening' && _mode != 'processing_stop') ...[
                     const SizedBox(height: 12),
                     Container(
@@ -1295,7 +1350,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   ),
                 ],
 
-                // ── TYPING ───────────────────────────────────────────
                 if (_mode == 'typing') ...[
                   Container(
                     decoration: BoxDecoration(
@@ -1347,7 +1401,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   ),
                 ],
 
-                // ── LOADING ──────────────────────────────────────────
                 if (_mode == 'loading') ...[
                   const SizedBox(height: 20),
                   const CircularProgressIndicator(color: _blue),
@@ -1360,7 +1413,6 @@ SCORE: <Score like 7/10 with one sentence justification.>
                   const SizedBox(height: 20),
                 ],
 
-                // ── FEEDBACK ─────────────────────────────────────────
                 if (_mode == 'feedback') ...[
                   Container(
                     width: double.infinity,
@@ -1518,6 +1570,57 @@ SCORE: <Score like 7/10 with one sentence justification.>
           ]),
         ),
       );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SHARED APPBAR - INSIDE THE STATE CLASS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  PreferredSizeWidget _appBar(BuildContext context) => AppBar(
+    backgroundColor: Colors.white,
+    elevation: 0,
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back, color: Colors.black),
+      onPressed: () async {
+        if (_mode == 'loading') {
+          final confirm = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Leave Practice?', style: TextStyle(fontWeight: FontWeight.w700)),
+              content: const Text('Your answer is still being analyzed. If you leave now, you will lose this progress.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Stay'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Leave', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            if (mounted) Navigator.pop(context);
+          }
+        } else {
+          if (mounted) Navigator.maybePop(context);
+        }
+      },
+    ),
+    title: Row(children: [
+      const Text('Interview Practice',
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black)),
+      const SizedBox(width: 8),
+      Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.grey[600]),
+    ]),
+    bottom: PreferredSize(
+      preferredSize: const Size.fromHeight(1),
+      child: Container(height: 1, color: const Color(0xFFEEEEEE)),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1647,7 +1750,7 @@ class _InterviewDialog extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVIEW SCREEN (kept as is)
+// REVIEW SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -2043,27 +2146,3 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
         ]),
       );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHARED APPBAR
-// ─────────────────────────────────────────────────────────────────────────────
-
-PreferredSizeWidget _appBar(BuildContext context) => AppBar(
-  backgroundColor: Colors.white,
-  elevation: 0,
-  leading: IconButton(
-    icon: const Icon(Icons.arrow_back, color: Colors.black),
-    onPressed: () => Navigator.maybePop(context),
-  ),
-  title: Row(children: [
-    const Text('Interview Practice',
-        style: TextStyle(
-            fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black)),
-    const SizedBox(width: 8),
-    Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.grey[600]),
-  ]),
-  bottom: PreferredSize(
-    preferredSize: const Size.fromHeight(1),
-    child: Container(height: 1, color: const Color(0xFFEEEEEE)),
-  ),
-);
