@@ -24,9 +24,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _newPasswordController = TextEditingController();
 
   File? _imageFile;
-  String? _currentPhotoData; // Stores either Google URL or Base64 string
+  String? _currentPhotoData;
   bool _isLoading = false;
   bool _isGoogleUser = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+
   final _formKey = GlobalKey<FormState>();
   static const Color brandBlue = Color(0xFF2563EB);
 
@@ -55,12 +58,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _nameController.text = data?['name'] ?? widget.user.displayName ?? '';
           _phoneController.text = data?['phone'] ?? '';
           _locationController.text = data?['location'] ?? '';
-
-          // --- FIX: Fallback to Google photoURL if Firestore is empty ---
           _currentPhotoData = data?['photoUrl'] ?? widget.user.photoURL;
         });
       } else {
-        // Brand new user: use Google photo URL as default
         setState(() {
           _currentPhotoData = widget.user.photoURL;
         });
@@ -92,8 +92,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final bytes = await file.readAsBytes();
     img.Image? originalImage = img.decodeImage(bytes);
     if (originalImage == null) return "";
-
-    // Resize to keep Firestore document size small
     img.Image resizedImage = img.copyResize(originalImage, width: 150);
     return base64Encode(img.encodeJpg(resizedImage, quality: 70));
   }
@@ -119,25 +117,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final user = widget.user;
       String? photoToSave = _currentPhotoData;
 
-      // 1. Password Logic
+      // 1. Password Update Logic
       if (!_isGoogleUser && _newPasswordController.text.isNotEmpty) {
-        if (_currentPasswordController.text.isEmpty) throw "Current password required.";
         bool success = await _reauthenticate(_currentPasswordController.text.trim());
-        if (!success) throw "Password verification failed.";
+        if (!success) throw "Current password incorrect.";
         await user.updatePassword(_newPasswordController.text.trim());
       }
 
-      // 2. Image Processing (Convert to Base64 if a new file was picked)
       if (_imageFile != null) {
         photoToSave = await _processImage(_imageFile!);
       }
 
-      // 3. Update Auth Display Name
       if (_nameController.text.trim().isNotEmpty) {
         await user.updateDisplayName(_nameController.text.trim());
       }
 
-      // 4. Save to Firestore
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -184,14 +178,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
               const SizedBox(height: 32),
 
               _buildLabel("Full Name"),
-              _buildTextField(_nameController, "Your Name", Icons.person_outline),
+              _buildTextField(
+                _nameController,
+                "Your Name",
+                Icons.person_outline,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Name is required" : null,
+              ),
               const SizedBox(height: 16),
+
               _buildLabel("Email Address (Locked)"),
               _buildTextField(_emailController, "Email", Icons.lock_outline, enabled: false),
               const SizedBox(height: 16),
+
               _buildLabel("Phone Number"),
-              _buildTextField(_phoneController, "01x-xxxxxxx", Icons.phone_android_outlined),
+              _buildTextField(
+                _phoneController,
+                "01x-xxxxxxx",
+                Icons.phone_android_outlined,
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null; // Optional field
+                  final phoneRegex = RegExp(r'^01[0-9]{1}-?[0-9]{7,8}$');
+                  if (!phoneRegex.hasMatch(v)) return "Enter a valid Malaysian phone number";
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
+
               _buildLabel("Location"),
               _buildTextField(_locationController, "City, State", Icons.location_on_outlined),
 
@@ -201,9 +214,50 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 const SizedBox(height: 16),
                 const Text("Security", style: TextStyle(fontWeight: FontWeight.bold, color: brandBlue, fontSize: 16)),
                 const SizedBox(height: 16),
-                _buildTextField(_currentPasswordController, "Current Password", Icons.lock_open_outlined, isPassword: true),
+
+                // Current Password
+                _buildTextField(
+                  _currentPasswordController,
+                  "Current Password",
+                  Icons.lock_open_outlined,
+                  isPassword: _obscureCurrent,
+                  suffix: IconButton(
+                    icon: Icon(_obscureCurrent ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                  ),
+                  validator: (v) {
+                    if (_newPasswordController.text.isNotEmpty && (v == null || v.isEmpty)) {
+                      return "Required to change password";
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 16),
-                _buildTextField(_newPasswordController, "New Password", Icons.lock_outline, isPassword: true),
+
+                // New Password
+                _buildTextField(
+                  _newPasswordController,
+                  "New Password",
+                  Icons.lock_outline,
+                  isPassword: _obscureNew,
+                  suffix: IconButton(
+                    icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                  ),
+                  validator: (v) {
+                    if (v != null && v.isNotEmpty && v.length < 8) {
+                      return "Use 8 characters or more for your password";
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 6),
+                if (_newPasswordController.text.isNotEmpty || _currentPasswordController.text.isNotEmpty)
+                  const Row(children: [
+                    Icon(Icons.info_outline, size: 13, color: Colors.grey),
+                    SizedBox(width: 5),
+                    Text('Use 8 or more characters.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ]),
               ],
 
               const SizedBox(height: 40),
@@ -222,20 +276,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Widget _buildProfilePicture() {
     ImageProvider? imageProvider;
-
     if (_imageFile != null) {
-      // 1. Show the local file if user just picked one
       imageProvider = FileImage(_imageFile!);
     } else if (_currentPhotoData != null && _currentPhotoData!.isNotEmpty) {
-      // 2. Check if data is a URL (Google) or Base64 (Manual)
       if (_currentPhotoData!.startsWith('http')) {
         imageProvider = NetworkImage(_currentPhotoData!);
       } else {
-        try {
-          imageProvider = MemoryImage(base64Decode(_currentPhotoData!));
-        } catch (e) {
-          imageProvider = null;
-        }
+        try { imageProvider = MemoryImage(base64Decode(_currentPhotoData!)); }
+        catch (e) { imageProvider = null; }
       }
     }
 
@@ -247,9 +295,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             radius: 55,
             backgroundColor: const Color(0xFFF1F5F9),
             backgroundImage: imageProvider,
-            child: imageProvider == null
-                ? const Icon(Icons.person, size: 40, color: brandBlue)
-                : null,
+            child: imageProvider == null ? const Icon(Icons.person, size: 40, color: brandBlue) : null,
           ),
           const Positioned(
               bottom: 0,
@@ -265,17 +311,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool isPassword = false, bool enabled = true}) {
+  Widget _buildTextField(
+      TextEditingController controller,
+      String hint,
+      IconData icon,
+      {bool isPassword = false,
+        bool enabled = true,
+        Widget? suffix,
+        String? Function(String?)? validator,
+        TextInputType? keyboardType}
+      ) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword,
       enabled: enabled,
+      validator: validator,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
-        filled: !enabled,
+        suffixIcon: suffix,
+        filled: true,
         fillColor: enabled ? Colors.white : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent)),
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
       ),
     );

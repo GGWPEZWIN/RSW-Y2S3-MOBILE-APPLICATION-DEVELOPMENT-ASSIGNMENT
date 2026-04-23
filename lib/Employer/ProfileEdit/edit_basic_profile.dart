@@ -165,7 +165,6 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
 
       // 1. Password Verification
       if (_newPasswordController.text.isNotEmpty) {
-        if (_currentPasswordController.text.isEmpty) throw "Enter current password to verify identity.";
         bool success = await _reauthenticate(_currentPasswordController.text.trim());
         if (!success) throw "Current password verification failed.";
         await widget.user.updatePassword(_newPasswordController.text.trim());
@@ -224,13 +223,29 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
               _buildLogoPicker(),
               const SizedBox(height: 32),
               _buildLabel("Company Name"),
-              _buildTextField(_nameController, "e.g. Jabil", Icons.business),
+              _buildTextField(
+                _nameController,
+                "e.g. Jabil",
+                Icons.business,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Company name required" : null,
+              ),
               const SizedBox(height: 20),
               _buildLabel("Contact Email (Read Only)"),
               _buildTextField(_emailController, "Email", Icons.lock_outline, enabled: false),
               const SizedBox(height: 20),
               _buildLabel("Company Phone"),
-              _buildTextField(_phoneController, "e.g. +604...", Icons.phone_android_outlined),
+              _buildTextField(
+                _phoneController,
+                "e.g. 01x-xxxxxxx",
+                Icons.phone_android_outlined,
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return "Phone number is required";
+                  final phoneRegex = RegExp(r'^01[0-9]{1}-?[0-9]{7,8}$');
+                  if (!phoneRegex.hasMatch(v)) return "Enter a valid Malaysian phone number";
+                  return null;
+                },
+              ),
               const SizedBox(height: 20),
               _buildLabel("Company Location"),
               _buildTextField(_locationController, "GPS Coordinates", Icons.location_on_outlined),
@@ -258,7 +273,6 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
                         children: [
                           TileLayer(
                             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            // Replace this with your actual app package name (e.g., com.jobbuddy.app)
                             userAgentPackageName: 'com.example.jobbuddy',
                           ),                          MarkerLayer(
                             markers: [
@@ -289,9 +303,31 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
               const SizedBox(height: 8),
               const Align(alignment: Alignment.centerLeft, child: Text("Security", style: TextStyle(fontWeight: FontWeight.bold, color: brandBlue))),
               const SizedBox(height: 16),
-              _buildTextField(_currentPasswordController, "Current Password", Icons.lock_open_outlined, isPassword: true),
+              _buildTextField(
+                _currentPasswordController,
+                "Current Password",
+                Icons.lock_open_outlined,
+                isPassword: true,
+                validator: (v) {
+                  if (_newPasswordController.text.isNotEmpty && (v == null || v.isEmpty)) {
+                    return "Current password required to change password";
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
-              _buildTextField(_newPasswordController, "New Password", Icons.lock_outline, isPassword: true),
+              _buildTextField(
+                _newPasswordController,
+                "New Password",
+                Icons.lock_outline,
+                isPassword: true,
+                validator: (v) {
+                  if (v != null && v.isNotEmpty && v.length < 8) {
+                    return "Password must be at least 8 characters";
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 40),
               _buildSaveButton(),
             ],
@@ -333,13 +369,29 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
 
   Widget _buildLabel(String text) => Align(alignment: Alignment.centerLeft, child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)));
 
-  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool enabled = true, bool isPassword = false}) {
+  Widget _buildTextField(
+      TextEditingController controller,
+      String hint,
+      IconData icon,
+      {bool enabled = true,
+        bool isPassword = false,
+        String? Function(String?)? validator,
+        TextInputType? keyboardType}
+      ) {
     return TextFormField(
-      controller: controller, enabled: enabled, obscureText: isPassword,
+      controller: controller,
+      enabled: enabled,
+      obscureText: isPassword,
+      validator: validator,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
-        hintText: hint, prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
-        filled: !enabled, fillColor: enabled ? Colors.white : const Color(0xFFF8FAFC),
+        hintText: hint,
+        prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
+        filled: true,
+        fillColor: enabled ? Colors.white : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
       ),
     );
   }
@@ -350,7 +402,9 @@ class _EditBasicProfilePageState extends State<EditBasicProfilePage> {
       child: ElevatedButton(
         onPressed: _isLoading ? null : _saveProfile,
         style: ElevatedButton.styleFrom(backgroundColor: brandBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        child: _isLoading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Text("Save Changes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
