@@ -8,9 +8,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 
 class SmartAnalyzerService {
-  //static const String _AImodel = 'gemini-3-flash-preview';
-  static const String _AImodel = 'gemini-1.5-flash-latest';
-  //final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
+  static const String _AImodel = 'gemini-3-flash-preview';
   String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? "";
 
   Future<List<Map<String, dynamic>>> getMissingSuggestionsFromImage({
