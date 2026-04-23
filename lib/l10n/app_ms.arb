@@ -111,6 +111,9 @@
   "createEmployerAccountBtn": "Cipta Akaun Majikan",
   "employerAccountNotice": "Akaun majikan adalah berasingan daripada akaun pencari kerja. Hanya syarikat berdaftar boleh mengakses portal majikan.",
   "notificationsSubtitle": "Aktifkan atau matikan amaran pop-up",
-  "signOutConfirm": "Adakah anda pasti mahu log keluar dari akaun anda?\n"
-
+  "signOutConfirm": "Adakah anda pasti mahu log keluar dari akaun anda?",
+  "companyInformation": "Maklumat Syarikat",
+  "industryLabel": "Industri",
+  "addPhone": "Tambah telefon",
+  "addOfficeLocation": "Tambah lokasi pejabat"
 }

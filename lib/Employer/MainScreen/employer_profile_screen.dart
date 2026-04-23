@@ -2,6 +2,7 @@ import 'dart:convert'; // Required for base64Decode
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../l10n/app_localizations.dart';
 import '../../settings_page.dart';
 import '../ProfileEdit/edit_basic_profile.dart';
 import '../ProfileEdit/edit_company_background.dart';
@@ -22,6 +23,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -67,25 +69,25 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 ),
 
                 const SizedBox(height: 24),
-                const Text("Employer Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(l10n.employerSettings, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const Divider(thickness: 1, height: 24),
 
                 // --- 2. COMPANY BACKGROUND ---
-                _buildSectionHeader("Company Background", onTap: () {
+                _buildSectionHeader(l10n.companyBackground, onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (c) => EditBackgroundPage(
                     currentBackground: employerData?['background'] ?? "",
                   )));
                 }),
                 _buildContentCard(
-                  title: "Background",
-                  subtitle: employerData?['background'] ?? "No background description set.",
+                  title: l10n.backgroundLabel,
+                  subtitle: employerData?['background'] ?? l10n.noBackgroundSet,
                   icon: Icons.business_outlined,
                 ),
 
                 const SizedBox(height: 24),
 
                 // --- 3. COMPANY INFORMATION ---
-                _buildSectionHeader("Company Information", onTap: () {
+                _buildSectionHeader(l10n.companyInfo, onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (c) => EditCompanyInfo(
                     currentIndustry: employerData?['industry'] ?? "",
                     currentWebsite: employerData?['website'] ?? "",
