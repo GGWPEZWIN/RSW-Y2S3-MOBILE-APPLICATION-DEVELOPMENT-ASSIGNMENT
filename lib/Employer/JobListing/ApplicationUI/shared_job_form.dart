@@ -63,49 +63,92 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   String? selectedState;
   String? selectedCity;
   String? selectedPostcode;
+  String? _suggestedPostcode;  // For showing suggestion popup
 
-  // Malaysia states and their cities
-  static const Map<String, List<String>> kMalaysiaCities = {
-    'Kuala Lumpur': ['Chow Kit', 'Bukit Bintang', 'Mont Kiara', 'Bangsar', 'Cheras', 'Kepong', 'Setapak', 'Wangsa Maju', 'Titiwangsa', 'Segambut'],
-    'Selangor': ['Petaling Jaya', 'Shah Alam', 'Subang Jaya', 'Klang', 'Ampang', 'Puchong', 'Kajang', 'Sepang', 'Rawang', 'Batu Caves'],
-    'Johor': ['Johor Bahru', 'Skudai', 'Batu Pahat', 'Muar', 'Kluang', 'Segamat', 'Pontian', 'Mersing', 'Kota Tinggi', 'Kulai'],
-    'Penang': ['George Town', 'Butterworth', 'Bukit Mertajam', 'Bayan Lepas', 'Nibong Tebal', 'Balik Pulau', 'Kepala Batas', 'Seberang Jaya'],
-    'Perak': ['Ipoh', 'Taiping', 'Teluk Intan', 'Sitiawan', 'Lumut', 'Manjung', 'Batu Gajah', 'Kuala Kangsar', 'Sungai Siput'],
-    'Sabah': ['Kota Kinabalu', 'Sandakan', 'Tawau', 'Lahad Datu', 'Keningau', 'Semporna', 'Kota Belud', 'Ranau', 'Beaufort'],
-    'Sarawak': ['Kuching', 'Miri', 'Sibu', 'Bintulu', 'Sri Aman', 'Sarikei', 'Kapit', 'Limbang', 'Mukah'],
-    'Melaka': ['Melaka City', 'Alor Gajah', 'Jasin', 'Masjid Tanah', 'Ayer Keroh', 'Batu Berendam'],
-    'Negeri Sembilan': ['Seremban', 'Port Dickson', 'Nilai', 'Bahau', 'Rembau', 'Tampin', 'Kuala Pilah'],
-    'Pahang': ['Kuantan', 'Temerloh', 'Bentong', 'Raub', 'Lipis', 'Pekan', 'Rompin', 'Jerantut'],
-    'Kedah': ['Alor Setar', 'Sungai Petani', 'Kulim', 'Baling', 'Langkawi', 'Pendang', 'Yan', 'Kubang Pasu'],
-    'Kelantan': ['Kota Bharu', 'Pasir Mas', 'Tanah Merah', 'Machang', 'Pasir Puteh', 'Kuala Krai', 'Gua Musang'],
-    'Terengganu': ['Kuala Terengganu', 'Kemaman', 'Dungun', 'Besut', 'Marang', 'Hulu Terengganu'],
-    'Perlis': ['Kangar', 'Arau', 'Padang Besar'],
-    'Putrajaya': ['Putrajaya'],
-    'Labuan': ['Victoria'],
-  };
-
-  static const Map<String, String> kMalaysiaPostcodePrefix = {
-    'Kuala Lumpur': '50',
-    'Selangor': '40',
-    'Johor': '80',
-    'Penang': '10',
-    'Perak': '30',
-    'Sabah': '88',
-    'Sarawak': '93',
-    'Melaka': '75',
-    'Negeri Sembilan': '70',
-    'Pahang': '25',
-    'Kedah': '05',
-    'Kelantan': '15',
-    'Terengganu': '20',
-    'Perlis': '02',
-    'Putrajaya': '62',
-    'Labuan': '87',
+  // Malaysia states and their cities with postcodes
+  static const Map<String, Map<String, List<String>>> kMalaysiaPostcodeMap = {
+    'Kuala Lumpur': {
+      'Chow Kit': ['50300', '50350'],
+      'Bukit Bintang': ['55100', '55150'],
+      'Mont Kiara': ['50480'],
+      'Bangsar': ['59000', '59100'],
+      'Cheras': ['56000', '56100'],
+      'Kepong': ['52100', '52200'],
+      'Setapak': ['53000', '53100'],
+      'Wangsa Maju': ['53300'],
+      'Titiwangsa': ['53200'],
+      'Segambut': ['51200', '51250'],
+    },
+    'Selangor': {
+      'Petaling Jaya': ['47300', '47301', '47310', '47320', '47330', '47340', '47350', '47370', '47380'],
+      'Shah Alam': ['40000', '40100', '40150', '40200', '40300', '40400', '40450', '40500', '40503', '40505'],
+      'Subang Jaya': ['47500', '47501', '47502', '47507', '47509', '47600', '47610', '47620', '47630', '47650'],
+      'Klang': ['41000', '41100', '41200', '41300', '41400', '41401', '41402', '41403', '41405', '41409'],
+      'Ampang': ['68000', '68001', '68010', '68020', '68030', '68040', '68050', '68060', '68070', '68080'],
+      'Puchong': ['47100', '47110', '47120', '47130', '47140', '47150', '47160', '47170', '47180', '47190'],
+      'Kajang': ['43000', '43001', '43002', '43003', '43004', '43005', '43006', '43007', '43008', '43009'],
+      'Sepang': ['43900', '43909'],
+      'Rawang': ['48000', '48050', '48060', '48070', '48080'],
+      'Batu Caves': ['68100', '68120', '68130', '68131', '68140', '68150'],
+    },
+    'Johor': {
+      'Johor Bahru': ['80000', '80100', '80200', '80300', '80400', '80500', '80600', '80700', '80800', '80900'],
+      'Skudai': ['81300', '81310', '81320', '81330', '81340'],
+      'Batu Pahat': ['83000', '83010', '83020', '83030', '83040', '83100', '83200', '83300', '83400'],
+      'Muar': ['84000', '84010', '84020', '84030', '84100', '84200', '84300', '84400'],
+      'Kluang': ['86000', '86010', '86020', '86030', '86100', '86200', '86300'],
+      'Segamat': ['85000', '85100', '85200', '85300'],
+      'Kulai': ['81000', '81010', '81020', '81030'],
+    },
+    'Penang': {
+      'George Town': ['10000', '10050', '10100', '10150', '10200', '10300', '10400', '10500', '10600', '10700', '10800', '10900'],
+      'Butterworth': ['12000', '12100', '12200', '12300', '12400', '13000', '13100', '13400', '13800'],
+      'Bukit Mertajam': ['14000', '14100', '14200'],
+      'Bayan Lepas': ['11900', '11909', '11910', '11920', '11950', '11960'],
+      'Nibong Tebal': ['14300'],
+      'Balik Pulau': ['11000'],
+      'Seberang Jaya': ['13700'],
+    },
+    'Perak': {
+      'Ipoh': ['30000', '30100', '30200', '30300', '30400', '30450', '30500', '30600', '30700', '30720', '30740', '30750', '30760', '30800', '30900'],
+      'Taiping': ['34000', '34010', '34020', '34030', '34040', '34050', '34060', '34070', '34080', '34090', '34100', '34200', '34300', '34400', '34500', '34600', '34700', '34800'],
+      'Teluk Intan': ['36000', '36100', '36200', '36300', '36400', '36500', '36600'],
+      'Sitiawan': ['32000'],
+      'Lumut': ['32100'],
+    },
+    'Sabah': {
+      'Kota Kinabalu': ['88000', '88100', '88200', '88300', '88400', '88450', '88500'],
+      'Sandakan': ['90000', '90100', '90200', '90300', '90400', '90500', '90600', '90700', '90800', '90900'],
+      'Tawau': ['91000', '91100', '91200', '91300', '91400', '91500'],
+    },
+    'Sarawak': {
+      'Kuching': ['93000', '93100', '93200', '93300', '93350', '93400', '93450', '93500'],
+      'Miri': ['98000', '98100'],
+      'Sibu': ['96000', '96100', '96200'],
+    },
   };
 
   List<String> get _citiesForSelectedState {
     if (selectedState == null) return [];
-    return kMalaysiaCities[selectedState!] ?? [];
+    return kMalaysiaPostcodeMap[selectedState!]?.keys.toList() ?? [];
+  }
+
+  // Get postcode suggestions for selected city
+  List<String> _getPostcodeSuggestions() {
+    if (selectedState == null || selectedCity == null) return [];
+    return kMalaysiaPostcodeMap[selectedState!]?[selectedCity!] ?? [];
+  }
+
+  // Auto-select first postcode when city is chosen
+  void _autoFillPostcodeFromCity() {
+    final suggestions = _getPostcodeSuggestions();
+    if (suggestions.isNotEmpty) {
+      setState(() {
+        selectedPostcode = suggestions.first;
+        _suggestedPostcode = null;
+      });
+      _updateLocationFromDropdowns();
+    }
   }
 
   // Build the full location string from dropdowns + street
@@ -116,6 +159,47 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
     if (selectedCity != null) parts.add(selectedCity!);
     if (selectedState != null) parts.add(selectedState!);
     locationCtrl.text = parts.join(', ');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PARSE LOCATION STRING (for editing existing jobs)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void parseLocationString(String location) {
+    if (location.isEmpty) return;
+
+    final parts = location.split(',');
+
+    if (parts.isNotEmpty) {
+      streetCtrl.text = parts[0].trim();
+    }
+
+    for (var part in parts) {
+      final trimmed = part.trim();
+      final postcodeMatch = RegExp(r'\b\d{5}\b').firstMatch(trimmed);
+      if (postcodeMatch != null) {
+        selectedPostcode = postcodeMatch.group(0);
+      } else if (trimmed.isNotEmpty && trimmed != streetCtrl.text) {
+        for (var stateKey in kMalaysiaPostcodeMap.keys) {
+          if (trimmed.contains(stateKey)) {
+            selectedState = stateKey;
+            break;
+          }
+        }
+        if (selectedState != null && selectedCity == null) {
+          final cities = kMalaysiaPostcodeMap[selectedState!]?.keys.toList() ?? [];
+          for (var cityName in cities) {
+            if (trimmed.contains(cityName)) {
+              selectedCity = cityName;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Update the location controller after parsing
+    _updateLocationFromDropdowns();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -621,13 +705,11 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
         ),
       );
 
-  // ── Malaysia location picker widget ──────────────────────────────────────
+  // ── Malaysia location picker widget with auto-postcode ────────────────────
   Widget _buildMalaysiaLocationPicker() {
-    final states = kMalaysiaCities.keys.toList()..sort();
+    final states = kMalaysiaPostcodeMap.keys.toList()..sort();
     final cities = List<String>.from(_citiesForSelectedState)..sort();
-    final postcodePrefix = selectedState != null
-        ? kMalaysiaPostcodePrefix[selectedState!] ?? ''
-        : '';
+    final postcodeSuggestions = _getPostcodeSuggestions();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
@@ -710,7 +792,10 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
             onChanged: selectedState == null
                 ? null
                 : (v) {
-              setState(() => selectedCity = v);
+              setState(() {
+                selectedCity = v;
+                _autoFillPostcodeFromCity();
+              });
               _updateLocationFromDropdowns();
             },
           ),
@@ -718,25 +803,82 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       ),
       const SizedBox(height: 14),
 
-      // Postcode (free text with validation)
+      // Postcode field with auto-fill and dropdown for multiple options
       buildLabel('Postcode', required: true),
-      TextFormField(
-        keyboardType: TextInputType.number,
-        maxLength: 5,
-        decoration: buildDecoration(
-          hint: postcodePrefix.isNotEmpty
-              ? 'e.g. ${postcodePrefix}000'
-              : 'e.g. 50000',
-          prefix: const Padding(
-              padding: EdgeInsets.all(12),
-              child: Icon(Icons.markunread_mailbox_outlined,
-                  size: 20, color: kInactiveGrey)),
-        ),
-        onChanged: (v) {
-          setState(() => selectedPostcode = v.trim().isEmpty ? null : v.trim());
-          _updateLocationFromDropdowns();
-        },
-        validator: (value) => validatePostcode(value),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: TextEditingController(
+              text: selectedPostcode ?? '',
+            )..addListener(() {
+              setState(() {
+                selectedPostcode = (selectedPostcode != null && selectedPostcode!.isNotEmpty)
+                    ? selectedPostcode
+                    : null;
+              });
+              _updateLocationFromDropdowns();
+            }),
+            keyboardType: TextInputType.number,
+            maxLength: 5,
+            decoration: buildDecoration(
+              hint: selectedCity != null
+                  ? 'e.g. ${postcodeSuggestions.isNotEmpty ? postcodeSuggestions.first : '50000'}'
+                  : 'Select city first',
+              prefix: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.markunread_mailbox_outlined,
+                      size: 20, color: kInactiveGrey)),
+            ),
+            onChanged: (v) {
+              setState(() {
+                selectedPostcode = v.trim().isEmpty ? null : v.trim();
+              });
+              _updateLocationFromDropdowns();
+            },
+            validator: (value) => validatePostcode(value),
+          ),
+
+          // Show multiple postcode options if available
+          if (postcodeSuggestions.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: postcodeSuggestions.map((code) {
+                  final isSelected = selectedPostcode == code;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedPostcode = code;
+                      });
+                      _updateLocationFromDropdowns();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? kBlue : kFill,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? kBlue : kBorder,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        code,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected ? Colors.white : kLabel,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
       ),
 
       // Preview of full location string
