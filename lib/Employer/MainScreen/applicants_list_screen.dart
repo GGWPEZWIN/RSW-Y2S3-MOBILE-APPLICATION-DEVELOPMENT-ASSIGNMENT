@@ -983,12 +983,46 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 }
 
 // ── CV Viewer ──────────────────────────────────────────────────────────────
-class _CvViewer extends StatefulWidget {
+class _CvViewer extends StatelessWidget {
   final String base64Image;
   const _CvViewer({required this.base64Image});
 
   @override
-  State<_CvViewer> createState() => _CvViewerState();
+  Widget build(BuildContext context) {
+    try {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.memory(
+          base64Decode(base64Image),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
+        ),
+      );
+    } catch (e) {
+      return _buildErrorWidget();
+    }
+  }
+
+  Widget _buildErrorWidget() {
+    return Container(
+      height: 200,
+      color: Colors.grey.shade100,
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+            SizedBox(height: 8),
+            Text("Could not load resume", style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _CvViewerState extends State<_CvViewer> {
