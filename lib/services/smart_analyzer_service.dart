@@ -2,13 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SmartAnalyzerService {
   static const String _AImodel = 'gemini-3-flash-preview';
-  static const String _apiKey = 'AIzaSyBNZKfTArIZBG8rmGXyg5XwuA5n83eh35g';
+  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
 
   Future<List<Map<String, dynamic>>> getMissingSuggestionsFromImage({
     required Uint8List imageBytes,
@@ -18,6 +19,14 @@ class SmartAnalyzerService {
     required List<dynamic> existingLanguages,
   }) async {
     try {
+
+      // Safety check: if API key is missing from .env
+      if (_apiKey.isEmpty) {
+        debugPrint("Gemini API Key is missing from .env file!");
+        return [];
+      }
+
+
       // 1. OCR Step
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final tempDir = await getTemporaryDirectory();
@@ -63,7 +72,11 @@ class SmartAnalyzerService {
       final response = await model.generateContent([Content.text(prompt)]);
       if (response.text == null) return [];
 
-      String cleanedText = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
+      String cleanedText = response.text!
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
       List<dynamic> aiResults = jsonDecode(cleanedText);
 
       // 3. Filtering Logic to prevent duplicates and handle categories

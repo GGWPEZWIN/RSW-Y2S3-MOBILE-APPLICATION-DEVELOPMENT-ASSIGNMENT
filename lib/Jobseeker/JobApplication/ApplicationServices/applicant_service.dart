@@ -5,12 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:assignment/Jobseeker/models/applicant_model.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ApplicantService {
 
   static const String _AImodel = 'gemini-3-flash-preview';
-  static const String _apiKey = 'AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0';
+  static final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
 
   static Applicant buildApplicant({
     required String resumePath,
