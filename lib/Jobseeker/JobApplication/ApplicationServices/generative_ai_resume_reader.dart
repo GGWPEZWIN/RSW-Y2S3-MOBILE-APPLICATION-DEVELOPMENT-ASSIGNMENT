@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
@@ -15,12 +16,12 @@ class _ResumeParserPageState extends State<ResumeParserPage> {
   String _extractedText = "No data extracted yet.";
   bool _isLoading = false;
   String AImodel = 'gemini-3-flash-preview';
-  String apiKey = 'AIzaSyD-Yx8hfxWsIbavmxL6Pr3CQhoxqsvgAq0';
+  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
 
   // Initialize the Gemini Model
   late final model = GenerativeModel(
     model: AImodel,
-    apiKey: apiKey,
+    apiKey: _apiKey,
   );
 
   Future<void> _processResume() async {
@@ -35,9 +36,9 @@ class _ResumeParserPageState extends State<ResumeParserPage> {
 
       // Define the prompt for text extraction
       final prompt = TextPart(
-          //"Read this resume image and extract all text clearly. "
-              "list down the skill as skill:"
-              //"Format it neatly so it is easy to read."
+        //"Read this resume image and extract all text clearly. "
+          "list down the skill as skill:"
+        //"Format it neatly so it is easy to read."
       );
 
       final imagePart = DataPart('image/jpeg', bytes);
@@ -93,3 +94,6 @@ class _ResumeParserPageState extends State<ResumeParserPage> {
     );
   }
 }
+
+
+
