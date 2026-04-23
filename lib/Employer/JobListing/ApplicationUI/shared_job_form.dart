@@ -33,7 +33,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   late TextEditingController vacanciesCtrl;
   late TextEditingController applicationUrlCtrl;
   late TextEditingController applicationEmailCtrl;
-  late TextEditingController streetCtrl;       // NEW: street address field
+  late TextEditingController streetCtrl;       // Street address field
   late FocusNode locationFocus;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -57,14 +57,14 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   String showPayOnAd       = 'Yes';
 
   // ─────────────────────────────────────────────────────────────────────────
-  // MALAYSIA LOCATION DROPDOWNS (NEW)
+  // MALAYSIA LOCATION DROPDOWNS
   // ─────────────────────────────────────────────────────────────────────────
 
   String? selectedState;
   String? selectedCity;
   String? selectedPostcode;
 
-  // Malaysia states and their cities/postcodes
+  // Malaysia states and their cities
   static const Map<String, List<String>> kMalaysiaCities = {
     'Kuala Lumpur': ['Chow Kit', 'Bukit Bintang', 'Mont Kiara', 'Bangsar', 'Cheras', 'Kepong', 'Setapak', 'Wangsa Maju', 'Titiwangsa', 'Segambut'],
     'Selangor': ['Petaling Jaya', 'Shah Alam', 'Subang Jaya', 'Klang', 'Ampang', 'Puchong', 'Kajang', 'Sepang', 'Rawang', 'Batu Caves'],
@@ -112,7 +112,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   void _updateLocationFromDropdowns() {
     final parts = <String>[];
     if (streetCtrl.text.trim().isNotEmpty) parts.add(streetCtrl.text.trim());
-    if (selectedPostcode != null) parts.add(selectedPostcode!);
+    if (selectedPostcode != null && selectedPostcode!.isNotEmpty) parts.add(selectedPostcode!);
     if (selectedCity != null) parts.add(selectedCity!);
     if (selectedState != null) parts.add(selectedState!);
     locationCtrl.text = parts.join(', ');
@@ -224,6 +224,67 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
+  // VALIDATORS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  String? validateStreetAddress(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Street address is required';
+    }
+
+    final address = value.trim();
+
+    if (address.length < 5) {
+      return 'Please enter a complete address';
+    }
+
+    if (!RegExp(r'\d').hasMatch(address)) {
+      return 'Include building/unit number (e.g., No. 123, Tower A)';
+    }
+
+    // Check for fake addresses
+    final fakePatterns = [
+      RegExp(r'^(test|asdf|qwerty|abc|xxx|fake|null|undefined)$', caseSensitive: false),
+      RegExp(r'^[a-z]+$', caseSensitive: false),
+      RegExp(r'^\d+$'),
+    ];
+
+    for (var pattern in fakePatterns) {
+      if (pattern.hasMatch(address)) {
+        return 'Please enter a valid street address';
+      }
+    }
+
+    return null;
+  }
+
+  String? validatePostcode(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Postcode is required';
+    }
+
+    final postcode = value.trim();
+
+    if (!RegExp(r'^\d{5}$').hasMatch(postcode)) {
+      return 'Postcode must be 5 digits (e.g., 47300)';
+    }
+
+    return null;
+  }
+
+  String? validateCity(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'City is required';
+    }
+
+    if (value.trim().length < 2) {
+      return 'Enter valid city name';
+    }
+
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // SETUP & CLEANUP
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -243,7 +304,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
 
     streetCtrl.addListener(() {
       _updateLocationFromDropdowns();
-      setState(() {});
+      if (mounted) setState(() {});
     });
   }
 
@@ -287,13 +348,31 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       if (_isEmpty(jobTitleCtrl.text))   { _showError('Please enter a job title');   return false; }
       if (selectedState == null)         { _showError('Please select a state');       return false; }
       if (selectedCity == null)          { _showError('Please select a city');        return false; }
+      if (_isEmpty(streetCtrl.text))     { _showError('Please enter street address'); return false; }
       if (_isEmpty(minPayCtrl.text))     { _showError('Please enter minimum pay');   return false; }
       if (_isEmpty(maxPayCtrl.text))     { _showError('Please enter maximum pay');   return false; }
+
       final min = double.tryParse(minPayCtrl.text.trim()) ?? -1;
       final max = double.tryParse(maxPayCtrl.text.trim()) ?? -1;
       if (min < 0) { _showError('Minimum pay must be a valid number'); return false; }
       if (max < 0) { _showError('Maximum pay must be a valid number'); return false; }
       if (max < min) { _showError('Maximum pay cannot be less than minimum pay'); return false; }
+
+      // Validate street address format
+      final streetValidation = validateStreetAddress(streetCtrl.text);
+      if (streetValidation != null) {
+        _showError(streetValidation);
+        return false;
+      }
+
+      // Validate postcode if entered
+      if (selectedPostcode != null && selectedPostcode!.isNotEmpty) {
+        final postcodeValidation = validatePostcode(selectedPostcode);
+        if (postcodeValidation != null) {
+          _showError(postcodeValidation);
+          return false;
+        }
+      }
     }
     if (step == 1) {
       if (_isEmpty(descriptionCtrl.text))  { _showError('Please enter a job description'); return false; }
@@ -302,7 +381,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       if (selectedEducations.isEmpty)    { _showError('Please select at least one education level');  return false; }
     }
     if (step == 2) {
-      // No extra validation needed — only In-app is supported
+      // No extra validation needed
     }
     return true;
   }
@@ -312,7 +391,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       SnackBar(content: Text(msg), backgroundColor: Colors.red));
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SUGGESTION CHIPS — FIX: tap again to DESELECT and remove from text field
+  // SUGGESTION CHIPS
   // ─────────────────────────────────────────────────────────────────────────
 
   void addSuggestionToField(TextEditingController ctrl, String chip) {
@@ -320,26 +399,22 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
     final alreadyAdded = current.contains(chip);
 
     if (alreadyAdded) {
-      // DESELECT: remove the bullet line containing this chip
       final lines = current.split('\n');
       final filtered = lines.where((line) {
         final clean = line.replaceAll('• ', '').trim();
         return clean != chip;
       }).toList();
-      // Clean up extra blank lines
       ctrl.text = filtered.join('\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trimRight();
       if (ctrl.text.isNotEmpty && !ctrl.text.endsWith('\n')) {
         ctrl.text = '${ctrl.text}\n';
       }
     } else {
-      // SELECT: add bullet line
       final trimmed = current.trim();
       ctrl.text = trimmed.isEmpty ? '• $chip\n' : '$trimmed\n• $chip\n';
     }
 
-    ctrl.selection =
-        TextSelection.fromPosition(TextPosition(offset: ctrl.text.length));
-    setState(() {});
+    ctrl.selection = TextSelection.fromPosition(TextPosition(offset: ctrl.text.length));
+    if (mounted) setState(() {});
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -354,14 +429,15 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
     required dynamic createdAt,
     required dynamic applicants,
   }) {
-    final salary =
-        '${selectedCurrency}${minPayCtrl.text.trim()} - ${selectedCurrency}${maxPayCtrl.text.trim()}';
+    final salary = '${selectedCurrency}${minPayCtrl.text.trim()} - ${selectedCurrency}${maxPayCtrl.text.trim()}';
     final now = DateTime.now();
+
     return {
       'title':             jobTitleCtrl.text.trim(),
       'company':           companyName,
       'companyId':         companyId,
       'location':          locationCtrl.text.trim(),
+      'street_address':    streetCtrl.text.trim(),
       'state':             selectedState ?? '',
       'city':              selectedCity ?? '',
       'postcode':          selectedPostcode ?? '',
@@ -435,8 +511,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
             borderSide: const BorderSide(color: Colors.red, width: 1.5)),
         filled: true,
         fillColor: kFill,
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         alignLabelWithHint: true,
       );
 
@@ -454,8 +529,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
               onTap: () => onSelect(opt),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
                   color: active ? kBlue : Colors.white,
                   borderRadius: BorderRadius.circular(30),
@@ -465,8 +539,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
                 child: Text(opt,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight:
-                      active ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                       color: active ? Colors.white : const Color(0xFF444444),
                     )),
               ),
@@ -494,8 +567,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: active ? kBlue : Colors.white,
                     borderRadius: BorderRadius.circular(30),
@@ -511,11 +583,8 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
                     Text(opt,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight:
-                          active ? FontWeight.w600 : FontWeight.w400,
-                          color: active
-                              ? Colors.white
-                              : const Color(0xFF444444),
+                          fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                          color: active ? Colors.white : const Color(0xFF444444),
                         )),
                   ]),
                 ),
@@ -552,7 +621,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
         ),
       );
 
-  // ── Malaysia location dropdown widget (NEW) ──────────────────────────────
+  // ── Malaysia location picker widget ──────────────────────────────────────
   Widget _buildMalaysiaLocationPicker() {
     final states = kMalaysiaCities.keys.toList()..sort();
     final cities = List<String>.from(_citiesForSelectedState)..sort();
@@ -562,16 +631,18 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      // Street address (free text)
-      buildLabel('Street / Building Name'),
+      // Street address (free text with validation)
+      buildLabel('Street / Building Name', required: true),
       TextFormField(
         controller: streetCtrl,
+        maxLines: 2,
         decoration: buildDecoration(
           hint: 'e.g. No. 12, Jalan Bukit Bintang',
           prefix: const Padding(
               padding: EdgeInsets.all(12),
               child: Icon(Icons.home_outlined, size: 20, color: kInactiveGrey)),
         ),
+        validator: (value) => validateStreetAddress(value),
       ),
       const SizedBox(height: 14),
 
@@ -647,8 +718,8 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       ),
       const SizedBox(height: 14),
 
-      // Postcode (free text with prefix hint)
-      buildLabel('Postcode'),
+      // Postcode (free text with validation)
+      buildLabel('Postcode', required: true),
       TextFormField(
         keyboardType: TextInputType.number,
         maxLength: 5,
@@ -665,7 +736,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
           setState(() => selectedPostcode = v.trim().isEmpty ? null : v.trim());
           _updateLocationFromDropdowns();
         },
-        initialValue: selectedPostcode,
+        validator: (value) => validatePostcode(value),
       ),
 
       // Preview of full location string
@@ -726,7 +797,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
         ),
       );
 
-  // ── Suggestion chips — now supports deselect ──────────────────────────────
+  // ── Suggestion chips ──────────────────────────────────────────────────────
   Widget buildSuggestionRow(List<String> suggestions,
       TextEditingController ctrl) =>
       Padding(
@@ -844,7 +915,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP 1 - CLASSIFY (with Malaysia location picker replacing old location)
+  // STEP 1 - CLASSIFY
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget buildClassifyStep({Widget? extraTop}) {
@@ -868,7 +939,7 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
       ),
       const SizedBox(height: 20),
 
-      // ── MALAYSIA LOCATION PICKER ──────────────────────────────────────
+      // MALAYSIA LOCATION PICKER
       buildLabel('Job Location', required: true),
       const SizedBox(height: 4),
       _buildMalaysiaLocationPicker(),
@@ -1206,7 +1277,10 @@ mixin SharedJobForm<T extends StatefulWidget> on State<T> {
           const SizedBox(height: 12),
           _buildSummaryRow('Category',  selectedIndustry.isEmpty ? '—' : selectedIndustry),
           _buildSummaryRow('Job Title', jobTitleCtrl.text.isEmpty ? '—' : jobTitleCtrl.text),
-          _buildSummaryRow('Location',  locationCtrl.text.isEmpty ? '—' : locationCtrl.text),
+          _buildSummaryRow('Street Address', streetCtrl.text.isEmpty ? '—' : streetCtrl.text),
+          _buildSummaryRow('City', selectedCity ?? '—'),
+          _buildSummaryRow('State', selectedState ?? '—'),
+          _buildSummaryRow('Postcode', selectedPostcode ?? '—'),
           _buildSummaryRow('Work Type', selectedWorkType),
           _buildSummaryRow('Workplace', selectedWorkplace),
           _buildSummaryRow('Pay',

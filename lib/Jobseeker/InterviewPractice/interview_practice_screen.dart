@@ -36,33 +36,74 @@ class CompletedAnswer {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPENROUTER HELPER
+// OPENROUTER HELPER — tries multiple free models, handles rate limits
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<String> _callOpenRouter(String prompt, String apiKey) async {
-  final response = await http.post(
-    Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-    headers: {
-      'Authorization': 'Bearer $apiKey',
-      'Content-Type': 'application/json',
-      'X-Title': 'JobBuddy Interview Practice',
-    },
-    body: jsonEncode({
-      'model': 'openrouter/free',
-      'messages': [
-        {'role': 'user', 'content': prompt}
-      ],
-      'temperature': 0.8,
-      'max_tokens': 1000,
-    }),
-  ).timeout(const Duration(seconds: 30));
+  const models = [
+    'google/gemma-3-12b-it:free',
+    'qwen/qwen3-8b:free',
+    'mistralai/mistral-7b-instruct:free',
+    'deepseek/deepseek-r1-0528:free',
+  ];
 
-  if (response.statusCode != 200) {
-    throw Exception('OpenRouter error ${response.statusCode}: ${response.body}');
+  for (final model in models) {
+    try {
+      debugPrint('🟡 Trying model: $model');
+      final response = await http.post(
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'X-Title': 'JobBuddy Interview Practice',
+        },
+        body: jsonEncode({
+          'model': model,
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.8,
+          'max_tokens': 1000,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      debugPrint('🟢 Response status: ${response.statusCode} for model: $model');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        debugPrint('✅ Success with model: $model');
+        return data['choices'][0]['message']['content'] as String;
+      }
+
+      // Rate limited (429) — wait longer then try next model
+      if (response.statusCode == 429) {
+        debugPrint('⚠️ Rate limited on model: $model, waiting 5 seconds...');
+        await Future.delayed(const Duration(seconds: 5));
+        continue;
+      }
+
+      // 404 / 503 = model offline or unavailable — try next immediately
+      if (response.statusCode == 404 || response.statusCode == 503) {
+        debugPrint('⚠️ Model $model unavailable (${response.statusCode}), trying next...');
+        continue;
+      }
+
+      // Other errors
+      debugPrint('⚠️ Model $model returned ${response.statusCode}, trying next...');
+      continue;
+
+    } on TimeoutException {
+      debugPrint('⏰ Timeout on model $model');
+      continue;
+    } catch (e) {
+      debugPrint('❌ Error with model $model: $e');
+      continue;
+    }
   }
 
-  final data = jsonDecode(response.body);
-  return data['choices'][0]['message']['content'] as String;
+  // All models failed or were rate-limited
+  debugPrint('🔥 All models failed!');
+  throw Exception('rate_limited');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,7 +164,9 @@ Respond with ONLY a numbered list — no intro text, no explanations:
           .map((e) => InterviewQuestion(number: e.key + 1, question: e.value))
           .toList();
     }
-  } catch (_) {}
+  } catch (e) {
+    debugPrint('❌ Question generation failed: $e');
+  }
 
   return _localFallbackQuestions(title, company, requirements, experience);
 }
@@ -195,6 +238,7 @@ class _InterviewPracticeSessionScreenState
   bool _endReviewActive  = false;
   String _aiFeedback       = '';
   String _aiSampleResponse = '';
+  bool _isEditingTranscript = false;
 
   static const int _totalSeconds = 120;
   int _remainingSeconds = _totalSeconds;
@@ -222,6 +266,7 @@ class _InterviewPracticeSessionScreenState
   @override
   void initState() {
     super.initState();
+    debugPrint('📱 InterviewPracticeSessionScreen initialized');
     _pulseCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900))
       ..repeat(reverse: true);
@@ -233,6 +278,7 @@ class _InterviewPracticeSessionScreenState
 
   @override
   void dispose() {
+    debugPrint('🗑️ InterviewPracticeSessionScreen disposed');
     _countdownTimer?.cancel();
     _finalResultTimeout?.cancel();
     _pulseCtrl.dispose();
@@ -242,7 +288,9 @@ class _InterviewPracticeSessionScreenState
   }
 
   Future<void> _loadQuestions() async {
+    debugPrint('📖 Loading questions...');
     if (_apiKey.isEmpty) {
+      debugPrint('⚠️ No API key found, using fallback questions');
       final title   = widget.savedJobData['jobTitle'] as String? ?? widget.savedJobData['title'] as String? ?? 'this role';
       final company = widget.savedJobData['company']  as String? ?? 'the company';
       final reqs    = widget.savedJobData['requirements']    as String? ?? '';
@@ -253,8 +301,10 @@ class _InterviewPracticeSessionScreenState
     }
     try {
       final qs = await _generateQuestionsFromAI(widget.savedJobData, _apiKey);
+      debugPrint('✅ Loaded ${qs.length} questions');
       if (mounted) setState(() { _questions = qs; _mode = 'idle'; });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('❌ Failed to load questions: $e');
       final title   = widget.savedJobData['jobTitle'] as String? ?? widget.savedJobData['title'] as String? ?? 'this role';
       final company = widget.savedJobData['company']  as String? ?? 'the company';
       final reqs    = widget.savedJobData['requirements']    as String? ?? '';
@@ -270,22 +320,22 @@ class _InterviewPracticeSessionScreenState
     try {
       _speechAvailable = await _speech.initialize(
         onStatus: (s) {
-          // FIX: Only stop on 'notListening', NOT on 'done'.
-          // 'done' fires naturally mid-session on Android when the engine
-          // resets between utterances — treating it as a stop was causing
-          // recordings to cut off unexpectedly while the user was still speaking.
+          debugPrint('🎤 Speech status: $s');
           if (s == 'notListening' && _mode == 'listening') {
             _stopRecordingAndShowStopped();
           }
         },
         onError: (e) {
+          debugPrint('❌ Speech error: $e');
           if (mounted && _mode == 'listening') {
             _stopRecordingAndShowStopped();
             _showSnack('Microphone error — please retry or type your answer');
           }
         },
       );
-    } catch (_) {
+      debugPrint('🎤 Speech available: $_speechAvailable');
+    } catch (e) {
+      debugPrint('❌ Speech init error: $e');
       _speechAvailable = false;
     }
     if (mounted) setState(() => _speechInitialising = false);
@@ -293,29 +343,44 @@ class _InterviewPracticeSessionScreenState
 
   void _onSpeechResult(SpeechRecognitionResult result) {
     if (!mounted) return;
+
+    debugPrint('🎤 Speech result: "${result.recognizedWords}" (final: ${result.finalResult})');
+
     setState(() => _currentWords = result.recognizedWords);
+
     if (result.finalResult) {
       final existing = _answerCtrl.text;
       final newWords = result.recognizedWords.trim();
+
       if (newWords.isNotEmpty) {
-        _answerCtrl.text = existing.isNotEmpty && !existing.endsWith(' ')
-            ? '$existing $newWords'
-            : '$existing$newWords';
-        _answerCtrl.selection =
-            TextSelection.fromPosition(TextPosition(offset: _answerCtrl.text.length));
+        final separator = existing.isNotEmpty && !existing.endsWith(' ') ? ' ' : '';
+        _answerCtrl.text = '$existing$separator$newWords';
+        _answerCtrl.selection = TextSelection.fromPosition(
+            TextPosition(offset: _answerCtrl.text.length));
+        debugPrint('📝 Updated answer text: "${_answerCtrl.text}"');
       }
-      _currentWords = '';
-      if (_isWaitingForFinal) {
-        _isWaitingForFinal = false;
-        _finalResultTimeout?.cancel();
-        if (mounted) setState(() => _mode = 'stopped');
-      }
+
+      setState(() {
+        _currentWords = '';
+        if (_isWaitingForFinal) {
+          debugPrint('✅ Final speech result received, stopping waiting');
+          _isWaitingForFinal = false;
+          _finalResultTimeout?.cancel();
+          if (_mode != 'feedback') {
+            _mode = 'stopped';
+          }
+        }
+      });
     }
   }
 
   Future<void> _onMicTap() async {
+    debugPrint('🎤 Mic tapped, current mode: $_mode');
     if (_isMicTapLocked || _mode == 'loading' || _mode == 'feedback' ||
-        _mode == 'stopped' || _mode == 'generating') return;
+        _mode == 'stopped' || _mode == 'generating' || _mode == 'processing_stop' || _mode == 'editing_transcript') {
+      debugPrint('🚫 Mic tap blocked - mode: $_mode, locked: $_isMicTapLocked');
+      return;
+    }
     if (_speechInitialising) { _showSnack('Setting up microphone...'); return; }
     if (!_speechAvailable && _mode == 'idle') {
       _showSnack('Microphone unavailable — tap "Or type your answer"');
@@ -325,10 +390,15 @@ class _InterviewPracticeSessionScreenState
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _isMicTapLocked = false);
     });
+
     if (_mode == 'idle') {
+      debugPrint('🎤 Starting listening...');
       await _startListening();
     } else if (_mode == 'listening') {
-      // User explicitly chose to stop — trigger stop
+      debugPrint('🎤 Stopping listening...');
+      setState(() {
+        _mode = 'processing_stop';
+      });
       _stopRecordingAndShowStopped();
     }
   }
@@ -343,16 +413,13 @@ class _InterviewPracticeSessionScreenState
     try {
       await _speech.listen(
         onResult: _onSpeechResult,
-        // FIX: Increased listenFor to match the 2-minute countdown timer
         listenFor: const Duration(seconds: 120),
-        // FIX: Increased pauseFor so the engine does NOT auto-stop on natural
-        // pauses mid-sentence. Recording now only stops when:
-        //   a) the user taps the mic button to stop, or
-        //   b) the 2-minute countdown timer runs out.
         pauseFor: const Duration(seconds: 120),
         partialResults: true,
       );
-    } catch (_) {
+      debugPrint('🎤 Listening started successfully');
+    } catch (e) {
+      debugPrint('❌ Failed to start listening: $e');
       _pulseCtrl.stop();
       if (mounted) {
         setState(() => _mode = 'typing');
@@ -364,33 +431,46 @@ class _InterviewPracticeSessionScreenState
   }
 
   void _stopRecordingAndShowStopped() {
+    debugPrint('🛑 Stopping recording, current mode: $_mode');
     _countdownTimer?.cancel();
     _pulseCtrl.stop();
+
     if (_mode == 'listening') {
-      if (_currentWords.trim().isNotEmpty) {
-        final existing = _answerCtrl.text;
-        final newWords = _currentWords.trim();
-        _answerCtrl.text = existing.isNotEmpty && !existing.endsWith(' ')
-            ? '$existing $newWords'
-            : '$existing$newWords';
-        _answerCtrl.selection =
-            TextSelection.fromPosition(TextPosition(offset: _answerCtrl.text.length));
-        _currentWords = '';
-      }
       _isWaitingForFinal = true;
       _speech.stop();
+      debugPrint('⏳ Waiting for final speech result...');
+
       _finalResultTimeout?.cancel();
       _finalResultTimeout = Timer(const Duration(seconds: 5), () {
         if (mounted && _isWaitingForFinal) {
+          debugPrint('⏰ Timeout waiting for final speech result');
           _isWaitingForFinal = false;
-          setState(() { _mode = 'stopped'; _currentWords = ''; });
+          setState(() {
+            _mode = 'stopped';
+            _currentWords = '';
+          });
           if (_answerCtrl.text.trim().isEmpty) {
             _showSnack('Nothing transcribed — please retry or type');
           }
         }
       });
+
+      if (_mode != 'processing_stop') {
+        setState(() {
+          _mode = 'processing_stop';
+        });
+      }
+    } else if (_mode == 'processing_stop') {
+      debugPrint('🔄 Already in processing_stop, forcing to stopped');
+      setState(() {
+        _mode = 'stopped';
+        _currentWords = '';
+      });
     } else {
-      setState(() { _mode = 'stopped'; _currentWords = ''; });
+      setState(() {
+        _mode = 'stopped';
+        _currentWords = '';
+      });
     }
   }
 
@@ -398,12 +478,18 @@ class _InterviewPracticeSessionScreenState
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
-      if (_remainingSeconds <= 0) { t.cancel(); _stopRecordingAndShowStopped(); return; }
+      if (_remainingSeconds <= 0) {
+        debugPrint('⏰ Countdown finished');
+        t.cancel();
+        _stopRecordingAndShowStopped();
+        return;
+      }
       setState(() => _remainingSeconds--);
     });
   }
 
   void _retryRecording() {
+    debugPrint('🔄 Retry recording');
     _countdownTimer?.cancel();
     _finalResultTimeout?.cancel();
     _isWaitingForFinal = false;
@@ -413,34 +499,137 @@ class _InterviewPracticeSessionScreenState
   }
 
   void _switchToTyping() {
+    debugPrint('⌨️ Switching to typing mode');
     if (_mode == 'loading' || _mode == 'feedback') return;
     if (_mode == 'listening') _stopRecordingAndShowStopped();
     setState(() => _mode = 'typing');
   }
 
   void _switchToVoice() {
+    debugPrint('🎤 Switching to voice mode');
     if (_mode == 'loading' || _mode == 'feedback') return;
     setState(() { _mode = 'idle'; _remainingSeconds = _totalSeconds; });
   }
 
+  void _editTranscript() {
+    debugPrint('✏️ Editing transcript');
+    setState(() {
+      _isEditingTranscript = true;
+      _mode = 'editing_transcript';
+    });
+  }
+
+  void _saveTranscriptEdit() {
+    debugPrint('💾 Saving transcript edit');
+    setState(() {
+      _isEditingTranscript = false;
+      _mode = 'stopped';
+    });
+  }
+
+  void _cancelTranscriptEdit() {
+    debugPrint('❌ Cancelling transcript edit');
+    setState(() {
+      _isEditingTranscript = false;
+      _mode = 'stopped';
+    });
+  }
+
+  Future<void> _showRateLimitDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _InterviewDialog(
+        icon: Icons.timer_outlined,
+        iconColor: const Color(0xFFF59E0B),
+        iconBg: const Color(0xFFFFFBEB),
+        title: 'AI is Busy Right Now',
+        body: 'The AI service is currently rate-limited due to high demand. Please wait 30-60 seconds and try again.\n\nTip: You can type your answers instead of using voice to reduce API calls.',
+        primaryLabel: 'Try Again',
+        primaryColor: const Color(0xFF3B4FD8),
+        secondaryLabel: 'Go Back',
+        onPrimary: () {
+          Navigator.pop(ctx);
+          // Retry the submission
+          _submitForFeedback();
+        },
+        onSecondary: () {
+          Navigator.pop(ctx);
+          setState(() {
+            _mode = 'stopped';
+            _isSubmitting = false;
+          });
+        },
+      ),
+    );
+  }
+
+  // FIXED: Improved submit with proper waiting and rate limit handling
   Future<void> _submitForFeedback() async {
-    if (_isSubmitting) return;
-    _isSubmitting = true;
+    debugPrint('🚀 SUBMIT BUTTON CLICKED - Current mode: $_mode, isSubmitting: $_isSubmitting');
+
+    if (_isSubmitting) {
+      debugPrint('⚠️ Already submitting, ignoring click');
+      _showSnack('Already submitting, please wait...');
+      return;
+    }
+
+    // Log current state for debugging
+    debugPrint('📊 State before submission - mode: $_mode, waitingForFinal: $_isWaitingForFinal, answer length: ${_answerCtrl.text.length}');
+
+    // If we're in processing_stop, wait for it to complete
+    if (_mode == 'processing_stop') {
+      debugPrint('⏳ In processing_stop mode, waiting for completion...');
+      _showSnack('Processing speech, please wait...');
+      int waited = 0;
+      while (_mode == 'processing_stop' && waited < 30) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        waited++;
+      }
+      if (_mode == 'processing_stop') {
+        debugPrint('⚠️ processing_stop timeout, forcing to stopped');
+        setState(() {
+          _mode = 'stopped';
+        });
+      } else {
+        debugPrint('✅ processing_stop completed');
+      }
+    }
 
     if (_isWaitingForFinal) {
+      debugPrint('⏳ Waiting for final speech result...');
+      _showSnack('Waiting for speech recognition...');
       int waited = 0;
       while (_isWaitingForFinal && waited < 40) {
         await Future.delayed(const Duration(milliseconds: 100));
         waited++;
       }
-    }
-    if (_mode == 'listening') {
-      _stopRecordingAndShowStopped();
-      await Future.delayed(const Duration(milliseconds: 800));
+      debugPrint('✅ Finished waiting for final result');
     }
 
+    if (_mode == 'listening') {
+      debugPrint('🎤 Still in listening mode, stopping recording');
+      _stopRecordingAndShowStopped();
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    // Final check - force to stopped if needed
+    if (_mode != 'stopped' && _mode != 'typing') {
+      debugPrint('⚠️ Mode is $_mode, forcing to stopped');
+      setState(() {
+        _mode = 'stopped';
+      });
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    debugPrint('✅ Ready to submit, mode is now: $_mode');
+    _isSubmitting = true;
+
     final answer = _answerCtrl.text.trim();
+    debugPrint('📝 Answer length: ${answer.length} characters');
+
     if (answer.isEmpty) {
+      debugPrint('❌ Answer is empty, cannot submit');
       _isSubmitting = false;
       _showSnack('Please speak or type your answer first');
       if (mounted) setState(() => _mode = _speechAvailable ? 'idle' : 'typing');
@@ -458,8 +647,13 @@ class _InterviewPracticeSessionScreenState
         widget.savedJobData['title'] as String? ?? 'this role';
     final company  = widget.savedJobData['company']  as String? ?? 'the company';
 
+    debugPrint('🤖 Sending to AI for job: $jobTitle at $company');
+
     try {
-      if (_apiKey.isEmpty) throw Exception('OPENROUTER_API_KEY not set in .env');
+      if (_apiKey.isEmpty) {
+        debugPrint('❌ OPENROUTER_API_KEY not set in .env');
+        throw Exception('OPENROUTER_API_KEY not set in .env');
+      }
 
       final prompt = '''
 You are a professional interview coach. The candidate is applying for "$jobTitle" at "$company".
@@ -477,7 +671,9 @@ SAMPLE_RESPONSE: <A strong 3-4 sentence model answer for this specific question 
 SCORE: <Score like 7/10 with one sentence justification.>
 ''';
 
+      debugPrint('📤 Calling OpenRouter API...');
       final text = await _callOpenRouter(prompt, _apiKey);
+      debugPrint('📥 Received response from OpenRouter, length: ${text.length}');
 
       final feedbackMatch = RegExp(r'FEEDBACK:\s*(.*?)(?=SAMPLE_RESPONSE:|$)',  dotAll: true).firstMatch(text);
       final sampleMatch   = RegExp(r'SAMPLE_RESPONSE:\s*(.*?)(?=SCORE:|$)',     dotAll: true).firstMatch(text);
@@ -489,8 +685,8 @@ SCORE: <Score like 7/10 with one sentence justification.>
             (score.isNotEmpty ? '\n\n⭐ Score: $score' : '');
         final sampleText   = sampleMatch?.group(1)?.trim() ?? 'No sample response available.';
 
-        // ── Save to completed answers list ──
-        // Replace existing if already answered (re-submit scenario)
+        debugPrint('✅ Successfully parsed feedback, score: ${score.isNotEmpty ? score : "N/A"}');
+
         _completedAnswers.removeWhere(
                 (a) => a.questionNumber == _currentQuestionIndex + 1);
         _completedAnswers.add(CompletedAnswer(
@@ -509,8 +705,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
           _feedbackExpanded = true;
           _sampleExpanded   = false;
         });
+        debugPrint('🎉 Feedback received and displayed');
       }
     } on TimeoutException {
+      debugPrint('⏰ TimeoutException - API took too long');
       if (mounted) setState(() {
         _aiFeedback = 'Request timed out. Check internet and try again.';
         _aiSampleResponse = '';
@@ -518,25 +716,35 @@ SCORE: <Score like 7/10 with one sentence justification.>
         _endReviewActive = true;
       });
     } catch (e) {
-      if (mounted) setState(() {
-        _aiFeedback = 'Could not get feedback. Error: ${e.toString()}';
-        _aiSampleResponse = '';
-        _mode = 'feedback';
-        _endReviewActive = true;
-      });
+      debugPrint('❌ Exception in submit: $e');
+      if (mounted) {
+        if (e.toString().contains('rate_limited')) {
+          // Show rate limit dialog
+          await _showRateLimitDialog();
+        } else {
+          setState(() {
+            _aiFeedback = 'Could not get feedback. Please check your connection and retry.';
+            _aiSampleResponse = '';
+            _mode = 'stopped';
+            _endReviewActive = false;
+          });
+          _showSnack('Connection error. Please try again.');
+        }
+      }
     } finally {
       _isSubmitting = false;
+      debugPrint('🏁 Submit finished, isSubmitting reset to false');
     }
   }
 
   void _nextQuestion() {
+    debugPrint('➡️ Moving to next question');
     if (_mode == 'loading' || _questions.isEmpty) return;
     _countdownTimer?.cancel();
 
     final isLast = _currentQuestionIndex >= _questions.length - 1;
 
     if (isLast) {
-      // All questions done — go straight to review
       _navigateToReview();
     } else {
       setState(() {
@@ -550,13 +758,16 @@ SCORE: <Score like 7/10 with one sentence justification.>
         _feedbackExpanded = true;
         _sampleExpanded = false;
         _isSubmitting = false;
+        _isEditingTranscript = false;
       });
+      debugPrint('📋 Now on question ${_currentQuestionIndex + 1} of ${_questions.length}');
     }
   }
 
   // ── End & Review logic ─────────────────────────────────────────────────────
 
   Future<void> _endAndReview() async {
+    debugPrint('🏁 End & Review clicked');
     if (_mode == 'loading') {
       _showSnack('Please wait for feedback before leaving');
       return;
@@ -566,13 +777,10 @@ SCORE: <Score like 7/10 with one sentence justification.>
     final answered = _answeredCount;
 
     if (answered == 0) {
-      // Case 1: user hasn't answered anything yet
       await _showNoAnswersDialog();
     } else if (answered < total) {
-      // Case 2: partial progress
       await _showPartialProgressDialog(answered, total);
     } else {
-      // Case 3: all done — go to review
       _navigateToReview();
     }
   }
@@ -592,7 +800,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
         secondaryLabel: 'Continue Practising',
         onPrimary: () {
           Navigator.pop(ctx);
-          Navigator.pop(context); // go back, nothing to review
+          Navigator.pop(context);
         },
         onSecondary: () => Navigator.pop(ctx),
       ),
@@ -623,6 +831,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
   }
 
   void _navigateToReview() {
+    debugPrint('📊 Navigating to review screen with ${_completedAnswers.length} answers');
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -638,8 +847,9 @@ SCORE: <Score like 7/10 with one sentence justification.>
   // ── Will-pop ───────────────────────────────────────────────────────────────
 
   Future<bool> _onWillPop() async {
+    debugPrint('🔙 Back button pressed, current mode: $_mode');
     if (_mode == 'loading') { _showSnack('Please wait for feedback before leaving'); return false; }
-    if (_mode == 'listening' || _mode == 'stopped') {
+    if (_mode == 'listening' || _mode == 'stopped' || _mode == 'processing_stop' || _mode == 'editing_transcript') {
       final confirm = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -661,6 +871,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
   }
 
   void _showSnack(String msg) {
+    debugPrint('📢 Snackbar: $msg');
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -780,8 +991,8 @@ SCORE: <Score like 7/10 with one sentence justification.>
                 const SizedBox(height: 24),
 
                 // ── VOICE MODES ──────────────────────────────────────
-                if (_mode == 'idle' || _mode == 'listening' || _mode == 'stopped') ...[
-                  if (_mode != 'idle') ...[
+                if (_mode == 'idle' || _mode == 'listening' || _mode == 'stopped' || _mode == 'processing_stop' || _mode == 'editing_transcript') ...[
+                  if (_mode != 'idle' && _mode != 'processing_stop' && _mode != 'editing_transcript') ...[
                     Text(_timerDisplay, style: TextStyle(
                         fontSize: 22, fontWeight: FontWeight.w300,
                         color: _timerColor, letterSpacing: 1)),
@@ -815,7 +1026,7 @@ SCORE: <Score like 7/10 with one sentence justification.>
                           decoration: BoxDecoration(
                             color: _mode == 'listening'
                                 ? _red
-                                : _mode == 'stopped'
+                                : _mode == 'stopped' || _mode == 'processing_stop' || _mode == 'editing_transcript'
                                 ? Colors.grey
                                 : _speechAvailable ? _blue : Colors.grey,
                             shape: BoxShape.circle,
@@ -849,11 +1060,19 @@ SCORE: <Score like 7/10 with one sentence justification.>
                         ? (_speechAvailable ? 'Tap mic to start' : 'Not available')
                         : _mode == 'listening'
                         ? 'Recording... tap mic to stop'
+                        : _mode == 'processing_stop'
+                        ? 'Processing speech...'
+                        : _mode == 'editing_transcript'
+                        ? 'Editing mode — tap save when done'
                         : 'Recording stopped',
                     style: TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w500,
                         color: _mode == 'listening'
                             ? _red
+                            : _mode == 'processing_stop'
+                            ? _blue
+                            : _mode == 'editing_transcript'
+                            ? Colors.orange
                             : _mode == 'stopped'
                             ? Colors.grey[600]
                             : Colors.grey[500]),
@@ -880,31 +1099,153 @@ SCORE: <Score like 7/10 with one sentence justification.>
                       ]),
                     ),
 
-                  // Captured text preview
-                  if (_answerCtrl.text.isNotEmpty && _mode != 'listening') ...[
+                  // Show processing indicator while waiting for final result
+                  if (_mode == 'processing_stop') ...[
+                    const SizedBox(height: 16),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Processing your speech...',
+                            style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+
+                  // Captured text preview with EDIT capability
+                  if (_answerCtrl.text.isNotEmpty && _mode != 'listening' && _mode != 'processing_stop') ...[
                     const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
-                      constraints: const BoxConstraints(maxHeight: 100),
-                      padding: const EdgeInsets.all(10),
+                      constraints: const BoxConstraints(maxHeight: 150),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        color: _mode == 'editing_transcript'
+                            ? Colors.white
+                            : const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _mode == 'editing_transcript'
+                              ? _blue
+                              : const Color(0xFFE5E7EB),
+                          width: _mode == 'editing_transcript' ? 2 : 1,
+                        ),
                       ),
-                      child: SingleChildScrollView(
-                        child: Text(_answerCtrl.text,
-                            style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_mode == 'editing_transcript')
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                '✏️ Edit your answer:',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF3B4FD8),
+                                ),
+                              ),
+                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _mode == 'editing_transcript'
+                                    ? TextField(
+                                  controller: _answerCtrl,
+                                  maxLines: null,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    hintText: 'Edit your answer here...',
+                                    hintStyle: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFFAAAAAA),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black87,
+                                    height: 1.4,
+                                  ),
+                                )
+                                    : SingleChildScrollView(
+                                  child: Text(
+                                    _answerCtrl.text,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.black87,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_mode == 'stopped' && !_isEditingTranscript)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: GestureDetector(
+                                    onTap: _editTranscript,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: _blue.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                        color: _blue,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (_mode == 'editing_transcript') ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: _cancelTranscriptEdit,
+                                  child: const Text(
+                                    'Cancel',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: _saveTranscriptEdit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _blue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 6,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Save',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
 
-                  // ── FIX: Retry / Submit row with flex weights ────────
-                  // Previously both buttons had equal Expanded weight, which
-                  // forced the long "Submit for AI Feedback" label to wrap
-                  // across two lines and made the button look too tall.
-                  // Now Retry gets flex:1 and Submit gets flex:2 so there
-                  // is enough horizontal space for the label on one line.
                   if (_mode == 'stopped') ...[
                     const SizedBox(height: 20),
                     Row(children: [
@@ -1229,7 +1570,6 @@ class _InterviewDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icon bubble
             Container(
               width: 64, height: 64,
               decoration: BoxDecoration(
@@ -1239,8 +1579,6 @@ class _InterviewDialog extends StatelessWidget {
               child: Icon(icon, color: iconColor, size: 32),
             ),
             const SizedBox(height: 20),
-
-            // Title
             Text(
               title,
               textAlign: TextAlign.center,
@@ -1252,8 +1590,6 @@ class _InterviewDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Body
             Text(
               body,
               textAlign: TextAlign.center,
@@ -1264,8 +1600,6 @@ class _InterviewDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-
-            // Primary CTA
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -1286,8 +1620,6 @@ class _InterviewDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Secondary CTA
             SizedBox(
               width: double.infinity,
               child: TextButton(
@@ -1315,7 +1647,7 @@ class _InterviewDialog extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVIEW SCREEN
+// REVIEW SCREEN (kept as is)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -1339,7 +1671,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
   static const Color _green = Color(0xFF0BA87E);
   static const Color _amber = Color(0xFFF59E0B);
 
-  // Track which cards are expanded
   late final List<bool> _expanded;
 
   @override
@@ -1354,13 +1685,11 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
 
   String get _company => widget.jobData['company'] as String? ?? '';
 
-  /// Extract just the score fraction (e.g. "7/10") from the feedback string.
   String _extractScore(String feedback) {
     final match = RegExp(r'(\d+/10)').firstMatch(feedback);
     return match?.group(1) ?? '—';
   }
 
-  /// Parse the numeric numerator of a "X/10" score string.
   int _scoreInt(String score) {
     final match = RegExp(r'^(\d+)').firstMatch(score);
     return int.tryParse(match?.group(1) ?? '0') ?? 0;
@@ -1424,7 +1753,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
         padding: const EdgeInsets.all(20),
         children: [
 
-          // ── Summary header card ──────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -1438,8 +1766,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
               )],
             ),
             child: Column(children: [
-
-              // Badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
@@ -1452,7 +1778,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                         color: _overallBadgeColor)),
               ),
               const SizedBox(height: 14),
-
               Text(_jobTitle,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
@@ -1464,8 +1789,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                     style: TextStyle(fontSize: 14, color: Colors.grey[500])),
               ],
               const SizedBox(height: 20),
-
-              // Stats row
               Row(children: [
                 _statBox(
                   label: 'Answered',
@@ -1493,7 +1816,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
           ),
           const SizedBox(height: 24),
 
-          // ── Section title ────────────────────────────────────────
           if (answered > 0) ...[
             const Text('Question Breakdown',
                 style: TextStyle(
@@ -1501,7 +1823,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                     color: Colors.black87)),
             const SizedBox(height: 12),
 
-            // ── Per-question cards ───────────────────────────────
             ...widget.completedAnswers.asMap().entries.map((entry) {
               final idx = entry.key;
               final ca  = entry.value;
@@ -1524,7 +1845,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header row (always visible)
                       InkWell(
                         onTap: () => setState(
                                 () => _expanded[idx] = !_expanded[idx]),
@@ -1532,7 +1852,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Row(children: [
-                            // Q number bubble
                             Container(
                               width: 32, height: 32,
                               decoration: BoxDecoration(
@@ -1547,8 +1866,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
-
-                            // Question text (truncated)
                             Expanded(
                               child: Text(ca.question,
                                   maxLines: expanded ? 10 : 2,
@@ -1560,8 +1877,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                                       color: Colors.black87, height: 1.4)),
                             ),
                             const SizedBox(width: 8),
-
-                            // Score badge
                             if (scoreInt > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -1585,8 +1900,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                           ]),
                         ),
                       ),
-
-                      // Expanded content
                       if (expanded) ...[
                         _divider(),
                         _reviewSection(
@@ -1618,7 +1931,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
             }),
           ],
 
-          // ── Skipped questions notice ─────────────────────────────
           if (skipped > 0) ...[
             const SizedBox(height: 4),
             Container(
@@ -1646,7 +1958,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
 
           const SizedBox(height: 28),
 
-          // ── Done button ──────────────────────────────────────────
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
