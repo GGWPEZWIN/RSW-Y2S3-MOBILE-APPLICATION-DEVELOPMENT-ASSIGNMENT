@@ -31,7 +31,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(l10n.profileTitle, style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -95,7 +95,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 }),
                 _buildDetailBox(
                   industry: employerData?['industry'] ?? "Not Specified",
-                  website: employerData?['website'] ?? "No website added",
+                  website: employerData?['website'] ?? l10n.noWebsiteAdded,
                 ),
 
                 const SizedBox(height: 40),

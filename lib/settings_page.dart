@@ -117,13 +117,13 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(l10n.signOutBtn, style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(l10n.signOutConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey))),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _signOut(context);
             },
-            child: Text('Sign Out', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+            child: Text(l10n.confirmBtn, style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -135,26 +135,36 @@ class _SettingsPageState extends State<SettingsPage> {
     final emailController = TextEditingController();
     final user = FirebaseAuth.instance.currentUser;
     final String userEmail = user?.email ?? "";
+    final l10n = AppLocalizations.of(context)!; // Initialize localization
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+        title: Text(
+            l10n.deleteAccount,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('This is permanent. All profile data will be lost.'),
+            Text(l10n.deleteWarning),
             const SizedBox(height: 12),
-            Text('Type your email to confirm:', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-            Text(userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(
+                l10n.typeEmailConfirm,
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 13)
+            ),
+            Text(
+                userEmail,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
-                hintText: "Enter email",
+                hintText: l10n.enterEmail,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
@@ -162,7 +172,10 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey))
+          ),
           ElevatedButton(
             onPressed: () => _handleDeleteAccount(context, emailController.text),
             style: ElevatedButton.styleFrom(
@@ -170,7 +183,10 @@ class _SettingsPageState extends State<SettingsPage> {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Confirm Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+                l10n.confirmDelete,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            ),
           ),
         ],
       ),

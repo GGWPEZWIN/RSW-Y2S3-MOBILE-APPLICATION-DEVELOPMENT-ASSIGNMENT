@@ -355,4 +355,139 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get addOfficeLocation => '添加办公地点';
+
+  @override
+  String get editBasicProfile => '编辑基本资料';
+
+  @override
+  String get companyName => '公司名称';
+
+  @override
+  String get companyPhone => '公司电话';
+
+  @override
+  String get companyLocation => '公司地点';
+
+  @override
+  String get gpsCoordinates => 'GPS 坐标';
+
+  @override
+  String get security => '安全设置';
+
+  @override
+  String get currentPassword => '当前密码';
+
+  @override
+  String get newPassword => '新密码';
+
+  @override
+  String get saveChanges => '保存更改';
+
+  @override
+  String get profileUpdated => '资料已更新！';
+
+  @override
+  String get enterPasswordVerify => '请输入当前密码以验证身份。';
+
+  @override
+  String get contactEmail => '联系电子邮箱（只读）';
+
+  @override
+  String get confirmBtn => '确认';
+
+  @override
+  String get deleteAccount => '删除账户';
+
+  @override
+  String get deleteWarning => '这是永久性的。所有个人资料都将丢失。';
+
+  @override
+  String get typeEmailConfirm => '输入您的电子邮件以确认：';
+
+  @override
+  String get enterEmail => '输入电子邮件';
+
+  @override
+  String get cancel => '取消';
+
+  @override
+  String get confirmDelete => '确认删除';
+
+  @override
+  String get createAccount => '创建账户';
+
+  @override
+  String get joinJobBuddy => '加入 JobBuddy，发现您的下一个机会。';
+
+  @override
+  String get tapToAddPhoto => '点击添加个人头像';
+
+  @override
+  String get iAmA => '我是一名...';
+
+  @override
+  String get jobSeeker => '求职者';
+
+  @override
+  String get lookingForWork => '正在找工作';
+
+  @override
+  String get employer => '雇主';
+
+  @override
+  String get hiringTalent => '正在招聘';
+
+  @override
+  String get fullName => '姓名';
+
+  @override
+  String get emailAddress => '电子邮件地址';
+
+  @override
+  String get password => '密码';
+
+  @override
+  String get confirmPassword => '确认密码';
+
+  @override
+  String get minCharacters => '至少 6 个字符';
+
+  @override
+  String get reEnterPassword => '请再次输入密码';
+
+  @override
+  String get alreadyHaveAccount => '已有账户？';
+
+  @override
+  String get login => '登录';
+
+  @override
+  String get nameRequired => '请输入姓名';
+
+  @override
+  String get validEmail => '请输入有效的电子邮件';
+
+  @override
+  String get passRequired => '请输入密码';
+
+  @override
+  String get confirmPassRequired => '请确认密码';
+
+  @override
+  String get passNotMatch => '密码不匹配';
+
+  @override
+  String get createJobseekerAccount => '创建您的求职者账户';
+
+  @override
+  String get email => '电子邮件';
+
+  @override
+  String get atLeast8Chars => '至少 8 个字符';
+
+  @override
+  String get passMinLength => '请为您的密码使用 8 个或更多字符';
+
+  @override
+  String get use8OrMore => '请使用 8 个或更多字符。';
 }

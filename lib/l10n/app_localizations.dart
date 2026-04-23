@@ -795,6 +795,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add office location'**
   String get addOfficeLocation;
+
+  /// No description provided for @editBasicProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Basic Profile'**
+  String get editBasicProfile;
+
+  /// No description provided for @companyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Company Name'**
+  String get companyName;
+
+  /// No description provided for @companyPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Company Phone'**
+  String get companyPhone;
+
+  /// No description provided for @companyLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Company Location'**
+  String get companyLocation;
+
+  /// No description provided for @gpsCoordinates.
+  ///
+  /// In en, this message translates to:
+  /// **'GPS Coordinates'**
+  String get gpsCoordinates;
+
+  /// No description provided for @security.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get security;
+
+  /// No description provided for @currentPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Password'**
+  String get currentPassword;
+
+  /// No description provided for @newPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'New Password'**
+  String get newPassword;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get saveChanges;
+
+  /// No description provided for @profileUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile Updated!'**
+  String get profileUpdated;
+
+  /// No description provided for @enterPasswordVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter current password to verify identity.'**
+  String get enterPasswordVerify;
+
+  /// No description provided for @contactEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Email (Read Only)'**
+  String get contactEmail;
+
+  /// No description provided for @confirmBtn.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirmBtn;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This is permanent. All profile data will be lost.'**
+  String get deleteWarning;
+
+  /// No description provided for @typeEmailConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Type your email to confirm:'**
+  String get typeEmailConfirm;
+
+  /// No description provided for @enterEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter email'**
+  String get enterEmail;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @confirmDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Delete'**
+  String get confirmDelete;
+
+  /// No description provided for @createAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get createAccount;
+
+  /// No description provided for @joinJobBuddy.
+  ///
+  /// In en, this message translates to:
+  /// **'Join JobBuddy and find your next opportunity.'**
+  String get joinJobBuddy;
+
+  /// No description provided for @tapToAddPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to add profile photo'**
+  String get tapToAddPhoto;
+
+  /// No description provided for @iAmA.
+  ///
+  /// In en, this message translates to:
+  /// **'I am a...'**
+  String get iAmA;
+
+  /// No description provided for @jobSeeker.
+  ///
+  /// In en, this message translates to:
+  /// **'Job Seeker'**
+  String get jobSeeker;
+
+  /// No description provided for @lookingForWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for work'**
+  String get lookingForWork;
+
+  /// No description provided for @employer.
+  ///
+  /// In en, this message translates to:
+  /// **'Employer'**
+  String get employer;
+
+  /// No description provided for @hiringTalent.
+  ///
+  /// In en, this message translates to:
+  /// **'Hiring talent'**
+  String get hiringTalent;
+
+  /// No description provided for @fullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Name'**
+  String get fullName;
+
+  /// No description provided for @emailAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Email Address'**
+  String get emailAddress;
+
+  /// No description provided for @password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get password;
+
+  /// No description provided for @confirmPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Password'**
+  String get confirmPassword;
+
+  /// No description provided for @minCharacters.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum 6 characters'**
+  String get minCharacters;
+
+  /// No description provided for @reEnterPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enter your password'**
+  String get reEnterPassword;
+
+  /// No description provided for @alreadyHaveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account?'**
+  String get alreadyHaveAccount;
+
+  /// No description provided for @login.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in'**
+  String get login;
+
+  /// No description provided for @nameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name is required'**
+  String get nameRequired;
+
+  /// No description provided for @validEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email'**
+  String get validEmail;
+
+  /// No description provided for @passRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Password is required'**
+  String get passRequired;
+
+  /// No description provided for @confirmPassRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please confirm password'**
+  String get confirmPassRequired;
+
+  /// No description provided for @passNotMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match'**
+  String get passNotMatch;
+
+  /// No description provided for @createJobseekerAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your jobseeker account'**
+  String get createJobseekerAccount;
+
+  /// No description provided for @email.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get email;
+
+  /// No description provided for @atLeast8Chars.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 8 characters'**
+  String get atLeast8Chars;
+
+  /// No description provided for @passMinLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 8 characters or more for your password'**
+  String get passMinLength;
+
+  /// No description provided for @use8OrMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 8 or more characters.'**
+  String get use8OrMore;
 }
 
 class _AppLocalizationsDelegate

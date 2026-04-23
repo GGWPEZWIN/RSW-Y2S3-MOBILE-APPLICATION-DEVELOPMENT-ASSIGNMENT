@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
 import 'Employer/MainScreen/employer_dashboard.dart';
+import 'l10n/app_localizations.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -190,6 +191,7 @@ class _RegisterPageState extends State<RegisterPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -218,8 +220,8 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 24),
 
-                  const Text(
-                    'Create Account',
+                  Text(
+                    l10n.createAccount,
                     style: TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w800,
@@ -228,8 +230,8 @@ class _RegisterPageState extends State<RegisterPage>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Join JobBuddy and find your next opportunity.',
+                  Text(
+                    l10n.joinJobBuddy,
                     style: TextStyle(fontSize: 14, color: kSubtext),
                   ),
                   const SizedBox(height: 32),
@@ -277,22 +279,22 @@ class _RegisterPageState extends State<RegisterPage>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Center(
+                  Center(
                     child: Text(
-                      'Tap to add profile photo',
-                      style: TextStyle(fontSize: 12, color: kSubtext),
+                      l10n.tapToAddPhoto,
+                      style: const TextStyle(fontSize: 12, color: kSubtext),
                     ),
                   ),
                   const SizedBox(height: 28),
 
-                  _sectionLabel('I am a...'),
+                  _sectionLabel(l10n.iAmA),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: _roleCard(
-                          label: 'Job Seeker',
-                          subtitle: 'Looking for work',
+                          label: l10n.jobSeeker,
+                          subtitle: l10n.lookingForWork,
                           icon: Icons.work_outline_rounded,
                           value: 'jobseeker',
                         ),
@@ -300,8 +302,8 @@ class _RegisterPageState extends State<RegisterPage>
                       const SizedBox(width: 12),
                       Expanded(
                         child: _roleCard(
-                          label: 'Employer',
-                          subtitle: 'Hiring talent',
+                          label: l10n.employer,
+                          subtitle: l10n.hiringTalent,
                           icon: Icons.business_center_outlined,
                           value: 'employer',
                         ),
@@ -310,14 +312,14 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(height: 24),
 
-                  _sectionLabel('Full Name'),
+                  _sectionLabel(l10n.fullName),
                   const SizedBox(height: 8),
                   _buildField(
                     controller: _nameController,
                     hint: 'e.g. Ahmad Faris',
                     icon: Icons.badge_outlined,
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Full name is required'
+                        ? l10n.nameRequired
                         : null,
                   ),
                   const SizedBox(height: 16),
@@ -330,18 +332,18 @@ class _RegisterPageState extends State<RegisterPage>
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Email is required';
-                      if (!v.contains('@')) return 'Enter a valid email';
+                      if (v == null || v.trim().isEmpty) return l10n.emailRequired;
+                      if (!v.contains('@')) return l10n.validEmail;
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  _sectionLabel('Password'),
+                  _sectionLabel(l10n.password),
                   const SizedBox(height: 8),
                   _buildField(
                     controller: _passwordController,
-                    hint: 'Minimum 6 characters',
+                    hint: l10n.minCharacters,
                     icon: Icons.lock_outline_rounded,
                     obscure: _obscurePassword,
                     suffixIcon: IconButton(
@@ -356,18 +358,18 @@ class _RegisterPageState extends State<RegisterPage>
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Password is required';
-                      if (v.length < 6) return 'Minimum 6 characters';
+                      if (v == null || v.isEmpty) return l10n.passRequired;
+                      if (v.length < 6) return l10n.minCharacters;
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  _sectionLabel('Confirm Password'),
+                  _sectionLabel(l10n.confirmPassword),
                   const SizedBox(height: 8),
                   _buildField(
                     controller: _confirmController,
-                    hint: 'Re-enter your password',
+                    hint: l10n.reEnterPassword,
                     icon: Icons.lock_outline_rounded,
                     obscure: _obscureConfirm,
                     suffixIcon: IconButton(
@@ -411,9 +413,9 @@ class _RegisterPageState extends State<RegisterPage>
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5),
                       )
-                          : const Text(
-                        'Create Account',
-                        style: TextStyle(
+                          : Text(
+                        l10n.createAccount,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
