@@ -2,7 +2,6 @@ import 'dart:convert'; // Required for base64Decode
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../l10n/app_localizations.dart';
 import '../../settings_page.dart';
 import '../ProfileEdit/edit_basic_profile.dart';
 import '../ProfileEdit/edit_company_background.dart';
@@ -22,12 +21,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Initialize l10n
-    final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
-
-    // 2. Safety check
-    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -35,8 +29,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        // Translated 'Profile'
-        title: Text(l10n.profileTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -48,7 +41,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text(l10n.errorLoadingProfile));
+          if (snapshot.hasError) return const Center(child: Text("Error loading profile"));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
           final employerData = snapshot.data?.data() as Map<String, dynamic>?;
@@ -58,7 +51,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- 1. HEADER ---
+                // --- 1. HEADER (LINKED TO BASIC PROFILE EDIT) ---
                 GestureDetector(
                   onTap: () {
                     if (user != null) {
@@ -74,34 +67,33 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 ),
 
                 const SizedBox(height: 24),
-                // Translated 'Employer Settings'
-                Text(l10n.employerSettings, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text("Employer Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const Divider(thickness: 1, height: 24),
 
                 // --- 2. COMPANY BACKGROUND ---
-                _buildSectionHeader(l10n.companyBackground, onTap: () {
+                _buildSectionHeader("Company Background", onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (c) => EditBackgroundPage(
                     currentBackground: employerData?['background'] ?? "",
                   )));
                 }),
                 _buildContentCard(
-                  title: l10n.backgroundLabel,
-                  subtitle: employerData?['background'] ?? l10n.noBackgroundSet,
+                  title: "Background",
+                  subtitle: employerData?['background'] ?? "No background description set.",
                   icon: Icons.business_outlined,
                 ),
 
                 const SizedBox(height: 24),
 
                 // --- 3. COMPANY INFORMATION ---
-                _buildSectionHeader(l10n.companyInfo, onTap: () {
+                _buildSectionHeader("Company Information", onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (c) => EditCompanyInfo(
                     currentIndustry: employerData?['industry'] ?? "",
                     currentWebsite: employerData?['website'] ?? "",
                   )));
                 }),
                 _buildDetailBox(
-                  industry: employerData?['industry'] ?? l10n.notSpecified,
-                  website: employerData?['website'] ?? l10n.noWebsiteAdded,
+                  industry: employerData?['industry'] ?? "Not Specified",
+                  website: employerData?['website'] ?? "No website added",
                 ),
 
                 const SizedBox(height: 40),
@@ -116,7 +108,6 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   // --- WIDGET BUILDERS ---
 
   Widget _buildHeader(Map<String, dynamic>? data, User? user) {
-
     // Determine the Logo Provider (Base64 vs Network)
     ImageProvider? imageProvider;
     final String? photoUrl = data?['photoUrl'];
@@ -134,7 +125,6 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       }
     }
 
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
@@ -146,23 +136,22 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
           CircleAvatar(
             radius: 45,
             backgroundColor: const Color(0xFFF1F5F9),
-        backgroundImage: imageProvider,
-        child: imageProvider == null
-            ? const Icon(Icons.business, size: 40, color: kPrimaryBlue)
-            : null,
+            backgroundImage: imageProvider,
+            child: imageProvider == null
+                ? const Icon(Icons.business, size: 40, color: kPrimaryBlue)
+                : null,
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                  Text(
-                    data?['companyName'] ?? 'Company Name',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis, // Safe for long names
-                    maxLines: 1,
-                  ),
-
+                Text(
+                  data?['companyName'] ?? 'Company Name',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis, // Safe for long names
+                  maxLines: 1,
+                ),
                 const SizedBox(height: 6),
                 _buildHeaderRow(Icons.email_outlined, data?['email'] ?? user?.email ?? ''),
                 _buildHeaderRow(Icons.phone_outlined, data?['phone'] ?? 'Add phone'),

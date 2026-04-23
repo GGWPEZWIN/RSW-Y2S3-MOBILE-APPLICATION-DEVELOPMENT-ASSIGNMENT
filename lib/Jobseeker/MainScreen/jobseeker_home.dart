@@ -560,18 +560,27 @@ class _HomePageState extends State<HomePage> {
 
   // ── AI section with loading + empty states ────────────────────────────────
   Widget _buildAiSection() {
-
     if (_isAiLoading) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 80),
+        padding: EdgeInsets.symmetric(vertical: 60),
         child: Center(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               CircularProgressIndicator(color: _blue),
               SizedBox(height: 16),
               Text(
-                "Analyzing your resume and skills...",
-                style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black54),
+                'Analysing your profile...',
+                style: TextStyle(
+                  color: Color(0xFF555555),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Finding your best matches',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ],
           ),
@@ -579,52 +588,35 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    if (_aiRecommendations == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 80),
+    if (_aiRecommendations == null || _aiRecommendations!.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
         child: Center(
-          child: Text(
-            "Preparing your personalized list...",
-            style: TextStyle(color: Colors.grey),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.psychology_outlined,
+                  size: 56, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              const Text(
+                'No AI matches found yet',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Complete your profile and upload your resume to get personalised job recommendations.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    // 3. Cold Start / Empty state: Fetching is DONE, but no matches found
-    if (_aiRecommendations!.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(40.0),
-        child: Column(
-          children: [
-            Icon(Icons.description_outlined, size: 60, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            const Text(
-              "Let's boost your matches!",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Upload a resume or add skills in your profile to see tailored recommendations.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ProfilePage(user: widget.user)),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text("Go to Profile", style: TextStyle(color: Colors.white)),
-            )
-          ],
-        ),
-      );
-    }
     return _buildAiList();
   }
 
@@ -636,38 +628,40 @@ class _HomePageState extends State<HomePage> {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
         final now = DateTime.now();
         final docs = snapshot.data!.docs.where((doc) {
           final d = doc.data() as Map<String, dynamic>;
 
-          // Date visibility checks
           final pub = (d['publishDate'] as Timestamp?)?.toDate();
           if (pub != null && pub.isAfter(now)) return false;
+
           final exp = (d['expiryDate'] as Timestamp?)?.toDate();
           if (exp != null && exp.isBefore(now)) return false;
 
-
-
           if (_selectedCategory != 'All Jobs') {
-
-            //String jobCategory = (d['category'] ?? '').toString();
-            String jobCategory = (d['industry'] ?? '').toString();
-            String cleanJobCategory = jobCategory.trim().toLowerCase();
-            String cleanSelected = _selectedCategory.trim().toLowerCase();
-
-            if (!cleanJobCategory.contains(cleanSelected)) return false;
+            final category = (d['category'] ?? '').toString().toLowerCase();
+            if (!category.contains(_selectedCategory.toLowerCase())) {
+              return false;
+            }
           }
 
           return true;
         }).toList();
 
         if (docs.isEmpty) {
-          return Center(
+          return const Center(
             child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Text('No jobs found in $_selectedCategory'),
+              padding: EdgeInsets.all(40),
+              child: Text('No jobs available yet.'),
             ),
           );
         }
@@ -678,129 +672,119 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           itemCount: docs.length,
           itemBuilder: (context, index) {
-            final doc = docs[index];
+            final doc  = docs[index];
             final data = doc.data() as Map<String, dynamic>;
 
             final job = Job(
-              id: doc.id,
-              title: data['title'] ?? 'Untitled',
-              companyId: data['companyId'] ?? '',
-              company: data['company'] ?? 'Company',
-              location: data['location'] ?? '',
-              workType: data['workType'] ?? 'Full-time',
-              workplace: data['workplace'] ?? 'On-site',
-              salary: data['salary'] ?? 'Salary not specified',
+              id:         doc.id,
+              title:      data['title']     ?? 'Untitled',
+              companyId:  data['companyId'] ?? '',
+              company:    data['company']   ?? 'Company',
+              location:   data['location']  ?? '',
+              workType:   data['workType']  ?? 'Full-time',
+              workplace:  data['workplace'] ?? 'On-site',
+              salary:     data['salary']    ?? 'Salary not specified',
               postedTime: data['postedTime'] ?? '',
               applicants: _parseApplicants(data['applicants']),
-              createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              createdAt:  (data['createdAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
             );
 
-            // Get benefits for display
-            final benefitLines = ((data['benefits'] ?? '') as String)
+            final benefits = (data['benefits'] ?? '') as String;
+            final benefitLines = benefits
                 .split('\n')
-                .where((l) => l.trim().isNotEmpty)
+                .map((l) => l.trim())
+                .where((l) => l.isNotEmpty)
                 .take(3)
                 .toList();
 
+            final hasApplied = _appliedJobs.contains(job.id);
+            final isSaved    = _savedJobs.contains(job.id);
+
             return _jobCard(
-              context,
-              job,
-              benefitLines,
-              _appliedJobs.contains(job.id),
-              _savedJobs.contains(job.id),
-              data,
-            );
+                context, job, benefitLines, hasApplied, isSaved, data);
           },
         );
       },
     );
   }
 
-
-  // ── AI recommendations list ────────────────────────
+  // ── AI recommendations list ───────────────────────────────────────────────
   Widget _buildAiList() {
-    // 1. Filter based on category
-    final filteredRecs = _aiRecommendations!.where((rec) {
-      if (_selectedCategory == 'All Jobs') return true;
-      //final jobCat = (rec.jobData['category'] ?? '').toString().toLowerCase();
-      final jobCat = (rec.jobData['industry'] ?? '').toString().toLowerCase();
-      final selected = _selectedCategory.toLowerCase();
-      return jobCat.contains(selected);
-    }).toList();
-
-    if (filteredRecs.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 60),
-        child: Center(
-          child: Text('No AI matches in $_selectedCategory',
-              style: TextStyle(color: Colors.grey[600])),
-        ),
-      );
-    }
-
     return ListView.builder(
-      key: ValueKey(_selectedCategory), // Forces list to rebuild when category changes
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: filteredRecs.length,
+      itemCount: _aiRecommendations!.length,
       itemBuilder: (context, index) {
-        final rec = filteredRecs[index];
+        final rec  = _aiRecommendations![index];
         final data = rec.jobData;
 
-        // --- IMPROVED MATH TRANSFORMATION ---
-        double rawScore = rec.similarityScore;
-        double minBound = 0.35;
-        double maxBound = 0.75;
-        double displayPercentage;
-
-        if (rawScore >= maxBound) {
-          displayPercentage = 98;
-        } else if (rawScore <= minBound) {
-          displayPercentage = 40 + (rawScore * 71);
-        } else {
-          displayPercentage = 65 + ((rawScore - minBound) / (maxBound - minBound) * 30);
-        }
-
-        displayPercentage = displayPercentage.clamp(0, 99);
-
         final job = Job(
-          id: data['id'],
-          title: data['title'] ?? 'Untitled',
-          companyId: data['companyId'] ?? '',
-          company: data['company'] ?? 'Company',
-          location: data['location'] ?? '',
-          workType: data['workType'] ?? 'Full-time',
-          workplace: data['workplace'] ?? 'On-site',
-          salary: data['salary'] ?? 'N/A',
+          id:         data['id'],
+          title:      data['title']     ?? 'Untitled',
+          companyId:  data['companyId'] ?? '',
+          company:    data['company']   ?? 'Company',
+          location:   data['location']  ?? '',
+          workType:   data['workType']  ?? 'Full-time',
+          workplace:  data['workplace'] ?? 'On-site',
+          salary:     data['salary']    ?? 'N/A',
           postedTime: '',
           applicants: '',
-          createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          createdAt:  (data['createdAt'] as Timestamp?)?.toDate() ??
+              DateTime.now(),
         );
+
+        final matchPercent =
+        (rec.similarityScore * 100).toStringAsFixed(0);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Container(
               margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: _matchGradient(displayPercentage)),
+                gradient: LinearGradient(
+                  colors: _matchGradient(rec.similarityScore),
+                ),
                 borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: _matchGradient(rec.similarityScore)
+                        .first
+                        .withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.auto_awesome_rounded, size: 11, color: Colors.white),
+                  const Icon(Icons.auto_awesome_rounded,
+                      size: 11, color: Colors.white),
                   const SizedBox(width: 4),
                   Text(
-                    '${displayPercentage.toStringAsFixed(0)}% Match',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    '$matchPercent% Match',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ),
-            _jobCard(context, job, [], _appliedJobs.contains(job.id), _savedJobs.contains(job.id), data),
+            _jobCard(
+              context,
+              job,
+              [],
+              _appliedJobs.contains(job.id),
+              _savedJobs.contains(job.id),
+              data,
+            ),
           ],
         );
       },
@@ -808,13 +792,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ── Match badge gradient based on score ──────────────────────────────────
-  List<Color> _matchGradient(double scaledScore) {
-    if (scaledScore >= 80) {
-      return [const Color(0xFF16A34A), const Color(0xFF22C55E)]; // Success Green
-    } else if (scaledScore >= 50) {
-      return [const Color(0xFF2563EB), const Color(0xFF3B82F6)]; // Info Blue
+  List<Color> _matchGradient(double score) {
+    if (score >= 0.75) {
+      return [const Color(0xFF16A34A), const Color(0xFF22C55E)];
+    } else if (score >= 0.5) {
+      return [const Color(0xFF2563EB), const Color(0xFF3B82F6)];
     } else {
-      return [const Color(0xFF64748B), const Color(0xFF94A3B8)]; // Neutral Slate
+      return [const Color(0xFFCA8A04), const Color(0xFFEAB308)];
     }
   }
 
