@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Employer/MainScreen/employer_dashboard.dart';
 import 'employer_signup.dart';
+import 'l10n/app_localizations.dart';
 import 'services/fcm_service.dart';          // ✅ Add
 import 'services/notification_service.dart'; // ✅ Add
 
@@ -215,6 +216,12 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: _bg,
       body: Column(
@@ -250,21 +257,21 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                   ),
                   const SizedBox(width: 10),
                   RichText(
-                    text: const TextSpan(children: [
-                      TextSpan(text: 'JobBuddy ',
+                    text: TextSpan(children: [
+                      const TextSpan(text: 'JobBuddy ',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
-                      TextSpan(text: 'Employer',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w400, color: Color(0xFF9FADC8))),
+                      TextSpan(text: l10n.employerLabel, // Translated 'Employer'
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w400, color: Color(0xFF9FADC8))),
                     ]),
                   ),
                 ]),
                 const SizedBox(height: 24),
-                const Text('Welcome back',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                Text(l10n.welcomeBack, // Translated 'Welcome back'
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
                         color: Colors.white, letterSpacing: -0.5)),
                 const SizedBox(height: 6),
-                const Text('Log in to your employer account to manage hiring.',
-                    style: TextStyle(fontSize: 14, color: Color(0xFF8A99B8), height: 1.4)),
+                Text(l10n.employerLoginSubtitle, // Translated subtitle
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF8A99B8), height: 1.4)),
               ],
             ),
           ),
@@ -278,22 +285,22 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _fieldLabel('Work Email'),
+                    _fieldLabel(l10n.workEmailLabel), // Translated 'Work Email'
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
                       decoration: _inputDec(hint: 'company@email.com', icon: Icons.email_outlined),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Email is required';
+                        if (v == null || v.trim().isEmpty) return l10n.emailRequired;
                         if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v))
-                          return 'Enter a valid email address';
+                          return l10n.invalidEmail;
                         return null;
                       },
                     ),
                     const SizedBox(height: 20),
 
-                    _fieldLabel('Password'),
+                    _fieldLabel(l10n.passwordLabel),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _passwordCtrl,
@@ -313,7 +320,7 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                         ),
                       ),
                       validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Password is required' : null,
+                      (v == null || v.isEmpty) ? l10n.passwordRequired : null,
                     ),
                     const SizedBox(height: 10),
 
@@ -325,8 +332,8 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                        child: const Text('Forgot Password?',
-                            style: TextStyle(color: _accent, fontSize: 13,
+                        child: Text(l10n.forgotPassword,
+                            style: const TextStyle(color: _accent, fontSize: 13,
                                 fontWeight: FontWeight.w600)),
                       ),
                     ),
@@ -347,8 +354,8 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                             ? const SizedBox(width: 22, height: 22,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2.5))
-                            : const Text('Log In',
-                            style: TextStyle(fontSize: 16,
+                            : Text(l10n.loginBtn,
+                            style: const TextStyle(fontSize: 16,
                                 fontWeight: FontWeight.bold, color: Colors.white)),
                       ),
                     ),
@@ -358,7 +365,7 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                       const Expanded(child: Divider()),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text('or', style: TextStyle(color: _subtext, fontSize: 13)),
+                        child: Text(l10n.orLabel, style: TextStyle(color: _subtext, fontSize: 13)),
                       ),
                       const Expanded(child: Divider()),
                     ]),
@@ -376,8 +383,8 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Create Employer Account',
-                            style: TextStyle(fontSize: 15,
+                        child: Text(l10n.createEmployerAccountBtn,
+                            style: const TextStyle(fontSize: 15,
                                 fontWeight: FontWeight.bold, color: _navy)),
                       ),
                     ),
@@ -390,15 +397,14 @@ class _EmployerLoginScreenState extends State<EmployerLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFBFCBF4)),
                       ),
-                      child: const Row(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.info_outline_rounded, size: 16, color: _accent),
-                          SizedBox(width: 10),
+                          const Icon(Icons.info_outline_rounded, size: 16, color: _accent),
+                          const SizedBox(width: 10),
                           Expanded(child: Text(
-                            'Employer accounts are separate from jobseeker accounts. '
-                                'Only registered companies can access the employer portal.',
-                            style: TextStyle(fontSize: 12, color: _accent, height: 1.5),
+                            l10n.employerAccountNotice,
+                            style: const TextStyle(fontSize: 12, color: _accent, height: 1.5),
                           )),
                         ],
                       ),

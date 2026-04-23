@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_signup.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
 import 'Employer/MainScreen/employer_dashboard.dart';
+import 'l10n/app_localizations.dart';
 import 'services/fcm_service.dart';          // ✅ Add
 import 'services/notification_service.dart'; // ✅ Add
 
@@ -199,6 +200,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check for the loading spinner
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -208,8 +215,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Log In',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        // Changed 'Log In' to l10n key
+        title: Text(l10n.loginTitle,
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -229,12 +237,14 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   child: const Icon(Icons.email_outlined, color: Colors.white, size: 36),
                 )),
                 const SizedBox(height: 24),
-                const Text('Welcome back',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                // Translated 'Welcome back'
+                Text(l10n.welcomeBack,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                const Text('Log in to continue',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                // Translated 'Log in to continue'
+                Text(l10n.loginSubtitle,
+                    style: const TextStyle(color: Colors.grey, fontSize: 14),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 32),
 
@@ -242,12 +252,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _inputDeco(
-                      label: 'Email', hint: 'you@example.com',
+                      label: l10n.emailLabel, hint: 'you@example.com',
                       icon: Icons.email_outlined),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (v == null || v.trim().isEmpty) return l10n.emailRequired;
                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v))
-                      return 'Enter a valid email address';
+                      return l10n.invalidEmail;
                     return null;
                   },
                 ),
@@ -257,7 +267,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: _inputDeco(
-                    label: 'Password', hint: 'Enter your password',
+                    label: l10n.passwordLabel, hint: l10n.passwordHint,
                     icon: Icons.lock_outline,
                     suffix: IconButton(
                       icon: Icon(_obscurePassword
@@ -267,7 +277,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     ),
                   ),
                   validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Password is required' : null,
+                  (v == null || v.isEmpty) ? l10n.passwordRequired : null,
                 ),
                 const SizedBox(height: 8),
 
@@ -279,8 +289,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    child: const Text('Forgot Password?',
-                        style: TextStyle(color: _primaryBlue,
+                    child: Text(l10n.forgotPassword,
+                        style: const TextStyle(color: _primaryBlue,
                             fontWeight: FontWeight.w600, fontSize: 13)),
                   ),
                 ),
@@ -300,8 +310,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         ? const SizedBox(width: 24, height: 24,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                        : const Text('Log In',
-                        style: TextStyle(fontSize: 16,
+                        : Text(l10n.loginBtn,
+                        style: const TextStyle(fontSize: 16,
                             fontWeight: FontWeight.bold, color: Colors.white)),
                   ),
                 ),
@@ -310,14 +320,14 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account? "),
+                    Text("${l10n.dontHaveAnAccount} "),
                     GestureDetector(
                       onTap: () => Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (_) => const EmailSignUpScreen()),
                       ),
-                      child: const Text('Sign Up',
-                          style: TextStyle(color: _primaryBlue,
+                      child: Text(l10n.signUpLink,
+                          style: const TextStyle(color: _primaryBlue,
                               fontWeight: FontWeight.bold)),
                     ),
                   ],

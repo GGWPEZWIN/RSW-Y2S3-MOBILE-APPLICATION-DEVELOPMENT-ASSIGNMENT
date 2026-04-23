@@ -577,7 +577,10 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                           children: [
                             TileLayer(
                               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.example.jobbuddy',
+                              userAgentPackageName: 'com.example.demo_openscreetmap',
+                              additionalOptions: const {
+                                'User-Agent': 'JobSeekerApp/1.0 (com.your.unique.package.id)',
+                              },
                             ),
                             MarkerLayer(
                               markers: [

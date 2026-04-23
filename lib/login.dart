@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_signup.dart';
 import 'email_login.dart';
 import 'employer_login.dart';
+import 'main.dart';
 import 'services/google_sign_in_service.dart';
 import 'services/fcm_service.dart';
 import 'Jobseeker/MainScreen/jobseeker_home.dart';
+import 'l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,6 +21,36 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final GoogleSignInService _googleSignInService = GoogleSignInService();
   bool _isLoading = false;
+
+  // --- LANGUAGE SELECTION DIALOG ---
+  void _showLanguageDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text("Select Language / 选择语言"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _langTile("🇺🇸", "English", const Locale('en'), context),
+            _langTile("🇲🇾", "Bahasa Melayu", const Locale('ms'), context),
+            _langTile("🇨🇳", "中文", const Locale('zh'), context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _langTile(String flag, String label, Locale locale, BuildContext context) {
+    return ListTile(
+      leading: Text(flag, style: const TextStyle(fontSize: 20)),
+      title: Text(label),
+      onTap: () {
+        appLocale.value = locale; // Updates the global app locale
+        Navigator.pop(context);
+      },
+    );
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
@@ -85,6 +117,10 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Get the localizations (safety check for null)
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9FB),
       body: SafeArea(
@@ -94,74 +130,60 @@ class _LoginPageState extends State<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.topLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('assets/icons/JobBuddyLogo.png',
-                        height: 50, width: 50),
-                    const SizedBox(width: 8),
-                    const Text('JobBuddy',
-                        style: TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+              // --- TOP ROW WITH LOGO AND LANGUAGE SELECTOR ---
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Image.asset('assets/icons/JobBuddyLogo.png', height: 50, width: 50),
+                      const SizedBox(width: 8),
+                      const Text('JobBuddy', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  // LANGUAGE BUTTON
+                  IconButton(
+                    icon: const Icon(Icons.language, color: Color(0xFF7B4DFF)),
+                    onPressed: () => _showLanguageDialog(context),
+                  ),
+                ],
               ),
+
               const Spacer(flex: 2),
               Image.asset('assets/icons/LoginPic.png', height: 220),
               const SizedBox(height: 30),
-              const Center(
-                child: Text('Find the right job',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF425AE2))),
+
+              // --- TRANSLATED TEXT ---
+              Center(
+                child: Text(l10n.findTheRightJob, // Example key from your .arb
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF425AE2))),
               ),
               const SizedBox(height: 12),
-              const Center(
-                child: Text('Build your career',
-                    style: TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold)),
+              Center(
+                child: Text(l10n.buildYourCareer, // Using existing keys for testing
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               ),
+
               const Spacer(flex: 2),
 
               // Google button
               _isLoading
-                  ? Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: const Color(0xFF7B4DFF), width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white,
-                ),
-                child: const Center(
-                  child: SpinKitThreeBounce(
-                      color: Color(0xFF7B4DFF), size: 24),
-                ),
-              )
+                  ? const Center(child: SpinKitThreeBounce(color: Color(0xFF7B4DFF), size: 24))
                   : OutlinedButton(
                 onPressed: _handleGoogleSignIn,
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(
-                      color: Color(0xFF7B4DFF), width: 1.5),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      width: 24, height: 24,
-                      child: Image.asset('assets/icons/google.webp'),
-                    ),
+                    SizedBox(width: 24, height: 24, child: Image.asset('assets/icons/google.webp')),
                     const SizedBox(width: 12),
-                    const Text('Continue with Google',
-                        style: TextStyle(
-                            color: Colors.black, fontSize: 16)),
+                    Text(l10n.continueWithGoogle, // Translates "Continue with Google" if you add the key
+                        style: const TextStyle(color: Colors.black, fontSize: 16)),
                   ],
                 ),
               ),
@@ -169,71 +191,46 @@ class _LoginPageState extends State<LoginPage> {
 
               // Email button
               OutlinedButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EmailLoginPage()),
-                ),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmailLoginPage())),
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
-                  side: const BorderSide(
-                      color: Color(0xFF7B4DFF), width: 1.5),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Color(0xFF7B4DFF), width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      width: 25, height: 25,
-                      child: Image.asset('assets/icons/email.png'),
-                    ),
+                    SizedBox(width: 25, height: 25, child: Image.asset('assets/icons/email.png')),
                     const SizedBox(width: 12),
-                    const Text('Continue with Email',
-                        style: TextStyle(color: Colors.black, fontSize: 16)),
+                    Text(l10n.continueWithEmail, style: TextStyle(color: Colors.black, fontSize: 16)),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Register link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Don't have an account? ",
-                      style: TextStyle(color: Colors.black54)),
+                  Text("${l10n.dontHaveAnAccount} ", style: const TextStyle(color: Colors.black54)),
                   GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const EmailSignUpScreen()),
-                    ),
-                    child: const Text('Register',
-                        style: TextStyle(
-                            color: Color(0xFF1A37CC),
-                            fontWeight: FontWeight.bold)),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmailSignUpScreen())),
+                    child: Text(l10n.registerLink, style: const TextStyle(color: Color(0xFF1A37CC), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
               const Spacer(flex: 1),
 
-              // Employer link
+// Employer link
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Recruitment? Visit ',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.bold)),
+                    Text(l10n.recruitmentVisit, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     GestureDetector(
                       onTap: _navigateToEmployer,
-                      child: const Text('here',
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1A37CC),
-                              decoration: TextDecoration.underline,
-                              fontWeight: FontWeight.bold)),
+                      child: Text(l10n.hereLink, style: const TextStyle(fontSize: 14, color: Color(0xFF1A37CC), decoration: TextDecoration.underline, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

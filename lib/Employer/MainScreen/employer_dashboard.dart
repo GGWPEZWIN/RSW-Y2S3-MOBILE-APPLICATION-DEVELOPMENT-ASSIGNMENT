@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../l10n/app_localizations.dart';
 import '../Interview/schedule_interview_page.dart';
 import '../JobListing/ApplicationUI/create_job_screen.dart';
 import '../JobListing/ApplicationUI/job_list_screen.dart';
@@ -72,6 +73,12 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check for the loading spinner
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -95,11 +102,12 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: RichText(text: const TextSpan(children: [
-                  TextSpan(text: 'JobBuddy ',
+                child: RichText(text: TextSpan(children: [
+                  const TextSpan(text: 'JobBuddy ',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black)),
-                  TextSpan(text: 'Employer',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w400, color: Colors.black)),
+                  // Translated 'Employer'
+                  TextSpan(text: l10n.employerLabel,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w400, color: Colors.black)),
                 ])),
               ),
               StreamBuilder<QuerySnapshot>(
@@ -150,7 +158,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                   .snapshots(),
               builder: (context, jobSnap) {
                 if (jobSnap.hasError)
-                  return Center(child: Text('Error: ${jobSnap.error}'));
+                  return Center(child: Text('${l10n.errorLabel}: ${jobSnap.error}'));
                 if (!jobSnap.hasData)
                   return const Center(child: CircularProgressIndicator());
 
@@ -168,9 +176,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                         ? appSnap.data!.docs
                         : <QueryDocumentSnapshot>[];
                     final totalApplicants = allApps.length;
-
-                    // ── Removed hired success rate ─────────────────────
-                    // No longer calculating hireRate
 
                     return StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -191,7 +196,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                           return exp != null && exp.isBefore(now);
                         }).length;
 
-                        // ── Upcoming interviews ────────────────────────
                         return StreamBuilder<QuerySnapshot>(
                           stream: FirebaseFirestore.instance
                               .collection('interviews')
@@ -215,39 +219,39 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                             }).length
                                 : 0;
 
-                            // ✅ Only 5 stat cards (removed Hired Success)
+                            // ✅ Stats with translated labels
                             final stats = [
                               {
                                 'value':     jobCount.toString(),
-                                'label':     'Jobs Posted',
+                                'label':     l10n.jobsPosted,
                                 'icon':      Icons.assignment_outlined,
                                 'bg':        const Color(0xFFFFF3E0),
                                 'iconColor': const Color(0xFFE07B39),
                               },
                               {
                                 'value':     totalApplicants.toString(),
-                                'label':     'Applicants',
+                                'label':     l10n.applicantsLabel,
                                 'icon':      Icons.group_outlined,
                                 'bg':        const Color(0xFFF0F2FF),
                                 'iconColor': const Color(0xFF3B4FD8),
                               },
                               {
                                 'value':     expiredCount.toString(),
-                                'label':     'Jobs Closed',
+                                'label':     l10n.jobsClosed,
                                 'icon':      Icons.receipt_long_outlined,
                                 'bg':        const Color(0xFFFFF3E0),
                                 'iconColor': const Color(0xFFE07B39),
                               },
                               {
                                 'value':     upcomingInterviews.toString(),
-                                'label':     'Upcoming Interviews',
+                                'label':     l10n.upcomingInterviews,
                                 'icon':      Icons.event_note_outlined,
                                 'bg':        const Color(0xFFF0F2FF),
                                 'iconColor': const Color(0xFF3B4FD8),
                               },
                               {
                                 'value':     unreadNotifs.toString(),
-                                'label':     'Notifications',
+                                'label':     l10n.notificationsLabel,
                                 'icon':      Icons.notifications_outlined,
                                 'bg':        const Color(0xFFFFF0EC),
                                 'iconColor': const Color(0xFFE07B39),
@@ -260,8 +264,9 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 24),
-                                  const Text('Dashboard',
-                                      style: TextStyle(fontSize: 22,
+                                  // Translated 'Dashboard'
+                                  Text(l10n.dashboardTitle,
+                                      style: const TextStyle(fontSize: 22,
                                           fontWeight: FontWeight.w800)),
                                   const SizedBox(height: 16),
                                   GridView.builder(
@@ -283,19 +288,21 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                                     mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Text('Recent job post',
-                                          style: TextStyle(fontSize: 18,
+                                      // Translated 'Recent job post'
+                                      Text(l10n.recentJobPost,
+                                          style: const TextStyle(fontSize: 18,
                                               fontWeight: FontWeight.w800)),
                                       if (recentJob != null)
                                         GestureDetector(
                                           onTap: _navigateToAllJobs,
-                                          child: const Row(children: [
-                                            Text('view all',
-                                                style: TextStyle(
+                                          child: Row(children: [
+                                            // Translated 'view all'
+                                            Text(l10n.viewAll,
+                                                style: const TextStyle(
                                                     fontSize: 14,
                                                     color: Colors.black54)),
-                                            SizedBox(width: 2),
-                                            Icon(Icons.chevron_right,
+                                            const SizedBox(width: 2),
+                                            const Icon(Icons.chevron_right,
                                                 size: 18,
                                                 color: Colors.black54),
                                           ]),
@@ -593,7 +600,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   }
 }
 
-// ── AllJobsListScreen (unchanged) ───────────────────────────────────────────
 
 class AllJobsListScreen extends StatelessWidget {
   final String employerId;
@@ -601,10 +607,17 @@ class AllJobsListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Initialize l10n
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All My Jobs',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        // Translated 'All My Jobs'
+        title: Text(l10n.allMyJobsTitle,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF3B4FD8),
         foregroundColor: Colors.white,
         leading: IconButton(
@@ -620,10 +633,14 @@ class AllJobsListScreen extends StatelessWidget {
         builder: (context, snapshot) {
           if (!snapshot.hasData)
             return const Center(child: CircularProgressIndicator());
+
           final jobs = snapshot.data!.docs;
+
           if (jobs.isEmpty)
-            return const Center(
-                child: Text('You have no jobs posted yet.'));
+            return Center(
+              // Translated 'You have no jobs posted yet.'
+                child: Text(l10n.noJobsPosted));
+
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: jobs.length,
@@ -632,7 +649,7 @@ class AllJobsListScreen extends StatelessWidget {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  title: Text(data['title'] ?? 'Untitled'),
+                  title: Text(data['title'] ?? l10n.untitledJob),
                   subtitle: Text(
                       '${data['company']} • ${data['location']}'),
                   trailing: const Icon(Icons.chevron_right),
