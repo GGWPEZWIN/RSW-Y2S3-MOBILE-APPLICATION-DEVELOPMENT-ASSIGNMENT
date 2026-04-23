@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/fcm_service.dart'; // ✅ Add this
 
 // ── Model ──────────────────────────────────────────────────────────────────
@@ -105,13 +106,20 @@ class ApplicantsListScreen extends StatelessWidget {
   }
 
   Widget _buildAllJobsScreen(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    // If for some reason it's null, show a placeholder or loader
+    if (l10n == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       backgroundColor: _bgGrey,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
-        title: const Text('Applications by Job',
+        title: Text(l10n.appsByJobTitle,
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
       ),
       body: StreamBuilder<QuerySnapshot>(

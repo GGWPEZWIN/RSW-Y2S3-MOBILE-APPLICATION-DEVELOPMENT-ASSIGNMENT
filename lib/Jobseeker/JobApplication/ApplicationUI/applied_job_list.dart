@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../MainScreen/jobseeker_profile.dart';
 import '../../Widgets/nav_bar_widget.dart';
 import '../../InterviewPractice/interview_practice_screen.dart';
@@ -73,6 +74,11 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
+    final l10n = AppLocalizations.of(context);
+
+    // 2. Safety check
+    if (l10n == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -82,7 +88,7 @@ class _AppliedJobsScreenState extends State<AppliedJobsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('My Applied Jobs',
+        title: Text(l10n.myAppliedJobsTitle,
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 17)),
         centerTitle: true,
       ),
